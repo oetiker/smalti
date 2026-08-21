@@ -116,6 +116,120 @@ and so may you:
 
   tools/show-glyphs.py upstream/Tamzen7x14r.bdf U+005F U+00AB U+0026
 
+## The character set
+
+67 glyphs, grouped by why they are here.
+
+**Latin-1 characters upstream never drew** (11)
+
+| | | |
+|---|---|---|
+| `§` | U+00A7 | Section Sign |
+| `¨` | U+00A8 | Diaeresis |
+| `¬` | U+00AC | Not Sign |
+| `¯` | U+00AF | Macron |
+| `±` | U+00B1 | Plus-Minus Sign |
+| `²` | U+00B2 | Superscript Two |
+| `³` | U+00B3 | Superscript Three |
+| `µ` | U+00B5 | Micro Sign |
+| `¶` | U+00B6 | Pilcrow Sign |
+| `·` | U+00B7 | Middle Dot |
+| `¹` | U+00B9 | Superscript One |
+
+**Typography** (15)
+
+| | | |
+|---|---|---|
+| `–` | U+2013 | En Dash |
+| `—` | U+2014 | Em Dash |
+| `‘` | U+2018 | Left Single Quotation Mark |
+| `’` | U+2019 | Right Single Quotation Mark |
+| `‚` | U+201A | Single Low-9 Quotation Mark |
+| `“` | U+201C | Left Double Quotation Mark |
+| `”` | U+201D | Right Double Quotation Mark |
+| `„` | U+201E | Double Low-9 Quotation Mark |
+| `†` | U+2020 | Dagger |
+| `‡` | U+2021 | Double Dagger |
+| `•` | U+2022 | Bullet |
+| `…` | U+2026 | Horizontal Ellipsis |
+| `′` | U+2032 | Prime |
+| `″` | U+2033 | Double Prime |
+| `€` | U+20AC | Euro Sign |
+
+**Arrows** (10)
+
+| | | |
+|---|---|---|
+| `←` | U+2190 | Leftwards Arrow |
+| `↑` | U+2191 | Upwards Arrow |
+| `→` | U+2192 | Rightwards Arrow |
+| `↓` | U+2193 | Downwards Arrow |
+| `↔` | U+2194 | Left Right Arrow |
+| `↕` | U+2195 | Up Down Arrow |
+| `↵` | U+21B5 | Downwards Arrow With Corner Leftwards |
+| `⇐` | U+21D0 | Leftwards Double Arrow |
+| `⇒` | U+21D2 | Rightwards Double Arrow |
+| `⇔` | U+21D4 | Left Right Double Arrow |
+
+**Mathematics** (17)
+
+| | | |
+|---|---|---|
+| `Δ` | U+0394 | Greek Capital Letter Delta |
+| `∆` | U+2206 | Increment |
+| `∈` | U+2208 | Element Of |
+| `∏` | U+220F | N-Ary Product |
+| `∑` | U+2211 | N-Ary Summation |
+| `−` | U+2212 | Minus Sign |
+| `√` | U+221A | Square Root |
+| `∞` | U+221E | Infinity |
+| `∧` | U+2227 | Logical And |
+| `∨` | U+2228 | Logical Or |
+| `∩` | U+2229 | Intersection |
+| `∪` | U+222A | Union |
+| `≈` | U+2248 | Almost Equal To |
+| `≠` | U+2260 | Not Equal To |
+| `≡` | U+2261 | Identical To |
+| `≤` | U+2264 | Less-Than Or Equal To |
+| `≥` | U+2265 | Greater-Than Or Equal To |
+
+**Shapes and marks** (14)
+
+| | | |
+|---|---|---|
+| `■` | U+25A0 | Black Square |
+| `□` | U+25A1 | White Square |
+| `▲` | U+25B2 | Black Up-Pointing Triangle |
+| `▴` | U+25B4 | Black Up-Pointing Small Triangle |
+| `▶` | U+25B6 | Black Right-Pointing Triangle |
+| `▼` | U+25BC | Black Down-Pointing Triangle |
+| `▾` | U+25BE | Black Down-Pointing Small Triangle |
+| `◀` | U+25C0 | Black Left-Pointing Triangle |
+| `◆` | U+25C6 | Black Diamond |
+| `○` | U+25CB | White Circle |
+| `●` | U+25CF | Black Circle |
+| `★` | U+2605 | Black Star |
+| `✓` | U+2713 | Check Mark |
+| `✗` | U+2717 | Ballot X |
+
+## Deliberately not drawn
+
+Each of these was attempted and abandoned for a reason, not forgotten.  They
+keep falling back to CommitMono, which is the right outcome.
+
+| | why |
+|---|---|
+| `®` | the `©` ring spans 6 columns and leaves a 2-column interior.  A `C` fits there; an `R` does not. |
+| `‰` | `%` already spans 6 of the 7 columns.  There is no room for a third zero. |
+| `™` | two letterforms in one 7-pixel cell. |
+| `¼` `½` `¾` | a digit, a solidus and a second digit in 7 columns. |
+| `☆` | a hollow star at this size is mush; `★` is kept. |
+
+`–` (en dash) is drawn **identical to the `-` hyphen**.  Tamzen's hyphen is
+already 5 pixels and `—` takes all 7, so there is no third length available.
+It is included anyway: without it the character would fall back to CommitMono
+and render at a visibly different weight.
+
 ## Known gaps
 
 * **Bold is not built yet.** `Tamzen7x14b.otb` is still the baseline, so bold
