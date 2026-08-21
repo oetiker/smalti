@@ -1,9 +1,9 @@
-# Tamzen 7x14 with extra glyphs, regular and bold.
+# Tamzen 7x14 with extra glyphs: regular, bold, oblique and bold oblique.
 #
-#   make            build both faces into build/
+#   make            build all four faces into build/
 #   make preview    show the added glyphs as ASCII art
 #   make show       print every added glyph in the terminal
-#   make install    copy both over the fonts wezterm actually loads
+#   make install    copy all four over the fonts wezterm actually loads
 #   make watch      rebuild, install and reload on every save
 #   make sources    regenerate the derived glyph sources (see below)
 #   make restore    put the untouched baselines back
@@ -18,7 +18,8 @@ BOLD_SRC := $(wildcard glyphs-bold/*.txt)
 
 .PHONY: all install preview show sources restore clean watch
 
-all: build/Tamzen7x14r.otb build/Tamzen7x14b.otb
+all: build/Tamzen7x14r.otb build/Tamzen7x14b.otb \
+     build/Tamzen7x14i.otb build/Tamzen7x14bi.otb
 
 build/Tamzen7x14r.bdf: upstream/Tamzen7x14r.bdf $(REG_SRC) tools/merge-glyphs.py
 	@mkdir -p build
@@ -27,6 +28,23 @@ build/Tamzen7x14r.bdf: upstream/Tamzen7x14r.bdf $(REG_SRC) tools/merge-glyphs.py
 build/Tamzen7x14b.bdf: upstream/Tamzen7x14b.bdf $(BOLD_SRC) tools/merge-glyphs.py
 	@mkdir -p build
 	tools/merge-glyphs.py upstream/Tamzen7x14b.bdf $(BOLD_SRC) > $@
+
+# The oblique face is sheared from the finished regular BDF, not from the
+# glyph sources, so it inherits every glyph automatically and there is no
+# glyphs-italic/ to keep in sync.  See tools/slant-bdf.py for the geometry.
+# STEPS are the rows where the lean drops a column: above the first the glyph
+# moves right, below the last it moves left.  More steps means more lean.
+#   make STEPS=4,7,10 install
+STEPS := 5,8
+build/Tamzen7x14i.bdf: build/Tamzen7x14r.bdf tools/slant-bdf.py
+	tools/slant-bdf.py --steps $(STEPS) $< > $@
+
+# The bold oblique is sheared FIRST and emboldened second: the bold face has
+# no side bearing left to lean into.  See tools/slant-bold.py.
+build/Tamzen7x14bi.bdf: build/Tamzen7x14b.bdf build/Tamzen7x14i.bdf \
+                        build/Tamzen7x14r.bdf tools/slant-bold.py tools/weight.py
+	tools/slant-bold.py build/Tamzen7x14b.bdf build/Tamzen7x14i.bdf \
+	                    build/Tamzen7x14r.bdf > $@
 
 # fonttosfnt writes a bitmap-only OTB whose scalable metrics do not describe
 # the strike; repair-tamzen.py fixes the four fields wezterm depends on.
@@ -53,6 +71,8 @@ glyphs/braille.txt: tools/gen-braille.py
 install: all
 	cp build/Tamzen7x14r.otb $(DEST)/Tamzen7x14r.otb
 	cp build/Tamzen7x14b.otb $(DEST)/Tamzen7x14b.otb
+	cp build/Tamzen7x14i.otb $(DEST)/Tamzen7x14i.otb
+	cp build/Tamzen7x14bi.otb $(DEST)/Tamzen7x14bi.otb
 	@echo "installed -- reload wezterm with Ctrl+Shift+R"
 
 # Rebuild and reload on every save.  Directories are watched, not files,
@@ -84,4 +104,6 @@ restore:
 
 clean:
 	rm -f build/Tamzen7x14r.bdf build/Tamzen7x14r.otb \
-	      build/Tamzen7x14b.bdf build/Tamzen7x14b.otb
+	      build/Tamzen7x14b.bdf build/Tamzen7x14b.otb \
+	      build/Tamzen7x14i.bdf build/Tamzen7x14i.otb \
+	      build/Tamzen7x14bi.bdf build/Tamzen7x14bi.otb
