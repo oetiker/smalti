@@ -19,6 +19,10 @@ field; the bitmap data itself is never touched.
      so fallback glyphs render at about half size.
   4. hhea ascender/descender/lineGap sum to more than the strike's height,
      adding phantom leading.
+  5. OS/2 fsSelection says REGULAR on every face, contradicting head.macStyle
+     and the name table, which do carry the style.  The spec requires the two
+     to agree.  Bold happens to pair anyway, but a matcher that trusts
+     fsSelection sees three Regulars in one family and picks one arbitrarily.
 """
 import struct, sys
 
@@ -76,6 +80,18 @@ def repair(path):
         changes.append(f"hhea asc/desc/gap {old} -> ({asc_u}, {-desc_u}, 0)")
     struct.pack_into('>hhh', d, oo+68, asc_u, -desc_u, 0)      # sTypo*
     struct.pack_into('>HH',  d, oo+74, asc_u, desc_u)          # usWin*
+
+    # 5. fsSelection must agree with head.macStyle.  ITALIC is bit 0, BOLD is
+    # bit 5 and REGULAR is bit 6; REGULAR is mutually exclusive with both.
+    mac = struct.unpack('>H', d[T['head'][0]+44:T['head'][0]+46])[0]
+    old_sel = struct.unpack('>H', d[oo+62:oo+64])[0]
+    sel = old_sel & ~0x0061
+    sel |= (0x01 if mac & 0x02 else 0) | (0x20 if mac & 0x01 else 0)
+    if not sel & 0x21:
+        sel |= 0x40
+    if sel != old_sel:
+        struct.pack_into('>H', d, oo+62, sel)
+        changes.append(f"OS/2 fsSelection 0x{old_sel:04X} -> 0x{sel:04X}")
 
     open(path, 'wb').write(bytes(d))
     print(f"{path}  (strike {int(_strike_advance(d,T,b,ppem))}x{rows} @ {ppem}ppem)")
