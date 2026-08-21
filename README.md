@@ -214,18 +214,21 @@ and `glyphs/greek.txt`.
 | `✓` | U+2713 | Check Mark |
 | `✗` | U+2717 | Ballot X |
 
-## Deliberately not drawn
+## Nothing is refused any more
 
-| | why |
+Every glyph that was once too hard is drawn.  Each needed the same move: stop
+trying to draw it correctly and draw it *legibly*, because a cramped glyph in
+the right weight beats a correct one borrowed from another font.
+
+| | what it took |
 |---|---|
-| `Ĳ` `ĳ` | two letterforms in one 7-pixel cell. |
-| `ŉ` | deprecated by Unicode itself; use `'n`. |
-
-Everything else that was once refused -- `®` `‰` `™` `¼` `½` `¾` `☆` -- is now
-drawn.  The trick for `®` was letting the ring span all 7 columns: at 6, like
-`©`, the interior is 2 columns and only a `C` fits; at 7 it is 3, which is what
-a legible `R` needs.  `‰` and the fractions give up hollow counters and use
-solid 2x2 blobs and 3x4 numerals instead.
+| `®` | the ring spans all 7 columns.  At 6, like `©`, the interior is 2 columns and only a `C` fits; at 7 it is 3, which is what an `R` needs. |
+| `‰` | the three rings become solid 2x2 blobs.  A hollow ring needs 3 columns and three of them plus a solidus need 11. |
+| `™` | two 3-column letterforms with one column of air between them. |
+| `¼` `½` `¾` | 3x4 numerals, numerator top-left, denominator bottom-right, solidus on Tamzen's own `/` slope. |
+| `☆` | the outline of `★`, with the waist opened up. |
+| `Ĳ` `ĳ` `ŉ` | both halves reduced to plain stems; there is no room for serifs. |
+| `※` | dense by nature, and left identical in bold for the same reason as `®`. |
 
 ## The three dash lengths
 

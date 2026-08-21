@@ -26,7 +26,7 @@ print('words   Kapitel ¶ 7 § 3 — »zwei« „drei“ … 5 ≤ x ≤ 9 → o
 print('maths   ∑(αᵢ ± β²) ≈ ∫ Δx → ∞, φ = ½(1+√5), ω ∈ Ω')
 print('czech   Příšerně žluťoučký kůň úpěl ďábelské ódy')
 print('polish  Zażółć gęślą jaźń')
-print('legal   ® ™ ‰ ¼ ½ ¾ ☆ ★')
+print('legal   ® ™ ‰ ¼ ½ ¾ ☆ ★ ※   Ĳ ĳ ŉ')
 print('spinner ✢ ∗ ✳ ✻ ✽ ✶ ✷ ✸ ✹ ✺   ◐ ◑ ◒ ◓ ◔ ◕   ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏')
 print('prompt  ❯ claude  ⏺ tool  ⎿  result  ✔ ✘ ▪ ▫ ⧉')
 print('braille ⣿ ⡿ ⢿ ⣻ ⣽ ⣾ ⣷ ⣯ ⣟ ⠿ ⠟ ⠯ ⠷ ⠾ ⠽ ⠻ (all 256 present)')

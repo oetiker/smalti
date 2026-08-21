@@ -30,7 +30,7 @@ KEEP = (set(range(0x2500, 0x2900))          # shapes, dingbats, braille
         # Already at maximum density: every one of these fills 6 or 7 columns
         # with 1-pixel detail, so any widening merges the interior.  Bold and
         # regular are the same glyph, which is what most fonts do anyway.
-        | {0x00AE, 0x2122, 0x2030, 0x00BC, 0x00BD, 0x00BE})
+        | {0x00AE, 0x2122, 0x2030, 0x00BC, 0x00BD, 0x00BE, 0x203B})
 # Greek capitals whose letterform IS the Latin one.
 TWIN = {0x391:'A', 0x392:'B', 0x395:'E', 0x396:'Z', 0x397:'H', 0x399:'I',
         0x39A:'K', 0x39C:'M', 0x39D:'N', 0x39F:'O', 0x3A1:'P', 0x3A4:'T',
