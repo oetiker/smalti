@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""The stroke-widening rule shared by the bold and the bold-oblique faces.
+
+Tamzen's own bold widens every stroke by one pixel to the LEFT: bold 'A' is
+regular 'A' OR itself shifted one column left.  That plain rule reproduces 108
+of the 189 upstream glyphs exactly -- the best score of anything tried -- but
+it also merges every 1-pixel gap, which turned the pilcrow, the registered
+sign and lowercase pi into solid blobs.
+
+Working on RUNS instead, and falling back to widening rightward when the left
+is blocked, reproduces 93 of 189 and never fills a counter.  Fidelity to
+upstream was deliberately traded for legibility here; do not "fix" it back.
+An earlier counter-aware attempt scored 22/189 because it extended the
+rightmost pixel of a solid run rightward -- work on runs, not pixels.
+
+The rightward fallback is also what lets the BOLD OBLIQUE exist at all.  A
+sheared glyph puts ink in column 0 on its lower rows, where there is nothing
+to the left to widen into; the run rule quietly widens those rows rightward
+instead, so shearing first and emboldening second loses no ink.
+"""
+CELL_W = 7
+
+
+def runs(v):
+    """The (first, last) column of each solid stroke in one packed row."""
+    out, start = [], None
+    for c in range(CELL_W):
+        if v & (1 << (7 - c)):
+            if start is None:
+                start = c
+        elif start is not None:
+            out.append((start, c - 1))
+            start = None
+    if start is not None:
+        out.append((start, CELL_W - 1))
+    return out
+
+
+def widen(bm):
+    """Widen each stroke by one pixel, without closing a counter."""
+    out = []
+    for v in bm:
+        rr, n = runs(v), v
+        for i, (s, e) in enumerate(rr):
+            prev = rr[i - 1][1] if i else None
+            nxt = rr[i + 1][0] if i + 1 < len(rr) else None
+            if s > 0 and (prev is None or s - prev > 2):
+                n |= 1 << (7 - (s - 1))
+            elif e < CELL_W - 1 and (nxt is None or nxt - e > 2):
+                n |= 1 << (7 - (e + 1))
+        out.append(n & 0xFE)
+    return out

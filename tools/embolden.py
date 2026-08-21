@@ -3,10 +3,9 @@
 
 Usage: embolden.py REGULAR.txt BOLD.txt BOLD-BASE.bdf
 
-Tamzen's own bold widens every stroke by one pixel to the LEFT: bold 'A' is
-regular 'A' OR itself shifted one column left.  That rule reproduces 108 of
-the 189 upstream glyphs exactly; the rest are hand-tuned, mostly to stop dense
-counters from filling in.  It is the right default here, with two exceptions:
+The widening rule itself lives in tools/weight.py, because the bold OBLIQUE
+face needs exactly the same one.  It is the right default here, with two
+exceptions:
 
   * Solid geometric shapes are NOT emboldened.  A filled circle has no strokes
     to thicken -- widening it just makes it lopsided.  Real fonts leave these
@@ -19,6 +18,7 @@ import sys
 
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import accents
+from weight import widen
 
 SRC, DST, BASE = sys.argv[1], sys.argv[2], sys.argv[3]
 
@@ -38,41 +38,6 @@ TWIN = {0x391:'A', 0x392:'B', 0x395:'E', 0x396:'Z', 0x397:'H', 0x399:'I',
         0x39A:'K', 0x39C:'M', 0x39D:'N', 0x39F:'O', 0x3A1:'P', 0x3A4:'T',
         0x3A5:'Y', 0x3A7:'X', 0x3BF:'o'}
 
-def runs(v):
-    out, start = [], None
-    for c in range(7):
-        if v & (1 << (7 - c)):
-            if start is None:
-                start = c
-        elif start is not None:
-            out.append((start, c - 1))
-            start = None
-    if start is not None:
-        out.append((start, 6))
-    return out
-
-def widen(bm):
-    """Widen each stroke by one pixel, without closing a counter.
-
-    The plain rule -- OR the row with itself shifted one column left --
-    reproduces 108 of the 189 upstream bold glyphs, but it also merges any
-    1-pixel gap, which turned the pilcrow, the registered sign and lowercase
-    pi into solid blobs.  Working on runs instead, and falling back to
-    widening rightward when the left is blocked, reproduces 93 of 189 and
-    never fills a counter.  Legible beats faithful here.
-    """
-    out = []
-    for v in bm:
-        rr, n = runs(v), v
-        for i, (s, e) in enumerate(rr):
-            prev = rr[i - 1][1] if i else None
-            nxt = rr[i + 1][0] if i + 1 < len(rr) else None
-            if s > 0 and (prev is None or s - prev > 2):
-                n |= 1 << (7 - (s - 1))
-            elif e < 6 and (nxt is None or nxt - e > 2):
-                n |= 1 << (7 - (e + 1))
-        out.append(n & 0xFE)
-    return out
 
 bold_base = accents.load(BASE)
 text = open(SRC).read()
