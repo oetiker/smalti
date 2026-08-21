@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate glyphs/latin-ext-a.txt by composing Tamzen letters with Tamzen marks.
+"""Generate a Latin Extended-A glyph file by composing Tamzen letters with Tamzen marks.
 
 Latin Extended-A is almost entirely base letter + diacritic, so the marks are
 lifted out of the glyphs Tamzen already draws (a-grave minus a, and so on)
@@ -15,11 +15,12 @@ Output is ordinary ASCII art -- edit it afterwards like any other glyph file.
 import re
 import sys
 import unicodedata
+
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 import accents
 
-BDF = 'upstream/Tamzen7x14r.bdf'
-OUT = 'glyphs/latin-ext-a.txt'
+BDF = sys.argv[1] if len(sys.argv) > 1 else 'upstream/Tamzen7x14r.bdf'
+OUT = sys.argv[2] if len(sys.argv) > 2 else 'glyphs/latin-ext-a.txt'
 
 g = accents.load(BDF)
 mark = accents.marks(g)
@@ -59,11 +60,19 @@ def compose(base_cp, mark_cp, upper):
     out[3] |= col
     return out, f'tall letter -> raised comma in column {max(free)}'
 
+# The letters below are drawn in the regular weight.  For the bold face they
+# are emboldened the way Tamzen itself does it -- each stroke widened one pixel
+# leftward -- because there is no bold original to copy them from.
+BOLD = 'Bold' in re.search(r'^WEIGHT_NAME "([^"]*)"', open(BDF).read(), re.M).group(1)
+
 hand = {}
 def H(ch, art):
     rows = art.strip('\n').split('\n')
     assert len(rows) == 14 and all(len(r) == 7 for r in rows), ch
-    hand[ord(ch)] = accents.pack(rows)
+    bm = accents.pack(rows)
+    if BOLD:
+        bm = [(v | (v << 1)) & 0xFE for v in bm]
+    hand[ord(ch)] = bm
 
 # Letters with no decomposition: drawn here, based on the plain letter.
 H('Đ', "\n.......\n.......\n.......\n.####..\n.#...#.\n.#...#.\n####.#.\n.#...#.\n.#...#.\n.#...#.\n.####..\n.......\n.......\n.......")

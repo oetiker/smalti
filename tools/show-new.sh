@@ -13,7 +13,9 @@ groups = [
     ('typo     ', lambda c: 0x2010 <= c < 0x2100),
     ('arrows   ', lambda c: 0x2190 <= c < 0x2200),
     ('maths    ', lambda c: 0x2200 <= c < 0x2300),
-    ('shapes   ', lambda c: c >= 0x2500),
+    ('shapes   ', lambda c: 0x2500 <= c < 0x2600),
+    ('ui       ', lambda c: c in (0x23BF, 0x23F5, 0x23FA, 0x29C9)
+                            or 0x2700 <= c < 0x2800),
 ]
 for label, pred in groups:
     sel = [chr(c) for c in cps if pred(c)]
@@ -25,4 +27,7 @@ print('maths   ∑(αᵢ ± β²) ≈ ∫ Δx → ∞, φ = ½(1+√5), ω ∈ �
 print('czech   Příšerně žluťoučký kůň úpěl ďábelské ódy')
 print('polish  Zażółć gęślą jaźń')
 print('legal   ® ™ ‰ ¼ ½ ¾ ☆ ★')
+print('spinner ✢ ∗ ✳ ✻ ✽ ✶ ✷ ✸ ✹ ✺   ◐ ◑ ◒ ◓ ◔ ◕   ⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏')
+print('prompt  ❯ claude  ⏺ tool  ⎿  result  ✔ ✘ ▪ ▫ ⧉')
+print('braille ⣿ ⡿ ⢿ ⣻ ⣽ ⣾ ⣷ ⣯ ⣟ ⠿ ⠟ ⠯ ⠷ ⠾ ⠽ ⠻ (all 256 present)')
 PY

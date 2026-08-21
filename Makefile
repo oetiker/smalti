@@ -1,34 +1,58 @@
-# Tamzen 7x14 with extra glyphs.
+# Tamzen 7x14 with extra glyphs, regular and bold.
 #
-#   make           build build/Tamzen7x14r.otb
-#   make install   copy it over the font wezterm actually loads
-#   make preview   show every added glyph as ASCII art
-#   make restore   put the untouched baseline back
+#   make            build both faces into build/
+#   make preview    show the added glyphs as ASCII art
+#   make show       print every added glyph in the terminal
+#   make install    copy both over the fonts wezterm actually loads
+#   make watch      rebuild, install and reload on every save
+#   make sources    regenerate the derived glyph sources (see below)
+#   make restore    put the untouched baselines back
 #
 # Requires: fonttosfnt (Debian/Ubuntu package xfonts-utils).
 
-BASE  := upstream/Tamzen7x14r.bdf
-EXTRA := $(wildcard glyphs/*.txt)
-OUT   := build/Tamzen7x14r
 DEST  := $(HOME)/.local/share/fonts/tamzen-patched
 WEZCFG := $(HOME)/.config/wezterm/wezterm.lua
 
-.PHONY: all install preview show restore clean watch
+REG_SRC  := $(wildcard glyphs/*.txt)
+BOLD_SRC := $(wildcard glyphs-bold/*.txt)
 
-all: $(OUT).otb
+.PHONY: all install preview show sources restore clean watch
 
-$(OUT).bdf: $(BASE) $(EXTRA) tools/merge-glyphs.py
+all: build/Tamzen7x14r.otb build/Tamzen7x14b.otb
+
+build/Tamzen7x14r.bdf: upstream/Tamzen7x14r.bdf $(REG_SRC) tools/merge-glyphs.py
 	@mkdir -p build
-	tools/merge-glyphs.py $(BASE) $(EXTRA) > $@
+	tools/merge-glyphs.py upstream/Tamzen7x14r.bdf $(REG_SRC) > $@
+
+build/Tamzen7x14b.bdf: upstream/Tamzen7x14b.bdf $(BOLD_SRC) tools/merge-glyphs.py
+	@mkdir -p build
+	tools/merge-glyphs.py upstream/Tamzen7x14b.bdf $(BOLD_SRC) > $@
 
 # fonttosfnt writes a bitmap-only OTB whose scalable metrics do not describe
 # the strike; repair-tamzen.py fixes the four fields wezterm depends on.
-$(OUT).otb: $(OUT).bdf tools/repair-tamzen.py
+build/%.otb: build/%.bdf tools/repair-tamzen.py
 	fonttosfnt -o $@ -- $<
 	tools/repair-tamzen.py $@
 
-install: $(OUT).otb
-	cp $(OUT).otb $(DEST)/Tamzen7x14r.otb
+# glyphs/ is hand-written and is the source of truth.  glyphs-bold/ is derived
+# from it -- run this after editing a regular glyph, then rebuild.
+# latin-ext-a is composed against the BOLD base font, which beats emboldening
+# because Tamzen's own bold letters and bold accents already exist.  Every
+# other file is derived from its regular counterpart.
+sources: glyphs/braille.txt
+	@mkdir -p glyphs-bold
+	python3 tools/gen-latin-ext-a.py upstream/Tamzen7x14b.bdf glyphs-bold/latin-ext-a.txt
+	@for f in $(filter-out glyphs/latin-ext-a.txt,$(REG_SRC)); do \
+		python3 tools/embolden.py $$f glyphs-bold/$$(basename $$f) \
+		        upstream/Tamzen7x14b.bdf || exit 1; \
+	done
+
+glyphs/braille.txt: tools/gen-braille.py
+	python3 tools/gen-braille.py
+
+install: all
+	cp build/Tamzen7x14r.otb $(DEST)/Tamzen7x14r.otb
+	cp build/Tamzen7x14b.otb $(DEST)/Tamzen7x14b.otb
 	@echo "installed -- reload wezterm with Ctrl+Shift+R"
 
 # Rebuild and reload on every save.  Directories are watched, not files,
@@ -41,21 +65,23 @@ watch:
 	@while true; do \
 		inotifywait -qq -e close_write,moved_to glyphs tools; \
 		echo "--- $$(date +%H:%M:%S)"; \
-		if $(MAKE) --no-print-directory install; then \
+		if $(MAKE) --no-print-directory sources install; then \
 			[ -f $(WEZCFG) ] && touch $(WEZCFG) && echo "wezterm reloaded"; \
 		else \
-			echo "BUILD FAILED -- font left untouched, still watching"; \
+			echo "BUILD FAILED -- fonts left untouched, still watching"; \
 		fi; \
 	done
 
 show: ; @tools/show-new.sh
 
-preview: $(OUT).bdf
-	tools/show-glyphs.py $(OUT).bdf $(EXTRA)
+preview: build/Tamzen7x14r.bdf
+	tools/show-glyphs.py $< glyphs/extra.txt
 
 restore:
 	cp baseline/Tamzen7x14r.otb $(DEST)/Tamzen7x14r.otb
-	@echo "baseline restored -- reload wezterm with Ctrl+Shift+R"
+	cp baseline/Tamzen7x14b.otb $(DEST)/Tamzen7x14b.otb
+	@echo "baselines restored -- reload wezterm with Ctrl+Shift+R"
 
 clean:
-	rm -f $(OUT).bdf $(OUT).otb
+	rm -f build/Tamzen7x14r.bdf build/Tamzen7x14r.otb \
+	      build/Tamzen7x14b.bdf build/Tamzen7x14b.otb
