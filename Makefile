@@ -1,4 +1,4 @@
-# Tamzen 7x14 with extra glyphs: regular, bold, oblique and bold oblique.
+# Smalti 7x14 -- Tamzen 7x14 with 813 extra glyphs, in four faces.
 #
 #   make            build all four faces into build/
 #   make preview    show the added glyphs as ASCII art
@@ -10,7 +10,11 @@
 #
 # Requires: fonttosfnt (Debian/Ubuntu package xfonts-utils).
 
-DEST  := $(HOME)/.local/share/fonts/tamzen-patched
+DEST  := $(HOME)/.local/share/fonts/smalti
+# `restore` still targets the ORIGINAL Tamzen directory: its job is to give
+# you a working terminal back, and after the rename that means pointing
+# wezterm at upstream Tamzen, not at a Smalti-named file holding 189 glyphs.
+TAMZEN_DEST := $(HOME)/.local/share/fonts/tamzen-patched
 WEZCFG := $(HOME)/.config/wezterm/wezterm.lua
 
 REG_SRC  := $(wildcard glyphs/*.txt)
@@ -18,14 +22,14 @@ BOLD_SRC := $(wildcard glyphs-bold/*.txt)
 
 .PHONY: all install preview show sources restore clean watch
 
-all: build/Tamzen7x14r.otb build/Tamzen7x14b.otb \
-     build/Tamzen7x14i.otb build/Tamzen7x14bi.otb
+all: build/Smalti7x14-Regular.otb build/Smalti7x14-Bold.otb \
+     build/Smalti7x14-Italic.otb build/Smalti7x14-BoldItalic.otb
 
-build/Tamzen7x14r.bdf: upstream/Tamzen7x14r.bdf $(REG_SRC) tools/merge-glyphs.py
+build/Smalti7x14-Regular.bdf: upstream/Tamzen7x14r.bdf $(REG_SRC) tools/merge-glyphs.py
 	@mkdir -p build
 	tools/merge-glyphs.py upstream/Tamzen7x14r.bdf $(REG_SRC) > $@
 
-build/Tamzen7x14b.bdf: upstream/Tamzen7x14b.bdf $(BOLD_SRC) tools/merge-glyphs.py
+build/Smalti7x14-Bold.bdf: upstream/Tamzen7x14b.bdf $(BOLD_SRC) tools/merge-glyphs.py
 	@mkdir -p build
 	tools/merge-glyphs.py upstream/Tamzen7x14b.bdf $(BOLD_SRC) > $@
 
@@ -36,15 +40,15 @@ build/Tamzen7x14b.bdf: upstream/Tamzen7x14b.bdf $(BOLD_SRC) tools/merge-glyphs.p
 # moves right, below the last it moves left.  More steps means more lean.
 #   make STEPS=4,7,10 install
 STEPS := 5,8
-build/Tamzen7x14i.bdf: build/Tamzen7x14r.bdf tools/slant-bdf.py
+build/Smalti7x14-Italic.bdf: build/Smalti7x14-Regular.bdf tools/slant-bdf.py
 	tools/slant-bdf.py --steps $(STEPS) $< > $@
 
 # The bold oblique is sheared FIRST and emboldened second: the bold face has
 # no side bearing left to lean into.  See tools/slant-bold.py.
-build/Tamzen7x14bi.bdf: build/Tamzen7x14b.bdf build/Tamzen7x14i.bdf \
-                        build/Tamzen7x14r.bdf tools/slant-bold.py tools/weight.py
-	tools/slant-bold.py build/Tamzen7x14b.bdf build/Tamzen7x14i.bdf \
-	                    build/Tamzen7x14r.bdf > $@
+build/Smalti7x14-BoldItalic.bdf: build/Smalti7x14-Bold.bdf build/Smalti7x14-Italic.bdf \
+                        build/Smalti7x14-Regular.bdf tools/slant-bold.py tools/weight.py
+	tools/slant-bold.py build/Smalti7x14-Bold.bdf build/Smalti7x14-Italic.bdf \
+	                    build/Smalti7x14-Regular.bdf > $@
 
 # fonttosfnt writes a bitmap-only OTB whose scalable metrics do not describe
 # the strike; repair-tamzen.py fixes the four fields wezterm depends on.
@@ -69,11 +73,12 @@ glyphs/braille.txt: tools/gen-braille.py
 	python3 tools/gen-braille.py
 
 install: all
-	cp build/Tamzen7x14r.otb $(DEST)/Tamzen7x14r.otb
-	cp build/Tamzen7x14b.otb $(DEST)/Tamzen7x14b.otb
-	cp build/Tamzen7x14i.otb $(DEST)/Tamzen7x14i.otb
-	cp build/Tamzen7x14bi.otb $(DEST)/Tamzen7x14bi.otb
-	@echo "installed -- reload wezterm with Ctrl+Shift+R"
+	@mkdir -p $(DEST)
+	cp build/Smalti7x14-Regular.otb $(DEST)/Smalti7x14-Regular.otb
+	cp build/Smalti7x14-Bold.otb $(DEST)/Smalti7x14-Bold.otb
+	cp build/Smalti7x14-Italic.otb $(DEST)/Smalti7x14-Italic.otb
+	cp build/Smalti7x14-BoldItalic.otb $(DEST)/Smalti7x14-BoldItalic.otb
+	@echo "installed to $(DEST) -- wezterm needs font_dirs and family 'Smalti 7x14'"
 
 # Rebuild and reload on every save.  Directories are watched, not files,
 # because editors replace a file rather than writing into it, which would
@@ -94,16 +99,16 @@ watch:
 
 show: ; @tools/show-new.sh
 
-preview: build/Tamzen7x14r.bdf
+preview: build/Smalti7x14-Regular.bdf
 	tools/show-glyphs.py $< glyphs/extra.txt
 
 restore:
-	cp baseline/Tamzen7x14r.otb $(DEST)/Tamzen7x14r.otb
-	cp baseline/Tamzen7x14b.otb $(DEST)/Tamzen7x14b.otb
-	@echo "baselines restored -- reload wezterm with Ctrl+Shift+R"
+	cp baseline/Tamzen7x14r.otb $(TAMZEN_DEST)/Tamzen7x14r.otb
+	cp baseline/Tamzen7x14b.otb $(TAMZEN_DEST)/Tamzen7x14b.otb
+	@echo "upstream Tamzen restored to $(TAMZEN_DEST) -- point wezterm there"
 
 clean:
-	rm -f build/Tamzen7x14r.bdf build/Tamzen7x14r.otb \
-	      build/Tamzen7x14b.bdf build/Tamzen7x14b.otb \
-	      build/Tamzen7x14i.bdf build/Tamzen7x14i.otb \
-	      build/Tamzen7x14bi.bdf build/Tamzen7x14bi.otb
+	rm -f build/Smalti7x14-Regular.bdf build/Smalti7x14-Regular.otb \
+	      build/Smalti7x14-Bold.bdf build/Smalti7x14-Bold.otb \
+	      build/Smalti7x14-Italic.bdf build/Smalti7x14-Italic.otb \
+	      build/Smalti7x14-BoldItalic.bdf build/Smalti7x14-BoldItalic.otb

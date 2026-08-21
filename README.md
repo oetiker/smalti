@@ -1,31 +1,65 @@
-# tobit — Tamzen 7x14 with extra glyphs
+# Smalti — a pixel font with wide Unicode coverage
+
+*Smalti* are the small glass tiles a mosaic is made from.  A pixel is one.
 
 Upstream Tamzen 7x14 has **189 glyphs and nothing above U+00FF**: no `§`, no
-`¶`, no dashes, no arrows, no triangles, no `…`.  This repo adds glyphs to it
-and rebuilds the `.otb` that wezterm loads.  Each face now carries **1002
-glyphs**.
+`¶`, no dashes, no arrows, no triangles, no `…`.  Smalti adds 813 more and
+draws two faces upstream never had, so each of its **four faces carries 1002
+glyphs**:
 
-## License
+| face | how it is made |
+|---|---|
+| Regular | upstream, plus the drawings in `glyphs/` |
+| Bold | upstream's own bold, plus emboldened drawings |
+| Oblique | the regular face sheared one column each way |
+| Bold oblique | sheared first, emboldened second |
 
-Tamsyn (Scott Fial, 2010) and Tamzen (Suraj N. Kurapati, 2011) both say:
+Every glyph is an ASCII-art text file.  A `#` is ink and a `.` is not; the
+drawings are the font and the `.otb` is a build artefact.
+
+    make install     # builds all four faces and installs them
+
+## Lineage and licence
+
+**Tamsyn → Tamzen → Smalti.**  Scott Fial drew Tamsyn in 2010.  Suraj N.
+Kurapati forked it as Tamzen in 2011.  This is a fork of Tamzen, renamed for
+the same reason Tamzen was: it is a different font now, and shipping it under
+someone else's name would make both harder to install.
+
+Both upstream licences say:
 
 > "…font is free.  You are hereby granted permission to use, copy, modify,
 > and distribute it as you see fit."
 
-Modification is explicitly permitted.  See `LICENSE.tamzen`.  Keep the
-`(c) 2015 Scott Fial` notice that is already in the font's name table.
+Modification is explicitly permitted.  See `LICENSE.tamzen`.  The
+`(c) 2015 Scott Fial` notice stays in the font's name table, alongside ours.
+
+**The size is part of the family name** — `Smalti 7x14`, not `Smalti`.  Each
+cell size is a separate design with its own metrics, so if they all claimed
+the family name `Smalti` a font matcher would pick between them arbitrarily.
+That is the bug upstream has, and the reason Tamzen's own notes say to keep
+only one size installed.  With the size in the name, every size can be
+installed at once.
 
 ## Build
 
 Needs `fonttosfnt` (Debian/Ubuntu: `xfonts-utils`).
 
-    make            # build build/Tamzen7x14r.otb
+    make            # build all four faces into build/
     make preview    # show the added glyphs as ASCII art
-    make install    # copy it over ~/.local/share/fonts/tamzen-patched/
+    make install    # copy them to ~/.local/share/fonts/smalti/
     make watch      # rebuild, install and reload on every save
-    make restore    # put the untouched baseline back
+    make restore    # put upstream Tamzen back, if Smalti misbehaves
 
 After `make install`, reload wezterm with `Ctrl+Shift+R`.
+
+These files are **bitmap-only**, so fontconfig will not serve them —
+`/etc/fonts/conf.d/70-no-bitmaps-except-emoji.conf` rejects anything with
+`outline=false`.  wezterm reaches them through `config.font_dirs`:
+
+    font_dirs = { os.getenv('HOME') .. '/.local/share/fonts/smalti' },
+    font = wezterm.font_with_fallback { { family = 'Smalti 7x14' } },
+    font_size = 10.5,   -- 14 ppem at 96 dpi
 
 ## `make watch` — the editing loop
 
@@ -115,7 +149,7 @@ and so may you:
 * **Deliberate asymmetry.**  `«` sits in columns 3..6 and `»` in columns 1..4,
   so each is pushed toward the text it quotes and `«wort»` hugs.
 
-  tools/show-glyphs.py upstream/Tamzen7x14r.bdf U+005F U+00AB U+0026
+  tools/show-glyphs.py build/Smalti7x14-Regular.bdf U+005F U+00AB U+0026
 
 ## The character set
 
@@ -384,6 +418,14 @@ dingbat makes it lopsided, not bold.
 * **Miscellaneous Symbols** U+2600..U+26FF has only `★` and `☆`.
 * **Miscellaneous Technical** U+2300..U+23FF has only what `glyphs/ui.txt`
   needed.
-* Only the **7x14** size is patched.  Every Tamzen size shares the family name
-  "Tamzen", so keep exactly one of them in
-  `~/.local/share/fonts/tamzen-patched/`.
+* Only the **7x14** size is drawn.  Upstream ships 5x9, 6x12, 7x13, 8x15,
+  8x16 and 10x20 as well.  Unlike Tamzen, several Smalti sizes *can* be
+  installed side by side once they exist, because the size is part of the
+  family name.
+* **`fonttosfnt` writes an incomplete name table.**  nameID 6, the PostScript
+  name, is missing although OpenType requires it; nameID 5 says
+  "Version 0.0"; nameID 10 is truncated mid-word.  None of it stops the font
+  working, and all of it goes away when the outline build replaces
+  `fonttosfnt` with `fontTools`.
+* **No outlines yet**, so fontconfig will not serve these files and a browser
+  cannot load them.  See the design spec in `docs/superpowers/specs/`.

@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
-"""Merge ASCII-art glyph definitions into a BDF font.
+"""Merge ASCII-art glyph definitions into a BDF font, and rebrand it.
 
 Usage: merge-glyphs.py BASE.bdf EXTRA.txt [EXTRA.txt ...] > MERGED.bdf
+
+The result is no longer Tamzen -- it carries five times the glyphs and faces
+upstream never drew -- so it is renamed here, once, at the point the merged
+font comes into being.  Every derived face reads this output and inherits it.
 
 The BDF bitmap format packs each row into whole bytes, most significant bit
 leftmost.  A 7-pixel-wide cell therefore occupies bits 7..1 of one byte and
@@ -14,6 +18,36 @@ import sys
 CELL_W = 7
 CELL_H = 14
 SWIDTH = None   # copied from the base font's own glyphs, never computed
+
+FAMILY = 'Smalti'
+COPYRIGHT_ADDED = '(c) 2026 Tobias Oetiker'
+
+
+def rebrand(head):
+    """Rename the font, putting the cell size IN the family name.
+
+    fonttosfnt takes the OpenType family name from FAMILY_NAME and ignores
+    the XLFD FONT line (verified by probe); both are rewritten anyway so the
+    BDF is coherent read on its own.
+
+    The size belongs in the family name because each strike is a separate
+    file with its own metrics and its own design.  If every size said
+    "Smalti", a font matcher would see seven different designs claiming the
+    same four styles and pick among them arbitrarily -- which is exactly the
+    bug upstream has, and the reason its own README says to keep only one
+    size installed at a time.  With the size in the name, all sizes coexist.
+
+    Upstream's copyright is kept and ours is appended: the licence permits
+    modification, and the attribution is not conditional on the name.
+    """
+    tag = f'{FAMILY}{CELL_W}x{CELL_H}'
+    head = re.sub(r'^(FONT -[^-]*)-[^-]*-', rf'\1-{tag}-', head, flags=re.M)
+    head = re.sub(r'^FAMILY_NAME ".*"$',
+                  f'FAMILY_NAME "{FAMILY} {CELL_W}x{CELL_H}"', head, flags=re.M)
+    head = re.sub(r'^COPYRIGHT "([^"]*)"$',
+                  lambda m: f'COPYRIGHT "{m.group(1)}; {COPYRIGHT_ADDED}"',
+                  head, flags=re.M)
+    return head
 
 
 def parse_base(path):
@@ -102,6 +136,7 @@ def main():
                 added += 1
             blocks[cp] = render(cp, name, rows)
     head = re.sub(r'^CHARS \d+$', f'CHARS {len(blocks)}', head, flags=re.M)
+    head = rebrand(head)
     sys.stdout.write(head + '\n')
     for cp in sorted(blocks):
         sys.stdout.write(blocks[cp] + '\n')
