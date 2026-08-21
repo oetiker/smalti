@@ -2,7 +2,7 @@
 
 Upstream Tamzen 7x14 has **189 glyphs and nothing above U+00FF**: no `§`, no
 `¶`, no dashes, no arrows, no triangles, no `…`.  This repo adds glyphs to it
-and rebuilds the `.otb` that wezterm loads.  Each face now carries **1001
+and rebuilds the `.otb` that wezterm loads.  Each face now carries **1002
 glyphs**.
 
 ## License
@@ -339,21 +339,23 @@ regenerated rather than hand-edited.
 
 ## The dingbats block
 
-`glyphs/dingbats.txt` and `glyphs/circled-digits.txt` cover **176 of the 192**
-codepoints in U+2700..U+27BF.  Sixteen are left out, and the reason splits
-cleanly in two.
+`glyphs/dingbats.txt` and `glyphs/circled-digits.txt` cover **177 of the 192**
+codepoints in U+2700..U+27BF.  Fifteen are left out.
 
-Fifteen are left out **by rule**: they have `Emoji_Presentation=Yes`, which
+They are left out **by rule**: they have `Emoji_Presentation=Yes`, which
 makes them East Asian Wide.  A terminal gives such a character two cells and
 takes it from the emoji font, so a 7x14 bitmap for it would be both unused and
 the wrong width.  Those fifteen are `✅ ✊ ✋ ✨ ❌ ❎ ❓ ❔ ❕ ❗ ➕ ➖ ➗ ➰ ➿`.
 
-The sixteenth, `➉` U+2789 CIRCLED SANS-SERIF NUMBER TEN, is left out because
-it does not fit.  Two digits need five columns -- a 3-wide zero, a 1-wide one
-and a gap -- and the ring needs the outer two, which leaves no separation at
-all: the one merges into the left wall and the zero into the right.  Its two
-*negative* siblings `❿` and `➓` are drawn, because a solid disc has no thin
-wall to merge with; the digits are knocked out of it and stay readable.
+One glyph that is drawn needed a trick to get there: `➉` U+2789 CIRCLED
+SANS-SERIF NUMBER TEN.  Two digits take five columns -- a 3-wide zero, a 1-wide one and a gap
+-- and a full ring takes the outer two, so there is no separation at all: the
+one merges into the left wall and the zero into the right.  So `➉` gets an
+**open ring**, the top and bottom arcs only, positioned so that no arc pixel
+sits in a digit column.  It keeps the family's height and still reads as an
+enclosure.  Its two *negative* siblings `❿` and `➓` need none of this: a solid
+disc has no thin wall to merge with, so the digits are simply knocked out of
+it.
 
 Three compromises are deliberate and should not be "fixed":
 
