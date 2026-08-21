@@ -13,7 +13,7 @@ OUT   := build/Tamzen7x14r
 DEST  := $(HOME)/.local/share/fonts/tamzen-patched
 WEZCFG := $(HOME)/.config/wezterm/wezterm.lua
 
-.PHONY: all install preview restore clean watch
+.PHONY: all install preview show restore clean watch
 
 all: $(OUT).otb
 
@@ -47,6 +47,8 @@ watch:
 			echo "BUILD FAILED -- font left untouched, still watching"; \
 		fi; \
 	done
+
+show: ; @tools/show-new.sh
 
 preview: $(OUT).bdf
 	tools/show-glyphs.py $(OUT).bdf $(EXTRA)
