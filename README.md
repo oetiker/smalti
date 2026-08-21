@@ -118,7 +118,9 @@ and so may you:
 
 ## The character set
 
-67 glyphs, grouped by why they are here.
+247 glyphs.  The tables below cover the symbol set; Latin
+Extended-A (125) and Greek (49) are listed in `glyphs/latin-ext-a.txt`
+and `glyphs/greek.txt`.
 
 **Latin-1 characters upstream never drew** (11)
 
@@ -214,21 +216,50 @@ and so may you:
 
 ## Deliberately not drawn
 
-Each of these was attempted and abandoned for a reason, not forgotten.  They
-keep falling back to CommitMono, which is the right outcome.
-
 | | why |
 |---|---|
-| `®` | the `©` ring spans 6 columns and leaves a 2-column interior.  A `C` fits there; an `R` does not. |
-| `‰` | `%` already spans 6 of the 7 columns.  There is no room for a third zero. |
-| `™` | two letterforms in one 7-pixel cell. |
-| `¼` `½` `¾` | a digit, a solidus and a second digit in 7 columns. |
-| `☆` | a hollow star at this size is mush; `★` is kept. |
+| `Ĳ` `ĳ` | two letterforms in one 7-pixel cell. |
+| `ŉ` | deprecated by Unicode itself; use `'n`. |
 
-`–` (en dash) is drawn **identical to the `-` hyphen**.  Tamzen's hyphen is
-already 5 pixels and `—` takes all 7, so there is no third length available.
-It is included anyway: without it the character would fall back to CommitMono
-and render at a visibly different weight.
+Everything else that was once refused -- `®` `‰` `™` `¼` `½` `¾` `☆` -- is now
+drawn.  The trick for `®` was letting the ring span all 7 columns: at 6, like
+`©`, the interior is 2 columns and only a `C` fits; at 7 it is 3, which is what
+a legible `R` needs.  `‰` and the fractions give up hollow counters and use
+solid 2x2 blobs and 3x4 numerals instead.
+
+## The three dash lengths
+
+`-` is 5 pixels (columns 1..5, Tamzen's own), `–` is 6 (columns 1..6), `—` is
+all 7.  Only `—` joins into an unbroken rule when repeated.
+
+## Latin Extended-A and Greek
+
+`glyphs/latin-ext-a.txt` is **generated once** by `tools/gen-latin-ext-a.py`
+and then owned by hand -- re-running the generator overwrites it.
+
+It works by subtraction, not invention.  Tamzen already draws grave, acute,
+circumflex, tilde, diaeresis, ring and cedilla on `a`, `A`, `c` and `C`;
+subtracting the plain letter from the accented one recovers each mark exactly
+as Tamzen drew it.  Only macron, breve, dot above, double acute, caron and
+ogonek had to be added by hand.
+
+Two traps worth recording:
+
+* **Do not subtract from capitals.**  Tamzen *squashes* the capital under its
+  own accents -- `Á` is a shorter `A` -- so `Á AND NOT A` leaves fragments of
+  the squashed letter behind.  The generator always takes the lowercase mark
+  and raises it over a full-height capital instead.
+* **A mark above `i` or `j` replaces the dot** (`ī`, not an i with both).  That
+  is the typographic rule and also the only way it fits.
+
+Where a letter is too tall for a mark above it -- `ĺ` `ľ` `ť` `ģ` -- the
+generator falls back to a raised comma beside the letter, which is what real
+typography does anyway.  It prints every such case when it runs.
+
+Greek in `glyphs/greek.txt` is hand-drawn, except the capitals whose letterform
+is identical to Latin (`Α` `Β` `Ε` `Ζ` `Η` `Ι` `Κ` `Μ` `Ν` `Ο` `Ρ` `Τ` `Υ` `Χ`)
+which are copies of Tamzen's own bitmaps, so the two cannot drift apart.
+`μ` and `µ` share one shape.
 
 ## Known gaps
 

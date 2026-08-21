@@ -8,7 +8,7 @@
 # Requires: fonttosfnt (Debian/Ubuntu package xfonts-utils).
 
 BASE  := upstream/Tamzen7x14r.bdf
-EXTRA := glyphs/extra.txt
+EXTRA := $(wildcard glyphs/*.txt)
 OUT   := build/Tamzen7x14r
 DEST  := $(HOME)/.local/share/fonts/tamzen-patched
 WEZCFG := $(HOME)/.config/wezterm/wezterm.lua
