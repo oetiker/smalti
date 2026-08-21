@@ -307,6 +307,21 @@ A wave arrow and a squiggle arrow differ by one pixel of amplitude, and a
 triple arrow is three lines because four would touch.  Every arrow is drawn
 distinct where distinct is possible, and directionally correct always.
 
+## The fork, and the private use area
+
+The git-branch mark in a shell prompt is written two different ways, so both
+are drawn: `⑂` U+2442 OCR FORK (real Unicode, which is why prompts favour it)
+and `` Powerline BRANCH (private use area).  The rest of the small OCR
+block came along with the first, and the core Powerline set with the second.
+
+`glyphs/powerline.txt` is the **only** private-use range drawn here, and
+deliberately so.  Nerd Font puts about 3,600 more icons in the PUA; those are
+designed for a double-width cell and the CommitMono Nerd Font fallback already
+renders them properly, so drawing them at 7x14 would make them worse.  The
+separators fill the cell edge to edge on purpose — they must butt against
+their neighbours with no seam — which also means they must never be
+emboldened, and `tools/embolden.py` keeps U+E0B0..E0BF as-is.
+
 ## Terminal UI symbols
 
 `glyphs/ui.txt` covers what Claude Code and similar TUIs draw: the `❯` prompt
