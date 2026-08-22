@@ -49,6 +49,11 @@ HAND_ROOT = 'glyphs'
 GEN_ROOT = os.path.join('build', 'gen')
 UPSTREAM_ROOT = 'upstream'
 
+# The name this font is built under.  It lives here rather than in the builder
+# because the checker has to name the artefacts it expects to find, and two
+# spellings of the family name would let a renamed build slip past the check.
+FAMILY = 'Smalti'
+
 
 class GlyphError(Exception):
     """A malformed glyph file.  Always carries path and line number."""
@@ -153,10 +158,33 @@ def read_glyph(path, w, h):
     return rows
 
 
+def normalised(cp, rows):
+    """The one canonical byte sequence a glyph file may have.
+
+    Every tool that writes, rewrites or checks a drawing goes through here, so
+    that "what `make headers` would write" has exactly one definition and a
+    checker cannot drift from the writer.  Newlines are LF on every platform:
+    the normal form is a property of the repository, not of the contributor's
+    operating system.
+    """
+    return header(cp) + '\n' + '\n'.join(rows) + '\n'
+
+
+def read_raw(path):
+    """The file's text exactly as stored, line endings and all.
+
+    Deliberately not universal-newline mode: a CRLF drawing must compare
+    UNEQUAL to its normal form, or `make check` would bless it and
+    `make headers` would never rewrite it.
+    """
+    with open(path, encoding='utf-8', newline='') as fh:
+        return fh.read()
+
+
 def write_glyph(path, cp, rows):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as fh:
-        fh.write(header(cp) + '\n' + '\n'.join(rows) + '\n')
+    with open(path, 'w', encoding='utf-8', newline='\n') as fh:
+        fh.write(normalised(cp, rows))
 
 
 def read_dir(directory, w, h):
@@ -211,6 +239,16 @@ def upstream_bdf(size, face):
     if tag is None:
         return None
     return os.path.join(UPSTREAM_ROOT, size, f'Tamzen{size}{tag}.bdf')
+
+
+def face_tag(face):
+    """The face's spelling in a filename: bold-italic -> BoldItalic."""
+    return ''.join(word.capitalize() for word in face.split('-'))
+
+
+def font_stem(size, face):
+    """The basename a built face carries, without its extension."""
+    return f'{FAMILY}{size}-{face_tag(face)}'
 
 
 def hand_dir(size, face):

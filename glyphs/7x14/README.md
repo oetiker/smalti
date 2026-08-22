@@ -25,6 +25,11 @@ builder refuses anything else, so a miscounted row is a build error and not a
 silently wrong glyph.  The header line names the codepoint, the character and
 its Unicode name; leave it off if you like and `make headers` will fill it in.
 
+`make check` compares each file against the normal form byte for byte — header
+line, pixel rows, line endings and all — so a trailing blank line is an error
+even though it changes no pixels.  `make headers` is always the fix: it
+rewrites exactly the files `make check` rejects.
+
 **A file here always wins.**  It outranks upstream Tamzen and it outranks every
 generator, in every face.  Drawing `glyphs/7x14/bold/00A8.txt` is how you
 overrule the bold diaeresis; drawing `glyphs/7x14/italic/0066.txt` is how you

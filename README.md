@@ -58,7 +58,7 @@ Needs `fonttosfnt` (Debian/Ubuntu: `xfonts-utils`) for the `.otb` files and
                        #   the proof that each .ttf matches its strike
     make check-sources    # the glyph store and the built faces only
     make check-outlines   # the .ttf-against-.bdf proof only
-    make headers       # fill in the header line of every drawing
+    make headers       # rewrite every drawing into its normal form
     make index         # regenerate docs/coverage.md
     make preview       # show the added glyphs as ASCII art
     make install       # copy the .otb files to ~/.local/share/fonts/smalti/
@@ -242,7 +242,8 @@ Create `glyphs/7x14/regular/2192.txt`:
 Exactly 14 rows of exactly 7 characters.  `#` is ink, `.` is background.
 The builder refuses anything else, so a miscounted row is a build error,
 not a silently wrong glyph.  The header line is filled in by `make headers`,
-so leave it off if you like.
+so leave it off if you like — that command rewrites the whole file into its
+normal form, which is what `make check` insists on, byte for byte.
 
 The same file under `glyphs/7x14/bold/`, `…/italic/` or `…/bold-italic/`
 overrules the derived face for that one codepoint — which is how the nine
@@ -563,6 +564,9 @@ someone drawing a new dingbat will actually look.
 
 ## Known gaps
 
+* **Latin-1 Supplement is 94 of 96**, not finished: `ª` U+00AA FEMININE
+  ORDINAL INDICATOR and `º` U+00BA MASCULINE ORDINAL INDICATOR are the two
+  holes, in every face.  Nothing else in U+00A0..U+00FF is missing.
 * **Cyrillic** U+0400..U+04FF is not drawn.
 * **Miscellaneous Symbols** U+2600..U+26FF has only `★` and `☆`.
 * **Miscellaneous Technical** U+2300..U+23FF has only what the terminal-UI

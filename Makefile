@@ -10,7 +10,7 @@
 #                   the proof that each .ttf is the same shape as its strike
 #   make check-sources   the glyph store and the built faces only
 #   make check-outlines  the .ttf-against-.bdf proof only
-#   make headers    normalise the header line of every drawing
+#   make headers    rewrite every drawing into its normal form
 #   make index      regenerate docs/coverage.md
 #   make restore    put the untouched baselines back
 #
@@ -111,7 +111,13 @@ build/%.otb: build/%.bdf tools/repair-tamzen.py
 check: check-sources check-outlines
 
 # The drawings and the built faces (design spec section 9).
+# The self-test runs FIRST and is not optional: it breaks the tree seven ways
+# and insists check-glyphs.py notices each one.  A green check below only means
+# something if the checker underneath it can go red, and twice now it could
+# not -- once for a drawing that had drifted out of normal form, once for a run
+# with nothing built to check.
 check-sources: all
+	python3 tools/test-check-glyphs.py $(SIZE)
 	python3 tools/check-glyphs.py $(SIZE)
 
 headers:
@@ -158,6 +164,7 @@ restore:
 clean:
 	rm -f $(BDF) $(OTB) $(TTF) $(WOFF2)
 	rm -rf build/gen
+	rm -rf build/selftest-*        # only if a self-test died mid-case
 
 # ------------------------------------------------------------------ outlines
 #

@@ -36,7 +36,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import glyphstore as gs
 
-FAMILY = 'Smalti'
+FAMILY = gs.FAMILY          # one definition; the checker names files with it
 COPYRIGHT_ADDED = '(c) 2026 Tobias Oetiker'
 
 
