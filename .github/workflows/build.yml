@@ -1,0 +1,93 @@
+# The font must build from a clean checkout, on a machine that has never
+# seen this project.  Everything here is `make` -- the Makefile is the build,
+# this file only supplies a machine to run it on.
+name: build
+
+on:
+  # Only main and pull requests: a branch push is already covered by
+  # validate.yml, which builds every face in order to check it, and running
+  # both on every push would double every run of a same-repo pull request.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Called by release.yml so a release ships exactly what CI built.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel a build a release is waiting on.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # fonttosfnt turns the BDF into a bitmap OTB; it has no pip equivalent.
+      - name: install fonttosfnt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xfonts-utils
+          fonttosfnt --help 2>&1 | head -1 || true
+
+      # Project-local .venv holding fontTools, for the outline build.
+      - name: python dependencies
+        run: make venv
+
+      - name: build
+        run: make
+
+      # The one build-output check that needs no glyph sources: repairing an
+      # already-repaired face must find nothing left to fix.  If a face still
+      # reports a defect here, fonttosfnt output changed under us and the font
+      # would render blank in wezterm.
+      - name: built faces carry no remaining defect
+        run: |
+          set -o pipefail
+          shopt -s nullglob
+          fonts=(build/*.otb build/*.ttf build/*.woff2)
+          if [ ${#fonts[@]} -eq 0 ]; then
+            echo "::error::the build produced no font files in build/"
+            exit 1
+          fi
+          printf 'built: %s\n' "${fonts[@]}"
+          otb=(build/*.otb)
+          if [ ${#otb[@]} -gt 0 ]; then
+            out=$(tools/repair-tamzen.py "${otb[@]}")
+            printf '%s\n' "$out"
+            clean=$(printf '%s\n' "$out" | grep -c 'already repaired' || true)
+            if [ "$clean" -ne "${#otb[@]}" ]; then
+              echo "::error::${#otb[@]} faces built but only $clean were free of defects"
+              exit 1
+            fi
+          fi
+
+      # Not a formality: install is the documented entry point in the README,
+      # and it is the step that would break if a face were renamed.
+      - name: install
+        run: |
+          make install
+          ls -l "$HOME/.local/share/fonts/smalti"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smalti-fonts
+          path: |
+            build/*.otb
+            build/*.ttf
+            build/*.woff2
+          if-no-files-found: error
+          retention-days: 14
