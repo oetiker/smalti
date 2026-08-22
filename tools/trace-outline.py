@@ -43,6 +43,27 @@ THE TRACE IS AN EXACT RECTANGLE UNION, NOT A CURVE FIT
     contours; tools/check-outlines.py proves the fill instead, by comparing
     the signed area against the lit pixel count.
 
+THE OUTPUT MUST BE BYTE-REPRODUCIBLE
+    The acceptance test for any future change to the glyph store is that the
+    files the build emits are byte-identical before and after -- that is what
+    proves a restructuring moved no pixel.  Once outlines exist, the files
+    that test compares are these .ttf, so a wall-clock stamp anywhere in them
+    would silently destroy the test: every build would differ and nothing
+    could ever be compared again.  A release artefact could not be
+    re-derived from its tag either.
+
+    head.created and head.modified are therefore never "now".  They come
+    from SOURCE_DATE_EPOCH when the environment sets it -- the
+    reproducible-builds convention, which also lets CI pin them -- and from
+    the fixed constant below when it does not.  fontTools' own default IS
+    the wall clock, so this must be set explicitly; leaving it to
+    FontBuilder is the bug this paragraph exists to prevent.
+
+    Everything else here is already order-stable by construction: glyph
+    order is sorted by codepoint, the edge list is built from `sorted(lit)`,
+    and the contour walk consumes that list in order.  No dict or set
+    iteration order reaches the output.
+
 WHY NOT fonttosfnt + repair-tamzen.py
     This path never runs fonttosfnt, so it does not inherit its broken name
     table either: nameID 6 (PostScript name) is written, nameID 5 carries the
@@ -60,6 +81,22 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 PX = 64                      # font units per pixel; see the docstring
+
+# The build stamp when SOURCE_DATE_EPOCH is unset.  A committed constant, not
+# the clock -- see "THE OUTPUT MUST BE BYTE-REPRODUCIBLE" above.  This is
+# 2026-01-01T00:00:00Z, the year Smalti forked from Tamzen.
+FALLBACK_EPOCH = 1767225600
+
+
+def build_epoch():
+    """Unix seconds to stamp into head.created / head.modified."""
+    raw = os.environ.get("SOURCE_DATE_EPOCH")
+    if raw is None or not raw.strip():
+        return FALLBACK_EPOCH
+    try:
+        return int(raw.strip())
+    except ValueError:
+        raise SystemExit(f"SOURCE_DATE_EPOCH is not an integer: {raw!r}")
 
 # ---------------------------------------------------------------- BDF input
 
@@ -280,6 +317,7 @@ def build_font(props, glyphs, out_path, family_base=None):
     from fontTools.fontBuilder import FontBuilder
     from fontTools.pens.ttGlyphPen import TTGlyphPen
     from fontTools.ttLib import newTable
+    from fontTools.misc.timeTools import timestampSinceEpoch
 
     cell_w = int(props["QUAD_WIDTH"])
     ascent_px = int(props["FONT_ASCENT"])
@@ -390,6 +428,10 @@ def build_font(props, glyphs, out_path, family_base=None):
     head.macStyle = mac_style
     head.lowestRecPPEM = cell_h
     head.fontRevision = float(re.match(r"[0-9.]+", version).group(0))
+    # Not the wall clock.  See the docstring: byte-identity of these files is
+    # the acceptance test for every future glyph-store change.
+    stamp = timestampSinceEpoch(build_epoch())
+    head.created = head.modified = stamp
     # A pixel font has no curves to smooth and no hints to run: ask for
     # grey-scale rendering at every size and leave grid-fitting off.
     gasp = newTable("gasp")
