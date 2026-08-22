@@ -60,6 +60,9 @@ Needs `fonttosfnt` (Debian/Ubuntu: `xfonts-utils`) for the `.otb` files and
     make check-outlines   # the .ttf-against-.bdf proof only
     make headers       # rewrite every drawing into its normal form
     make index         # regenerate docs/coverage.md
+    make site          # build the specimen site into build/site/
+    make serve-site    # …and serve it on http://localhost:8014/
+    make check-site    # prove the site ships this repository's drawings
     make preview       # show the added glyphs as ASCII art
     make install       # copy the .otb files to ~/.local/share/fonts/smalti/
     make install-outlines   # copy the .ttf files to …/smalti-ttf/
@@ -218,6 +221,36 @@ plain upstream Tamzen.  Ragged coverage is a first-class state.
 `indexTablesSize`, wrong `hmtx` advance, wrong `OS/2` `xAvgCharWidth`, phantom
 `hhea` leading).  Without the repair the font renders **blank** in wezterm,
 because it is bitmap-only and has no outline to fall back to.
+
+## The specimen site
+
+    make site         # build it into build/site/
+    make serve-site   # …and look at it on http://localhost:8014/
+    make check-site   # prove it ships this repository's own drawings
+
+`https://oetiker.github.io/smalti/` shows every glyph in every face as real
+rendered text, says honestly what is and is not covered, and lets a visitor
+**click any glyph, change its pixels and open the pull request from the
+browser** — no clone, no Python, no toolchain.  For a codepoint nobody has
+drawn yet the link arrives at GitHub with the path and the drawing already
+filled in; for one that already has a file it opens that file in GitHub's
+editor.  That is the property the one-file-per-glyph layout was for.
+
+Three things about it are not obvious:
+
+* **It loads the `.woff2` files, never the `.otb` files.**  An `.otb` is
+  bitmap-only and no browser draws an embedded strike, so a site built on
+  those would show nothing at all.
+* **It only ever sets type at 14, 28 and 42 px**, because those are the sizes
+  at which the outline reproduces the strike exactly.  A pixel font at 17px
+  looks broken, so no size in between is offered.
+* **Nothing under `build/site/` is committed.**  The page is generated from
+  the drawings by `tools/build-site.py`, and `tools/check-site.py` compares
+  every glyph it ships — and the exact bytes its editor would put on a
+  contributor's clipboard — back against the store.  `site/` holds the HTML,
+  CSS and JS it is generated from; there is no npm and no build step.
+
+`.github/workflows/pages.yml` runs `make check-site` and publishes the result.
 
 ## Drawing a glyph
 
@@ -566,7 +599,9 @@ someone drawing a new dingbat will actually look.
 
 * **Latin-1 Supplement is 94 of 96**, not finished: `ª` U+00AA FEMININE
   ORDINAL INDICATOR and `º` U+00BA MASCULINE ORDINAL INDICATOR are the two
-  holes, in every face.  Nothing else in U+00A0..U+00FF is missing.
+  holes, in every face.  Nothing else in U+00A0..U+00FF that is a character
+  at all is missing.  Found by the specimen site's block table, which is what
+  that table is for.
 * **Cyrillic** U+0400..U+04FF is not drawn.
 * **Miscellaneous Symbols** U+2600..U+26FF has only `★` and `☆`.
 * **Miscellaneous Technical** U+2300..U+23FF has only what the terminal-UI
