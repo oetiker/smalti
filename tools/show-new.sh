@@ -1,11 +1,13 @@
 #!/bin/sh
 # Print every glyph this repo adds, in the terminal's own font.
-# Anything that looks wrong here is a glyph to fix in glyphs/*.txt.
+# Anything that looks wrong here is a glyph to draw in glyphs/7x14/regular/.
 cd "$(dirname "$0")/.." || exit 1
 python3 - <<'PY'
-import glob, re
-cps = sorted({int(x, 16) for f in glob.glob('glyphs/*.txt')
-              for x in re.findall(r'^CHAR U\+([0-9A-Fa-f]+)', open(f).read(), re.M)})
+import glob, os, re
+cps = sorted({int(os.path.basename(f)[:-4], 16)
+              for d in ('glyphs/7x14/regular', 'build/gen/7x14/regular')
+              for f in glob.glob(d + '/*.txt')
+              if re.fullmatch(r'[0-9A-F]{4,6}\.txt', os.path.basename(f))})
 groups = [
     ('latin-1  ', lambda c: c < 0x100),
     ('lat-ext-A', lambda c: 0x100 <= c < 0x180),

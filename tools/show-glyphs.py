@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Render glyphs of a BDF font as ASCII art, side by side.
 
-Usage: show-glyphs.py FONT.bdf [EXTRA.txt | U+XXXX ...]
+Usage: show-glyphs.py FONT.bdf [GLYPHDIR | U+XXXX ...]
 
-With no selection the whole font is shown.  An EXTRA.txt argument selects
-exactly the codepoints that file defines, which is what `make preview` wants.
+With no selection the whole font is shown.  A directory argument selects
+exactly the codepoints it holds drawings for -- one file per glyph, named for
+the codepoint -- which is what `make preview` wants.
 """
+import os
 import re
 import sys
 
@@ -26,10 +28,12 @@ want = []
 for arg in sys.argv[2:]:
     if arg.startswith('U+'):
         want.append(int(arg[2:], 16))
+    elif os.path.isdir(arg):
+        want += [int(f[:-4], 16) for f in os.listdir(arg)
+                 if re.fullmatch(r'[0-9A-F]{4,6}\.txt', f)]
     else:
-        want += [int(x, 16) for x in re.findall(r'^CHAR U\+([0-9A-Fa-f]+)',
-                                                open(arg).read(), re.M)]
-want = want or sorted(glyphs)
+        sys.exit(f'show-glyphs.py: not a directory or a U+XXXX: {arg!r}')
+want = sorted(set(want)) or sorted(glyphs)
 
 def art(cp):
     out = []

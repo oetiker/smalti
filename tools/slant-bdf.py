@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""Derive an oblique BDF from an upright one by shearing the bitmaps.
+"""Derive the italic face from the resolved regular face by shearing it.
 
-Usage: slant-bdf.py [--steps R,R,...] UPRIGHT.bdf > OBLIQUE.bdf
+Usage: slant-bdf.py [--steps R,R,...] [SIZE]        (default 7x14)
+
+IT CONSUMES THE RESOLVED FACE, NOT A BUILT BDF
+    Every layer of the regular face is in place by the time this runs, so
+    hand-drawing a regular glyph improves its italic automatically.  The output
+    is only a candidate: a drawing in glyphs/<size>/italic/ outranks it, which
+    is how the nine letters this leaves upright can be corrected by hand.
 
 WHY A SHEAR AND NOT REDRAWN LETTERFORMS
     At 7x14 there is no room for cursive letterforms.  A shear keeps every
@@ -48,9 +54,12 @@ WHAT IS SLANTED
     would put a kink in the middle of a stroke, so they stay upright and the
     tool names them.
 """
-import re
+import os
 import sys
 import unicodedata
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import glyphstore as gs
 
 CELL_W = 7
 STEPS = (5, 8)       # rows where the displacement drops by one column
@@ -98,47 +107,39 @@ def shear(rows):
 
 
 def main():
-    global STEPS
+    global STEPS, CELL_W
     argv = sys.argv[1:]
-    if len(argv) > 2 and argv[0] == '--steps':
+    if len(argv) >= 2 and argv[0] == '--steps':
         STEPS = tuple(int(x) for x in argv[1].split(','))
         argv = argv[2:]
-    if len(argv) != 1:
-        sys.exit(__doc__)
-    text = open(argv[0], encoding='latin1').read()
-    head, _, rest = text.partition('\nSTARTCHAR ')
+    size = argv[0] if argv else '7x14'
+    CELL_W, _h = gs.cell(size)
+    if CELL_W != 7:
+        sys.exit(f'slant-bdf.py: the lean below spends 7x14 side bearings, '
+                 f'not {size}')
 
-    # fonttosfnt reads the style from these two.  The XLFD's fourth field and
-    # the SLANT property must agree, or the face is announced as upright and
-    # wezterm pairs it with nothing.
-    head = re.sub(r'^(FONT -[^-]*-[^-]*-[^-]*)-R-', r'\1-I-', head, flags=re.M)
-    head = re.sub(r'^SLANT "R"$', 'SLANT "I"', head, flags=re.M)
-    if 'SLANT "I"' not in head:
-        sys.exit('slant-bdf.py: could not set SLANT in the header')
+    regular = gs.bitmaps(size, 'regular')
+    if not regular:
+        sys.exit(f'slant-bdf.py: the {size} regular face resolved to nothing')
+    outdir = gs.gen_dir(size, 'italic')
 
-    crowded, n, out = [], 0, []
-    for chunk in ('STARTCHAR ' + rest).split('STARTCHAR ')[1:]:
-        body, _, _tail = chunk.partition('ENDCHAR')
-        cp = int(re.search(r'^ENCODING (-?\d+)', body, re.M).group(1))
-        pre, _, bits = body.partition('BITMAP\n')
-        rows = [int(x, 16) for x in bits.strip().split('\n')] if bits else []
-        if is_slanted(cp) and rows:
+    crowded, n = [], 0
+    for cp, rows in sorted(regular.items()):
+        out = rows
+        if is_slanted(cp):
             if has_room(rows):
+                out = shear(rows)
                 n += 1
-                out.append('STARTCHAR ' + pre + 'BITMAP\n'
-                           + '\n'.join(f'{v:02X}' for v in shear(rows))
-                           + '\nENDCHAR\n')
-                continue
-            crowded.append(cp)
-        out.append('STARTCHAR ' + body + 'ENDCHAR\n')
+            else:
+                crowded.append(cp)
+        gs.write_glyph(os.path.join(outdir, gs.filename(cp)), cp,
+                       gs.art(out, CELL_W))
 
-    sys.stdout.write(head + '\n' + '\n'.join(out) + '\nENDFONT\n')
     steps = ','.join(str(s) for s in STEPS)
-    print(f'{argv[0]}: {n} glyphs sheared, steps at {steps}', file=sys.stderr)
+    print(f'{outdir}: {n} of {len(regular)} glyphs sheared, steps at {steps}')
     if crowded:
         print('  left upright, no room to lean: '
-              + ' '.join(f'U+{c:04X} {chr(c)}' for c in sorted(crowded)),
-              file=sys.stderr)
+              + ' '.join(f'U+{c:04X} {chr(c)}' for c in sorted(crowded)))
 
 
 main()

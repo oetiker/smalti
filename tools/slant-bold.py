@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Build the bold oblique face.
+"""Build the bold-italic face from the resolved regular, bold and italic faces.
 
-Usage: slant-bold.py BOLD.bdf OBLIQUE.bdf UPRIGHT.bdf > BOLD-OBLIQUE.bdf
+Usage: slant-bold.py [SIZE]           (default 7x14)
 
 WHY THIS IS NOT JUST slant-bdf.py RUN ON THE BOLD FACE
     The oblique spends both columns of side bearing: its top rows sit one
@@ -19,54 +19,48 @@ WHY THIS IS NOT JUST slant-bdf.py RUN ON THE BOLD FACE
 
     The consequence to know about: a bold-oblique letter is a widened shear of
     the REGULAR glyph, not a sheared copy of Tamzen's hand-tuned bold one.
-    Where the two disagree -- Latin Extended-A, which glyphs-bold/ composes
-    against the bold base font rather than emboldening -- the bold oblique
-    follows the emboldening rule instead.
+    Where the two disagree -- Latin Extended-A, which is composed against the
+    bold base font rather than emboldened -- the bold oblique follows the
+    emboldening rule instead.
 
     Only the glyphs the oblique actually sheared are rebuilt this way.  Every
     other glyph, from box drawing to the Powerline separators, is copied
-    straight from the bold face so that the two bold faces stay identical
-    wherever slant is meaningless.
+    straight from the resolved bold face so that the two bold faces stay
+    identical wherever slant is meaningless.
+
+    The output is only a candidate: a drawing in glyphs/<size>/bold-italic/
+    outranks it.
 """
-import re
+import os
 import sys
 
-sys.path.insert(0, __file__.rsplit('/', 1)[0])
-import accents
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import glyphstore as gs
 from weight import widen
 
 
 def main():
-    if len(sys.argv) != 4:
-        sys.exit(__doc__)
-    bold_path, oblique_path, upright_path = sys.argv[1:4]
-    oblique = accents.load(oblique_path)
-    upright = accents.load(upright_path)
+    size = sys.argv[1] if len(sys.argv) > 1 else '7x14'
+    w, _h = gs.cell(size)
+    bold = gs.bitmaps(size, 'bold')
+    italic = gs.bitmaps(size, 'italic')
+    upright = gs.bitmaps(size, 'regular')
+    for name, face in (('bold', bold), ('italic', italic),
+                       ('regular', upright)):
+        if not face:
+            sys.exit(f'slant-bold.py: the {size} {name} face resolved to nothing')
+    outdir = gs.gen_dir(size, 'bold-italic')
 
-    text = open(bold_path, encoding='latin1').read()
-    head, _, rest = text.partition('\nSTARTCHAR ')
-    head = re.sub(r'^(FONT -[^-]*-[^-]*-[^-]*)-R-', r'\1-I-', head, flags=re.M)
-    head = re.sub(r'^SLANT "R"$', 'SLANT "I"', head, flags=re.M)
-    if 'SLANT "I"' not in head:
-        sys.exit('slant-bold.py: could not set SLANT in the header')
-
-    n, out = 0, []
-    for chunk in ('STARTCHAR ' + rest).split('STARTCHAR ')[1:]:
-        body, _, _tail = chunk.partition('ENDCHAR')
-        cp = int(re.search(r'^ENCODING (-?\d+)', body, re.M).group(1))
+    n = 0
+    for cp, bm in sorted(bold.items()):
         # A glyph the oblique left alone is not a text glyph, or had no room
         # to lean; either way the upright bold form is the right one.
-        if cp in oblique and oblique[cp] != upright.get(cp):
-            pre = body.partition('BITMAP\n')[0]
-            rows = widen(oblique[cp])
+        if cp in italic and italic[cp] != upright.get(cp):
+            bm = widen(italic[cp])
             n += 1
-            out.append('STARTCHAR ' + pre + 'BITMAP\n'
-                       + '\n'.join(f'{v:02X}' for v in rows) + '\nENDCHAR\n')
-        else:
-            out.append('STARTCHAR ' + body + 'ENDCHAR\n')
+        gs.write_glyph(os.path.join(outdir, gs.filename(cp)), cp, gs.art(bm, w))
 
-    sys.stdout.write(head + '\n' + '\n'.join(out) + '\nENDFONT\n')
-    print(f'{bold_path}: {n} glyphs sheared and emboldened', file=sys.stderr)
+    print(f'{outdir}: {n} of {len(bold)} glyphs sheared and emboldened')
 
 
 main()
