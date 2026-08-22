@@ -126,6 +126,25 @@ table either: nameID 6 is written, nameID 5 carries the real version, and
 nameID 10 is a whole sentence.  `head.macStyle` and `OS/2 fsSelection` are
 set from one table in the tracer, so they cannot disagree.
 
+### The build is byte-reproducible
+
+Two clean builds of the same tree produce byte-identical `.ttf` and
+`.woff2`.  This is not tidiness: **the acceptance test for any change to the
+glyph store is that these files do not change**, which is how a
+thousand-file restructuring is proved to have moved no pixel.  A wall-clock
+stamp anywhere in the output would silently destroy that test, and it is
+`fontTools`' default for `head.created` / `head.modified`, so the tracer
+sets them explicitly.
+
+    make                          # 2026-01-01, the committed fallback
+    SOURCE_DATE_EPOCH=… make      # whatever CI or a release tag pins
+
+`SOURCE_DATE_EPOCH` is the only thing that moves the bytes; nothing else in
+the tracer is clock- or environment-derived, and glyph order, edge order and
+the contour walk are all order-stable by construction rather than by
+accident.  The `.otb` files are unaffected either way — `fonttosfnt` already
+writes a fixed stamp.
+
 ## `make watch` — the editing loop
 
 Run it in a spare pane, then just edit `glyphs/extra.txt` and save:
