@@ -15,7 +15,7 @@ glyphs**:
 | Bold oblique | sheared first, emboldened second |
 
 Every glyph is an ASCII-art text file.  A `#` is ink and a `.` is not; the
-drawings are the font and the `.otb` is a build artefact.
+drawings are the font; the `.otb` and the `.ttf` are build artefacts.
 
     make install     # builds all four faces and installs them
 
@@ -43,23 +43,88 @@ installed at once.
 
 ## Build
 
-Needs `fonttosfnt` (Debian/Ubuntu: `xfonts-utils`).
+Every face is built twice: as a bitmap `.otb`, and as an outline `.ttf`
+traced from the same bitmap.
 
-    make            # build all four faces into build/
-    make preview    # show the added glyphs as ASCII art
-    make install    # copy them to ~/.local/share/fonts/smalti/
-    make watch      # rebuild, install and reload on every save
-    make restore    # put upstream Tamzen back, if Smalti misbehaves
+Needs `fonttosfnt` (Debian/Ubuntu: `xfonts-utils`) for the `.otb` files and
+`python3-venv` for the `.ttf` files.
+
+    make               # build all four faces, bitmap and outline, into build/
+    make venv          # just the Python dependencies, into ./.venv
+    make outlines      # just the four .ttf files
+    make check         # prove every traced glyph matches its bitmap
+    make woff2         # .woff2 for the web
+    make preview       # show the added glyphs as ASCII art
+    make install       # copy the .otb files to ~/.local/share/fonts/smalti/
+    make install-outlines   # copy the .ttf files to …/smalti-ttf/
+    make watch         # rebuild, install and reload on every save
+    make restore       # put upstream Tamzen back, if Smalti misbehaves
+
+From a clean clone, `make` is enough: it creates `.venv` itself.
 
 After `make install`, reload wezterm with `Ctrl+Shift+R`.
 
-These files are **bitmap-only**, so fontconfig will not serve them —
+### Which file to use
+
+The `.otb` files are **bitmap-only**, so fontconfig will not serve them —
 `/etc/fonts/conf.d/70-no-bitmaps-except-emoji.conf` rejects anything with
-`outline=false`.  wezterm reaches them through `config.font_dirs`:
+`outline=false`, and no browser renders an embedded bitmap strike either.
+wezterm reaches them through `config.font_dirs`:
 
     font_dirs = { os.getenv('HOME') .. '/.local/share/fonts/smalti' },
     font = wezterm.font_with_fallback { { family = 'Smalti 7x14' } },
     font_size = 10.5,   -- 14 ppem at 96 dpi
+
+The `.ttf` files have real outlines, so `fc-match "Smalti 7x14"` finds them
+and every other application does too.  `make install-outlines` puts them in
+a *separate* directory on purpose: both formats carry the family name
+`Smalti 7x14`, so keeping them apart is what stops wezterm's `font_dirs`
+from seeing two candidates for every face.
+
+## Outlines
+
+`tools/trace-outline.py` turns one BDF strike into one `.ttf`.  Not a curve
+fit — `potrace` and friends smooth pixel edges, which is exactly wrong here.
+The outline is the **exact union of the lit pixels**, at integer coordinates.
+
+**The em is a whole number of pixels.**  `upem = cell_height * 64`, so one
+pixel is exactly 64 units and 7x14 gets `upem = 896`, advance 448, ascent
+704, descent 192.  At 14 ppem a pixel edge at unit *k*·64 lands on device
+pixel *k* with no rounding; the mapping is linear, so 28 px and 42 px are
+exact too.  `make check` rasterises all four faces at 14, 28 and 42 ppem and
+finds **no** pixel different from the bitmap and **no** antialiased pixel.
+Sizes between multiples do blur — that is the one thing an outline gives up,
+and wezterm only ever asks for an exact ppem anyway.
+
+**One file per strike**, because outlines cannot vary with cell size: a
+variable font's `opsz` axis would need interpolation-compatible masters, and
+the same glyph at 5x9 and 10x20 is a different number of rectangles in
+different places.
+
+The one hard case is **two pixels touching only at a corner**.  That vertex
+has two incoming and two outgoing edges, so a point-keyed lookup loses one
+and the contour walk dies; there are 6,223 such vertices across the four
+faces.  Each arrival is paired with the sharpest *right* turn.  Either
+pairing is correct — the winding number of a point is a sum over the edges
+and does not depend on how they are grouped into loops — so the choice only
+decides whether `o` comes out as one pinched ring or as four rectangles
+whose union is the same shape.  Contour count is not the goal; the area
+check is.
+
+`make check` is the proof, over all 4,008 glyphs of all four faces:
+
+| check | result |
+|---|---|
+| signed filled area vs. lit pixel count | 0 discrepancies |
+| segments that are not axis-aligned | 0 |
+| coordinates off the 64-unit grid | 0 |
+| off-curve points | 0 |
+| points per glyph | 22.4 mean, 132 worst |
+
+This path never runs `fonttosfnt`, so it does not inherit its broken name
+table either: nameID 6 is written, nameID 5 carries the real version, and
+nameID 10 is a whole sentence.  `head.macStyle` and `OS/2 fsSelection` are
+set from one table in the tracer, so they cannot disagree.
 
 ## `make watch` — the editing loop
 
@@ -85,12 +150,13 @@ watch would end up pointing at the old inode.
     glyphs/extra.txt  ──merge-glyphs.py──►  build/…bdf
                       ──fonttosfnt───────►  build/…otb
                       ──repair-tamzen.py─►  usable in wezterm
+                      ──trace-outline.py─►  build/…ttf, usable everywhere
 
 `upstream/` holds pristine upstream BDF sources and is never edited.
 `baseline/` holds the exact `.otb` files that were live before this repo
 existed, so `make restore` is always a working escape hatch.
 
-`repair-tamzen.py` is required on every build, not just on upstream files:
+`repair-tamzen.py` is required on every `.otb` build, not just on upstream files:
 `fonttosfnt` itself emits the four broken metric fields (wrong EBLC
 `indexTablesSize`, wrong `hmtx` advance, wrong `OS/2` `xAvgCharWidth`, phantom
 `hhea` leading).  Without the repair the font renders **blank** in wezterm,
@@ -425,7 +491,6 @@ dingbat makes it lopsided, not bold.
 * **`fonttosfnt` writes an incomplete name table.**  nameID 6, the PostScript
   name, is missing although OpenType requires it; nameID 5 says
   "Version 0.0"; nameID 10 is truncated mid-word.  None of it stops the font
-  working, and all of it goes away when the outline build replaces
-  `fonttosfnt` with `fontTools`.
-* **No outlines yet**, so fontconfig will not serve these files and a browser
-  cannot load them.  See the design spec in `docs/superpowers/specs/`.
+  working, and none of it is inherited by the `.ttf` files, which are written
+  by `fontTools` and never see `fonttosfnt`.  Only the `.otb` path is
+  affected, and `repair-tamzen.py` leaves the name table alone.

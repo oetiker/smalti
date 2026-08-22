@@ -1,0 +1,5 @@
+# Python dependencies for the outline build.  `make venv` installs them into
+# ./.venv; nothing here is needed for the bitmap .otb path.
+fontTools>=4.50        # writes the .ttf and the .woff2
+brotli>=1.1            # woff2 compression, used by fontTools
+freetype-py>=2.4       # tools/render-check.py rasterises the result

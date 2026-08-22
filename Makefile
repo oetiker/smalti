@@ -1,6 +1,8 @@
 # Smalti 7x14 -- Tamzen 7x14 with 813 extra glyphs, in four faces.
 #
-#   make            build all four faces into build/
+#   make            build all four faces into build/, bitmap and outline
+#   make outlines   build only the outline .ttf faces
+#   make check      prove each .ttf is the same shape as its .bdf strike
 #   make preview    show the added glyphs as ASCII art
 #   make show       print every added glyph in the terminal
 #   make install    copy all four over the fonts wezterm actually loads
@@ -8,7 +10,8 @@
 #   make sources    regenerate the derived glyph sources (see below)
 #   make restore    put the untouched baselines back
 #
-# Requires: fonttosfnt (Debian/Ubuntu package xfonts-utils).
+# Requires: fonttosfnt (Debian/Ubuntu package xfonts-utils) for the .otb path,
+# and python3-venv for the .ttf path -- `make venv` does the rest.
 
 DEST  := $(HOME)/.local/share/fonts/smalti
 # `restore` still targets the ORIGINAL Tamzen directory: its job is to give
@@ -20,10 +23,12 @@ WEZCFG := $(HOME)/.config/wezterm/wezterm.lua
 REG_SRC  := $(wildcard glyphs/*.txt)
 BOLD_SRC := $(wildcard glyphs-bold/*.txt)
 
-.PHONY: all install preview show sources restore clean watch
+FACES := Regular Bold Italic BoldItalic
 
-all: build/Smalti7x14-Regular.otb build/Smalti7x14-Bold.otb \
-     build/Smalti7x14-Italic.otb build/Smalti7x14-BoldItalic.otb
+.PHONY: all install preview show sources restore clean watch \
+        venv outlines woff2 check install-outlines
+
+all: $(FACES:%=build/Smalti7x14-%.otb) outlines
 
 build/Smalti7x14-Regular.bdf: upstream/Tamzen7x14r.bdf $(REG_SRC) tools/merge-glyphs.py
 	@mkdir -p build
@@ -108,7 +113,57 @@ restore:
 	@echo "upstream Tamzen restored to $(TAMZEN_DEST) -- point wezterm there"
 
 clean:
-	rm -f build/Smalti7x14-Regular.bdf build/Smalti7x14-Regular.otb \
-	      build/Smalti7x14-Bold.bdf build/Smalti7x14-Bold.otb \
-	      build/Smalti7x14-Italic.bdf build/Smalti7x14-Italic.otb \
-	      build/Smalti7x14-BoldItalic.bdf build/Smalti7x14-BoldItalic.otb
+	rm -f $(FACES:%=build/Smalti7x14-%.bdf) $(FACES:%=build/Smalti7x14-%.otb) \
+	      $(FACES:%=build/Smalti7x14-%.ttf) $(FACES:%=build/Smalti7x14-%.woff2)
+
+# ------------------------------------------------------------------ outlines
+#
+# The .otb files above are bitmap-only, and a bitmap-only font is invisible to
+# most of the system: fontconfig's 70-no-bitmaps-except-emoji.conf rejects
+# anything with outline=false, and no browser renders an embedded strike.  So
+# each strike is ALSO traced into an outline .ttf -- one file per strike,
+# because outlines cannot vary with cell size.  tools/trace-outline.py has the
+# reasoning; `make check` proves the trace is exact.
+#
+# This path does not use fonttosfnt and so does not inherit its broken name
+# table either, which is why repair-tamzen.py has no part in it.
+
+VENV := .venv
+PY   := $(VENV)/bin/python
+
+# One command from a clean clone: everything the outline build needs.
+venv: $(VENV)/.stamp
+$(VENV)/.stamp: requirements.txt
+	python3 -m venv $(VENV)
+	$(VENV)/bin/pip install --quiet --upgrade pip
+	$(VENV)/bin/pip install --quiet -r requirements.txt
+	@touch $@
+
+outlines: $(FACES:%=build/Smalti7x14-%.ttf)
+woff2:    $(FACES:%=build/Smalti7x14-%.woff2)
+
+build/%.ttf: build/%.bdf tools/trace-outline.py | $(VENV)/.stamp
+	$(PY) tools/trace-outline.py $< $@
+
+build/%.woff2: build/%.ttf | $(VENV)/.stamp
+	$(VENV)/bin/fonttools ttLib.woff2 compress -o $@ $<
+
+# Every glyph of every face: filled area against lit pixel count, then the
+# rendered raster against the bitmap at 1x, 2x and 3x.
+check: outlines
+	$(PY) tools/check-outlines.py \
+	    $(foreach f,$(FACES),build/Smalti7x14-$(f).bdf build/Smalti7x14-$(f).ttf)
+	@for f in $(FACES); do \
+		$(PY) tools/render-check.py build/Smalti7x14-$$f.bdf \
+		      build/Smalti7x14-$$f.ttf || exit 1; \
+	done
+
+# Kept separate from `install`: the .ttf files carry the same family name as
+# the .otb files, so putting both in one directory would give wezterm's
+# font_dirs two candidates for every face.  Install these where fontconfig
+# looks instead, and every other application gets the font too.
+install-outlines: outlines
+	@mkdir -p $(DEST)-ttf
+	cp $(FACES:%=build/Smalti7x14-%.ttf) $(DEST)-ttf/
+	@fc-cache -f $(DEST)-ttf >/dev/null 2>&1 || true
+	@echo "installed to $(DEST)-ttf -- fontconfig serves family 'Smalti 7x14'"
