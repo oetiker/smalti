@@ -1,0 +1,58 @@
+# The drawings are the font, so the drawings are what CI checks.
+#
+# Every rule lives in `make check` (design spec section 9), never here: a
+# contributor has to be able to run the same check locally before pushing,
+# and a rule written in YAML can only be run by GitHub.  This file's whole
+# job is to provide a machine and call make.
+name: validate
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # `make check` builds every face to check them, so it needs the builder.
+      - name: install fonttosfnt
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xfonts-utils
+
+      - name: python dependencies
+        run: make venv
+
+      # Filenames, headers, glyph dimensions, per-face glyph counts, and that
+      # every built face passes repair-tamzen.py with nothing left to repair.
+      - name: check
+        run: make check
+
+      # The coverage table is generated, so it must not be edited by hand and
+      # must not go stale.  Regenerate it and insist nothing moved.
+      - name: coverage index is up to date
+        run: |
+          make index
+          if ! git diff --exit-code; then
+            echo "::error::the coverage index is stale -- run 'make index' and commit the result"
+            exit 1
+          fi
