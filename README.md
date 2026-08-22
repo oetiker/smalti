@@ -321,7 +321,12 @@ The tables below cover the symbol set.  Latin Extended-A (128, generated) and
 Greek (49, hand-drawn) are not listed here; `docs/coverage.md` counts every
 face, and `make show` prints the lot in the terminal's own font.
 
-**Latin-1 characters upstream never drew** (11)
+**Latin-1 characters upstream never drew** (13)
+
+With `ª` and `º` this block is complete: 96 of 96.  Both are drawn as a
+superscript letter in rows 2..6 over an underline in row 8, so the pair reads
+as a pair -- and `°` U+00B0 stays the shorter four-row ring it always was,
+because a degree sign is a symbol and an ordinal is a letter.
 
 | | | |
 |---|---|---|
@@ -336,6 +341,8 @@ face, and `make show` prints the lot in the terminal's own font.
 | `¶` | U+00B6 | Pilcrow Sign |
 | `·` | U+00B7 | Middle Dot |
 | `¹` | U+00B9 | Superscript One |
+| `ª` | U+00AA | Feminine Ordinal Indicator |
+| `º` | U+00BA | Masculine Ordinal Indicator |
 
 **Typography** (15)
 
@@ -597,11 +604,6 @@ someone drawing a new dingbat will actually look.
 
 ## Known gaps
 
-* **Latin-1 Supplement is 94 of 96**, not finished: `ª` U+00AA FEMININE
-  ORDINAL INDICATOR and `º` U+00BA MASCULINE ORDINAL INDICATOR are the two
-  holes, in every face.  Nothing else in U+00A0..U+00FF that is a character
-  at all is missing.  Found by the specimen site's block table, which is what
-  that table is for.
 * **Cyrillic** U+0400..U+04FF is not drawn.
 * **Miscellaneous Symbols** U+2600..U+26FF has only `★` and `☆`.
 * **Miscellaneous Technical** U+2300..U+23FF has only what the terminal-UI
