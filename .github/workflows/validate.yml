@@ -1,6 +1,7 @@
 # The drawings are the font, so the drawings are what CI checks.
 #
-# Every rule lives in `make check` (design spec section 9), never here: a
+# Every rule lives in `make check` -- the glyph store (design spec section 9)
+# and the outline proof, both halves -- never here: a
 # contributor has to be able to run the same check locally before pushing,
 # and a rule written in YAML can only be run by GitHub.  This file's whole
 # job is to provide a machine and call make.
@@ -42,8 +43,9 @@ jobs:
       - name: python dependencies
         run: make venv
 
-      # Filenames, headers, glyph dimensions, per-face glyph counts, and that
-      # every built face passes repair-tamzen.py with nothing left to repair.
+      # Filenames, headers, glyph dimensions, per-face glyph counts, that every
+      # built face passes repair-tamzen.py with nothing left to repair, and that
+      # every traced .ttf glyph is the same shape as its .bdf strike.
       - name: check
         run: make check
 

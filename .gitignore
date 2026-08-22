@@ -1,2 +1,4 @@
 # derived artefacts; rebuild with `make`
 /build/
+# python dependencies for the outline build; recreate with `make venv`
+/.venv/

@@ -65,6 +65,13 @@ jobs:
       # count of files actually verified is tracked and has to be non-zero.
       # An empty build/*.otb glob under nullglob is exactly that trap: it
       # would leave the check a no-op with a green tick.
+      # The outline faces are what fontconfig and browsers actually get, so the
+      # artefact this job uploads must be the one that was proved correct --
+      # every glyph's filled area against its lit pixel count, then the
+      # rendered raster against the bitmap at 1x, 2x and 3x.
+      - name: the traced outlines match the bitmaps
+        run: make check-outlines
+
       - name: built faces carry no remaining defect
         run: |
           set -o pipefail
@@ -88,6 +95,12 @@ jobs:
             fi
             checked=$((checked + ${#otb[@]}))
           fi
+
+          # Proved by `make check-outlines` in the step above.  If that step is
+          # ever removed, remove this too -- counting a file as verified when
+          # nothing verified it is the failure this whole tally exists to stop.
+          ttf=(build/*.ttf)
+          checked=$((checked + ${#ttf[@]}))
 
           if [ "$checked" -eq 0 ]; then
             echo "::error::${#fonts[@]} font files were built and none of them could be" \
