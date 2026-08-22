@@ -1,0 +1,67 @@
+# The specimen site, published to GitHub Pages.
+#
+# Like every other workflow here, this file supplies a machine and calls make.
+# The site is `make site`, and the proof that it ships this repository's own
+# drawings is `make check-site` -- both runnable locally, because a rule that
+# only GitHub can run is a rule a contributor cannot check before pushing.
+#
+# It does NOT need fonttosfnt.  The page loads the .woff2 files, which come
+# from the outline path (BDF -> .ttf -> .woff2) and never touch the bitmap
+# .otb path; a browser cannot render an .otb at all.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one in flight: a half-replaced
+# site is worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # fontTools, for the outline build and for the Unicode block table.
+      - name: python dependencies
+        run: make venv
+
+      # Builds the site as a side effect, then proves every glyph it ships is
+      # this repository's glyph and that the file its editor would put on a
+      # contributor's clipboard is byte-identical to the committed one.
+      - name: build and check the site
+        run: make check-site SITE_REPO='${{ github.repository }}' SITE_BRANCH=main
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

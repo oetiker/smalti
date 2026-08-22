@@ -12,6 +12,8 @@
 #   make check-outlines  the .ttf-against-.bdf proof only
 #   make headers    normalise the header line of every drawing
 #   make index      regenerate docs/coverage.md
+#   make site       build the specimen site into build/site/
+#   make check-site prove the site ships this repository's drawings
 #   make restore    put the untouched baselines back
 #
 # Requires: fonttosfnt (Debian/Ubuntu package xfonts-utils) for the .otb path,
@@ -51,7 +53,8 @@ WOFF2 := $(FACES:%=build/$(FONT)-%.woff2)
 BDF   := $(FACES:%=build/$(FONT)-%.bdf)
 
 .PHONY: all install preview show restore clean watch headers index \
-        check check-sources check-outlines venv outlines woff2 install-outlines
+        check check-sources check-outlines venv outlines woff2 \
+        install-outlines site check-site serve-site
 
 # The bitmap faces AND the outline faces: an .otb is invisible to fontconfig
 # and to every browser, so the .ttf is not an extra, it is how the font
@@ -157,7 +160,7 @@ restore:
 
 clean:
 	rm -f $(BDF) $(OTB) $(TTF) $(WOFF2)
-	rm -rf build/gen
+	rm -rf build/gen build/site
 
 # ------------------------------------------------------------------ outlines
 #
@@ -200,6 +203,47 @@ check-outlines: outlines
 		$(PY) tools/render-check.py build/$(FONT)-$$f.bdf \
 		      build/$(FONT)-$$f.ttf || exit 1; \
 	done
+
+# ---------------------------------------------------------------- the site
+#
+# A specimen page that renders every glyph as real text, says honestly what is
+# and is not covered, and lets a visitor edit any glyph's pixels and open the
+# pull request from the browser.
+#
+# IT LOADS THE .woff2 FILES, NOT THE .otb FILES.  An .otb is bitmap-only and no
+# browser draws an embedded strike, so a site built on those would show
+# nothing at all.  The outlines are exact at 14, 28 and 42 px and the page
+# offers no size in between.
+#
+# Nothing under build/site/ is committed, for the same reason nothing else
+# under build/ is: generated output is generated, never discovered.
+
+SITE   := build/site
+# owner/name for the "edit this glyph on GitHub" links.  Taken from the git
+# remote so a fork's links point at the fork; GitHub Actions passes
+# github.repository instead, because a checkout there has no useful remote.
+SITE_REPO   ?=
+SITE_BRANCH ?= main
+SITE_ARGS   := --branch $(SITE_BRANCH) $(if $(SITE_REPO),--repo $(SITE_REPO),)
+
+SITESRC := site/index.html site/smalti.css site/smalti.js
+
+site: $(SITE)/index.html
+$(SITE)/index.html: $(WOFF2) $(TTF) $(SITESRC) tools/build-site.py \
+                    tools/glyphstore.py | $(VENV)/.stamp
+	$(PY) tools/build-site.py $(SITE_ARGS) --out $(SITE) $(SIZE)
+
+# The site ships a copy of every drawing.  A stale copy would hand a
+# contributor a wrong file and turn their first pull request into a spurious
+# diff, so every glyph, in every face, is compared back against the store --
+# including the exact bytes the in-page editor would emit.
+check-site: site
+	$(PY) tools/check-site.py --site $(SITE) $(SIZE)
+
+# fetch() refuses file:// URLs, so the site has to be served to be looked at.
+serve-site: site
+	@echo "http://localhost:8014/ -- Ctrl-C to stop"
+	@cd $(SITE) && python3 -m http.server 8014
 
 # Kept separate from `install`: the .ttf files carry the same family name as
 # the .otb files, so putting both in one directory would give wezterm's

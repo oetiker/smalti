@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smalti {{SIZE}} — a pixel font you can draw in your browser</title>
+<meta name="description" content="Specimen and glyph editor for Smalti {{SIZE}}, a bitmap terminal font with {{GLYPHS}} glyphs in {{FACES}} faces. Click any glyph to change its pixels and open a pull request.">
+<meta name="color-scheme" content="dark">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="smalti.css">
+<link rel="preload" href="fonts/Smalti{{SIZE}}-Regular.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body>
+<a class="skip" href="#browse">Skip to the glyphs</a>
+
+<header class="masthead">
+  <a class="mark px" href="#top">smalti<b>{{SIZE}}</b></a>
+  <nav class="px" aria-label="Sections">
+    <a href="#specimen">specimen</a>
+    <a href="#coverage">coverage</a>
+    <a href="#browse">every&nbsp;glyph</a>
+    <a class="out" href="https://github.com/{{REPO}}">source</a>
+  </nav>
+</header>
+
+<main>
+
+<section id="top" class="hero">
+  <h1 class="sr-only">Smalti {{SIZE}}</h1>
+  <div class="hero-mark">{{WORDMARK}}</div>
+  <p class="lede">
+    Smalti are the small glass tiles a mosaic is made from. A pixel is one.
+    This is a {{CELL_W}}&times;{{CELL_H}} bitmap terminal font, forked from
+    Tamzen, in which every glyph is an ASCII-art text file — {{GLYPHS}} of
+    them per face, {{HAND}} drawn by hand in this repository.
+    <strong>The drawings are the font.</strong> The font files are what the
+    build spits out afterwards.
+  </p>
+  <ul class="facts px">
+    <li><b>{{GLYPHS}}</b> glyphs</li>
+    <li><b>{{FACES}}</b> faces</li>
+    <li><b>{{CELL_W}}&times;{{CELL_H}}</b> cell</li>
+    <li><b>{{HAND}}</b> drawn here</li>
+  </ul>
+  <p class="cta"><a class="button px" href="#browse">Pick a glyph and change it</a></p>
+</section>
+
+<section id="specimen" class="band">
+  <h2 class="head"><span class="eyebrow px">01</span> Specimen</h2>
+  <p class="prose">
+    Everything below is the real font, loaded as a web font and rendered as
+    text by your browser. It is set at 14, 28 and 42&nbsp;px — the cell height
+    and its multiples — because that is where the outlines land exactly on the
+    pixel grid and reproduce the bitmap with no antialiasing at all. At
+    17&nbsp;px it would blur, which is why no size in between is offered.
+  </p>
+  <div id="specimen-faces" class="specimens"></div>
+  <p class="prose note">
+    If these look soft, your display is running at a fractional scale factor:
+    14 CSS pixels then land on 21 device pixels and no outline can be exact at
+    a half-pixel. It is crisp at 100%, 200% and 300%.
+  </p>
+</section>
+
+<section id="coverage" class="band">
+  <h2 class="head"><span class="eyebrow px">02</span> Coverage</h2>
+  <p class="prose">
+    Coverage here is ragged on purpose. A face with no drawings at all still
+    builds — it comes out as plain upstream Tamzen — so nothing is ever
+    blocked on nobody having drawn <span class="px">✦</span> yet. What follows
+    is the whole truth about what this font has, where it came from, and what
+    it is missing.
+  </p>
+
+  <h3 class="sub">Who drew what</h3>
+  <p class="prose">
+    A drawing beats a computation; a computation beats nothing. Every glyph in
+    every face comes from exactly one of three places, and this is the count
+    per face — the same numbers <code>make&nbsp;index</code> writes into
+    <code>docs/coverage.md</code>.
+  </p>
+  <div id="provenance"></div>
+
+  <h3 class="sub">Block by block</h3>
+  <p class="prose">
+    Each strip below is one Unicode block, one tile per codepoint, in order.
+    A lit tile is a glyph this font has. An empty socket is a glyph nobody has
+    drawn yet — click one and you can be the person who does. A crossed tile
+    is a codepoint left undrawn <em>by rule</em>: it is East Asian Wide, so a
+    terminal gives it two cells and takes it from the emoji font, and a
+    {{CELL_W}}&times;{{CELL_H}} bitmap for it would be both unused and the
+    wrong width.
+  </p>
+  <div class="legend px" id="cov-legend"></div>
+  <div id="blocks"></div>
+  <p class="prose note" id="untouched-note"></p>
+  <p class="prose note">
+    Two counting notes, so the numbers can be checked. Each face holds
+    {{GLYPHS}} glyphs but its <code>cmap</code> has {{CMAP}} entries:
+    <code>.notdef</code> is glyph&nbsp;0 and is deliberately not mapped, which
+    is correct and not a gap. And a block's target excludes unassigned
+    codepoints, surrogates, control codes and the private use area — what
+    belongs in those is a judgement this font makes one codepoint at a time,
+    so they are counted as extras rather than counted against.
+  </p>
+</section>
+
+<section id="browse" class="band">
+  <h2 class="head"><span class="eyebrow px">03</span> Every glyph</h2>
+  <p class="prose">
+    Rendered as text, in the face and at the size you choose. Click any tile
+    to open its {{CELL_W}}&times;{{CELL_H}} grid and change the pixels.
+  </p>
+
+  <div class="toolbar px" role="group" aria-label="Glyph browser controls">
+    <label class="field">
+      <span>face</span>
+      <select id="face"></select>
+    </label>
+    <fieldset class="seg">
+      <legend class="sr-only">Size</legend>
+      <label><input type="radio" name="zoom" value="1"><span>14px</span></label>
+      <label><input type="radio" name="zoom" value="2" checked><span>28px</span></label>
+      <label><input type="radio" name="zoom" value="3"><span>42px</span></label>
+    </fieldset>
+    <fieldset class="seg">
+      <legend class="sr-only">Show</legend>
+      <label><input type="radio" name="filt" value="all" checked><span>all</span></label>
+      <label><input type="radio" name="filt" value="hand"><span>drawn here</span></label>
+      <label><input type="radio" name="filt" value="gap"><span>gaps</span></label>
+    </fieldset>
+    <label class="field grow">
+      <span>find</span>
+      <input id="find" type="search" placeholder="arrow, 2192, ✓" autocomplete="off">
+    </label>
+  </div>
+  <p class="px count" id="count" role="status"></p>
+  <div id="grid"></div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <p class="prose">
+    Tamsyn &rarr; Tamzen &rarr; Smalti. Scott Fial drew Tamsyn in 2010, Suraj
+    N. Kurapati forked it as Tamzen in 2011, and this is a fork of that. Both
+    upstream licences grant permission to use, copy, modify and distribute.
+    This page is built by <code>make site</code> from the drawings themselves,
+    so it cannot describe a font other than the one in the repository.
+  </p>
+</footer>
+
+<div id="editor" class="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="ed-title"></div>
+<div id="scrim" class="scrim" hidden></div>
+
+<script src="smalti.js"></script>
+</body>
+</html>
