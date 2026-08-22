@@ -54,6 +54,17 @@ jobs:
       # already-repaired face must find nothing left to fix.  If a face still
       # reports a defect here, fonttosfnt output changed under us and the font
       # would render blank in wezterm.
+      #
+      # ORDER IS LOAD-BEARING.  repair-tamzen.py is a repair tool, and it
+      # edits the file IN PLACE.  It works as a check only because `make` has
+      # already run it, which makes this second run a no-op that reports
+      # "already repaired".  Move this step ahead of the build and it will
+      # silently repair the defect and then report success.
+      #
+      # A step that checked nothing must never report success either, so the
+      # count of files actually verified is tracked and has to be non-zero.
+      # An empty build/*.otb glob under nullglob is exactly that trap: it
+      # would leave the check a no-op with a green tick.
       - name: built faces carry no remaining defect
         run: |
           set -o pipefail
@@ -64,6 +75,8 @@ jobs:
             exit 1
           fi
           printf 'built: %s\n' "${fonts[@]}"
+
+          checked=0
           otb=(build/*.otb)
           if [ ${#otb[@]} -gt 0 ]; then
             out=$(tools/repair-tamzen.py "${otb[@]}")
@@ -73,6 +86,22 @@ jobs:
               echo "::error::${#otb[@]} faces built but only $clean were free of defects"
               exit 1
             fi
+            checked=$((checked + ${#otb[@]}))
+          fi
+
+          if [ "$checked" -eq 0 ]; then
+            echo "::error::${#fonts[@]} font files were built and none of them could be" \
+                 "verified -- this step has no check for any of these formats, so it" \
+                 "must fail rather than pass having checked nothing"
+            exit 1
+          fi
+          echo "verified $checked of ${#fonts[@]} built font files"
+
+          # Not fatal: a format this step cannot verify yet is a gap to close,
+          # not a broken build.  It is named here so it cannot go unnoticed.
+          if [ "$checked" -ne "${#fonts[@]}" ]; then
+            echo "::warning::$(( ${#fonts[@]} - checked )) built font files went" \
+                 "unverified -- no check exists here for their format"
           fi
 
       # Not a formality: install is the documented entry point in the README,
