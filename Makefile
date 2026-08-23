@@ -63,6 +63,7 @@ BDF   := $(FACES:%=build/$(FONT)-%.bdf)
 
 .PHONY: all install preview show restore clean watch headers index \
         check check-sources check-outlines check-version venv outlines woff2 \
+        print-dest \
         site check-site serve-site
 
 # The .bdf strikes are the intermediate; the .ttf is the deliverable.  There
@@ -180,6 +181,11 @@ watch:
 		fi; \
 	done
 
+# CI asks where `install` puts things rather than hardcoding the path in a
+# workflow.  A second copy of DEST is a second thing to forget when it moves,
+# and it has moved once already.
+print-dest: ; @echo $(DEST)
+
 show: ; @tools/show-new.sh
 
 preview: build/$(FONT)-Regular.bdf $(GEN)
@@ -192,6 +198,7 @@ restore:
 
 clean:
 	rm -f $(BDF) $(TTF) $(WOFF2)
+	rm -f build/*.otb              # stale output of a format this no longer builds
 	rm -rf build/gen build/site
 	rm -rf build/selftest-*        # only if a self-test died mid-case
 
