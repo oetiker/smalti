@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 
+### Changed
+
+### Fixed
+
+## 0.1.0 - 2026-08-23
+### New
 - **The glyph store**: one file per glyph, at `glyphs/<size>/<face>/<CP>.txt`, resolved through a three-layer stack — a drawing here always wins, upstream Tamzen's own hand-drawn bitmap comes next, and a generator fills what is left. A generator writes only into `build/gen/`, so all seven are re-runnable and none can overwrite anyone's work; overriding one is not a flag, it is drawing the glyph. Duplicate codepoints are impossible rather than checked for, because the filesystem enforces uniqueness. The layout carries a size dimension from day one, populated with 7x14.
 - **Outline faces**: every strike is traced into a `.ttf`, and compressed to `.woff2` for the web. The em is a whole number of pixels (upem = cell height x 64), so the outline reproduces the bitmap exactly at 14, 28 and 42 px. `make outlines`, `make woff2`, `make install`.
 - **A specimen site**: every glyph in every face rendered as real text, an honest account of what is and is not covered, and a click on any tile — including an empty one — that opens that glyph's grid, editable, with the pull request one link away. `make site`, `make serve-site`, published to GitHub Pages.
@@ -24,7 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The editor can send its pull requests to a repository and branch of your choosing.** Remembered as you move from glyph to glyph, so drawing a whole block lands on one branch instead of scattering across twenty. The site cannot create the branch — a GitHub URL opens an editor on a ref, it does not make one — so the panel says that, and while a non-default branch is in force both the create-the-file and edit-the-file links are offered, because what the build knows about which glyphs exist is only true of the default branch.
 
 ### Changed
-
 - **The bitmap `.otb` format is no longer built or shipped.** A bitmap-only font has `outline=false`, which fontconfig's `70-no-bitmaps-except-emoji.conf` rejects outright, and no browser renders an embedded strike — so it reached nothing except a wezterm patched to read strikes, while requiring an apt package (`xfonts-utils`, for `fonttosfnt`) that nothing else in the build needed. The `.ttf` renders the same pixels everywhere, proven glyph by glyph. `make install` now installs the `.ttf` files, `make install-outlines` is gone, and the build's only dependency is `python3-venv`.
 - `tools/repair-tamzen.py` is no longer part of the build. The four metric fields it repaired were emitted wrongly by `fonttosfnt`; with that tool gone there is nothing to repair. The same four fields are now *checked* on every built face instead, by `make check-sources`. The script is kept for `make restore`, which repairs upstream Tamzen's own files.
 - `glyphs-bold/` is gone. All 813 of it was reproducible and is now generated into `build/gen/7x14/bold/`, so `make sources` is gone with it — there is nothing left to regenerate by hand.
@@ -32,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `U+00A8 DIAERESIS` in the bold and bold-italic faces is upstream's drawing again. It is the only codepoint where a generator's output overlaps a glyph upstream also draws, and a hand-drawn bitmap outranks a computed one. Dropping a drawing at `glyphs/7x14/bold/00A8.txt` reverses that.
 
 ### Fixed
-
 - **The release guard could not be retried after a failed attempt.** It excluded only the current run's jobs from the checks it waits on, so an attempt that failed for any reason left a failed check run on the commit, and every later attempt refused to release it. Check runs cannot be deleted, so the commit was permanently un-releasable, and deleting the release branch did not help — the block is attached to the commit. This cost Smalti its first release: `0.1.0` was prepared correctly, failed to open its pull request because *Allow GitHub Actions to create and approve pull requests* was off, and could then never be retried. The id-gathering moved from inline YAML, where nothing could test it, into `lib/checks.js` as `guardIgnoreIds`, with unit tests covering both directions — a dead earlier attempt is ignored, a genuinely failing check still blocks. `release-pr.yml` and `lib/checks.js` are borrowed files and now carry a `+ LOCAL PATCH` marker; see `RELEASING.md` before taking a newer set from repo-infra.
 - **The editor's baseline was drawn one pixel too low and was never once visible.** It was a pseudo-element at `bottom: -2px` on the cells of row 10, which put it inside row 11, where that row's own background painted over it. Nudging the offset does not fix a z-order problem, so all four guide lines moved onto a single canvas over the grid, positioned from the cells' real rectangles. Cap height and x-height, which had been the same blue at the same opacity and so could not be told apart, are now dashed and dotted, and the legend draws each swatch the way its line is drawn.
 - **The font no longer claims to be Tamzen 1.11.** `FONT_VERSION` was inherited from upstream and never rewritten, so the `.ttf` name table carried upstream's version. Every artefact now carries this project's own version, and `make check-version` reads it back out to prove it.
