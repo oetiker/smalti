@@ -40,6 +40,12 @@ from fontTools.unicodedata import Blocks
 # follows for generated output.
 ASSETS = ('smalti.css', 'smalti.js')
 
+# The editor's ghost fonts, vendored by tools/make-hint-fonts.py.  This build
+# never downloads them and never subsets them; all it does is read their cmaps
+# so it can hand each codepoint to exactly one of them.
+HINT_DIR = os.path.join('site', 'hint')
+HINT_MANIFEST = 'SOURCES.json'
+
 FACE_FILE = {'regular': 'Regular', 'bold': 'Bold',
              'italic': 'Italic', 'bold-italic': 'BoldItalic'}
 
@@ -129,7 +135,58 @@ def in_target(cp):
 
 # ------------------------------------------------------------------ data --
 
-def build_data(size, repo, branch):
+def hint_plan(hint_dir=HINT_DIR):
+    """Which vendored ghost font owns which codepoint.
+
+    Returns [(filename, sorted codepoints)] in manifest order, with the sets
+    DISJOINT: a codepoint goes to the first font that has it.  Overlapping
+    unicode-ranges would leave the browser two candidates for one character
+    and the ghost would then depend on rule order rather than on a decision
+    made here.
+
+    The cmaps are read out of the .woff2 files that are actually shipped, not
+    out of the manifest, so a file swapped without re-running make-hint-fonts
+    cannot lie about what it contains.
+    """
+    from fontTools.ttLib import TTFont
+
+    path = os.path.join(hint_dir, HINT_MANIFEST)
+    if not os.path.exists(path):
+        raise SystemExit(f'{path} is missing -- run tools/make-hint-fonts.py '
+                         f'to vendor the editor\'s ghost fonts')
+    manifest = json.load(open(path, encoding='utf-8'))
+    plan, taken = [], set()
+    for entry in manifest['fonts']:
+        fn = entry['file']
+        src = os.path.join(hint_dir, fn)
+        if not os.path.exists(src):
+            raise SystemExit(f'{src} is named in {HINT_MANIFEST} but is not '
+                             f'here -- re-run tools/make-hint-fonts.py')
+        f = TTFont(src, lazy=True)
+        cps = set(f.getBestCmap())
+        f.close()
+        mine = sorted(cps - taken)
+        taken |= cps
+        plan.append((fn, mine))
+    if not taken:
+        raise SystemExit(f'{hint_dir} holds no codepoints at all -- the ghost '
+                         f'would be blank for every glyph')
+    return plan
+
+
+def css_ranges(cps):
+    """Merge a sorted codepoint list into CSS `unicode-range` syntax."""
+    out, i, n = [], 0, len(cps)
+    while i < n:
+        j = i
+        while j + 1 < n and cps[j + 1] == cps[j] + 1:
+            j += 1
+        out.append(f'U+{cps[i]:X}' if i == j else f'U+{cps[i]:X}-{cps[j]:X}')
+        i = j + 1
+    return ', '.join(out)
+
+
+def build_data(size, repo, branch, hinted):
     w, h = gs.cell(size)
     faces = list(gs.FACES)
     resolved = {f: gs.resolve(size, f) for f in faces}
@@ -183,6 +240,12 @@ def build_data(size, repo, branch):
                      in ('Cc', 'Cf', 'Cs', 'Zl', 'Zp') else '1'
                      for cp in listed)
 
+    # Which codepoints the editor can show a ghost for.  Recorded rather than
+    # guessed at in the browser: the page must be able to SAY that it has no
+    # hint for a codepoint instead of drawing the empty box a missing glyph
+    # produces, which a contributor would reasonably read as a design.
+    hint = ''.join('1' if cp in hinted else '0' for cp in listed)
+
     for px, text in SPECIMEN:
         for ch in text:
             if ord(ch) not in cov:
@@ -226,6 +289,7 @@ def build_data(size, repo, branch):
         'headers': [gs.header(cp) for cp in listed],
         'state': state,
         'textok': textok,
+        'hint': hint,
         'specimen': [{'px': px, 'text': text} for px, text in SPECIMEN],
         'bits': bits, 'layers': layers,
         'blocks': blocks, 'totals': totals,
@@ -299,13 +363,16 @@ def main():
               'request" links are disabled.  Pass --repo owner/name.',
               file=sys.stderr)
 
-    data, resolved, covered = build_data(a.size, repo, a.branch)
+    plan = hint_plan()
+    data, resolved, covered = build_data(
+        a.size, repo, a.branch, {cp for _fn, cps in plan for cp in cps})
     w, h = data['cell']['w'], data['cell']['h']
 
     out = a.out
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(os.path.join(out, 'fonts'), exist_ok=True)
     os.makedirs(os.path.join(out, 'data'), exist_ok=True)
+    os.makedirs(os.path.join(out, 'hint'), exist_ok=True)
 
     for face, name in data['faceFile'].items():
         src = os.path.join('build', name)
@@ -337,6 +404,34 @@ def main():
                    ' font-display: block;\n}')
     with open(os.path.join(out, 'fonts.css'), 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(css) + '\n')
+
+    # The ghost fonts.  One family name over several files, each with a
+    # unicode-range covering exactly what it owns, so a browser fetches ONE of
+    # them -- the Nerd Font alone is a megabyte and must not be pulled down to
+    # draw a letter.  `font-display: block` because a ghost that arrives as a
+    # different font mid-draw would be worse than one that arrives late, and
+    # `swap` is what produces that.
+    hint_css = ['/* generated by tools/build-site.py -- do not edit */']
+    for fn, cps in plan:
+        shutil.copyfile(os.path.join(HINT_DIR, fn),
+                        os.path.join(out, 'hint', fn))
+        if not cps:
+            # Every codepoint it has is already owned by an earlier font.  Ship
+            # the file (the licence names it) but do not declare a face with an
+            # empty unicode-range, which no browser has a defined behaviour for.
+            continue
+        hint_css.append('@font-face {\n'
+                        '  font-family: SmaltiHint;\n'
+                        f'  src: url("hint/{fn}") format("woff2");\n'
+                        '  font-weight: 400; font-style: normal;'
+                        ' font-display: block;\n'
+                        f'  unicode-range: {css_ranges(cps)};\n}}')
+    with open(os.path.join(out, 'hint.css'), 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(hint_css) + '\n')
+    for fn in sorted(os.listdir(HINT_DIR)):
+        if fn.endswith('.txt') or fn == HINT_MANIFEST:
+            shutil.copyfile(os.path.join(HINT_DIR, fn),
+                            os.path.join(out, 'hint', fn))
 
     # Read the cmap out of the font that was actually built rather than
     # asserting a number: the page tells a visitor that .notdef is glyph 0 and

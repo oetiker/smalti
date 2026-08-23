@@ -1,0 +1,52 @@
+{
+  "fonts": [
+    {
+      "bytes": 141132,
+      "codepoints": 3490,
+      "file": "NotoSansMono-Regular.woff2",
+      "sha256": "b97922da952ad3f7ee7280c83d9929456bed8d4fd832dddef01e595422508891",
+      "source": "https://raw.githubusercontent.com/notofonts/notofonts.github.io/3c16704cb6f6e7c02268f7bc0cf86aaee598d16f/fonts/NotoSansMono/unhinted/ttf/NotoSansMono-Regular.ttf",
+      "sourceSha256": "87f8ce0522a6c99b743ee5fc75b4073cfdd575639119672828b7b9944b65b4f4",
+      "version": "Version 2.014"
+    },
+    {
+      "bytes": 233220,
+      "codepoints": 2641,
+      "file": "NotoSansSymbols2-Regular.woff2",
+      "sha256": "87dd031dd1d8a36f680eafce601b0cd0601ffaee3fe0fd4143f41cbb0dd5c4fc",
+      "source": "https://raw.githubusercontent.com/notofonts/notofonts.github.io/3c16704cb6f6e7c02268f7bc0cf86aaee598d16f/fonts/NotoSansSymbols2/unhinted/ttf/NotoSansSymbols2-Regular.ttf",
+      "sourceSha256": "c4a0a80f0041ce4be81e2478faad22776d23edb98ae3f0d19bd37044820ecf9d",
+      "version": "Version 2.008"
+    },
+    {
+      "bytes": 54884,
+      "codepoints": 840,
+      "file": "NotoSansSymbols-Regular.woff2",
+      "sha256": "23c72835a77361b1e3a4e4c1f385cb3d8a73235aff6a6d454083b3afc9fd472f",
+      "source": "https://raw.githubusercontent.com/notofonts/notofonts.github.io/3c16704cb6f6e7c02268f7bc0cf86aaee598d16f/fonts/NotoSansSymbols/unhinted/ttf/NotoSansSymbols-Regular.ttf",
+      "sourceSha256": "6eea9cb4cd39269ea9f95ba5c2735f80ae74049dfc9e1a7c932a5cfc8f0c3030",
+      "version": "Version 2.003"
+    },
+    {
+      "bytes": 245744,
+      "codepoints": 2919,
+      "file": "NotoSansMath-Regular.woff2",
+      "sha256": "b9acd26280fd08486ffcd396cdbbdc4adcdcf9cd677fe24df95dc91742c540fe",
+      "source": "https://raw.githubusercontent.com/notofonts/notofonts.github.io/3c16704cb6f6e7c02268f7bc0cf86aaee598d16f/fonts/NotoSansMath/unhinted/ttf/NotoSansMath-Regular.ttf",
+      "sourceSha256": "b127e84699212b6b2ef50aff58e0ebebeec04ffe6db1b9eb9e209c8c3d97b4aa",
+      "version": "Version 3.000"
+    },
+    {
+      "bytes": 1072220,
+      "codepoints": 10624,
+      "file": "SymbolsNerdFont-Regular.woff2",
+      "sha256": "58ebcc170fd524a39612d68598e2a6804be080c236462ce6a7259aa26ad531f0",
+      "source": "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.5.1/NerdFontsSymbolsOnly.zip!SymbolsNerdFont-Regular.ttf",
+      "sourceSha256": "2839f0a572d4559f3f17a6fb74b8772e183f0c0a47150998ab194932cad55829",
+      "version": "Version 001.000;Nerd Fonts 3.5.1"
+    }
+  ],
+  "nerdTag": "v3.5.1",
+  "notoCommit": "3c16704cb6f6e7c02268f7bc0cf86aaee598d16f",
+  "oflCommit": "0c7e5ee3312638800f9cc2162cc621a82695d02e"
+}

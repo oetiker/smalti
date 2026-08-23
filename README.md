@@ -433,6 +433,64 @@ Three things about it are not obvious:
 
 `.github/workflows/pages.yml` runs `make check-site` and publishes the result.
 
+### The editor's ghost, and where its edits go
+
+Two things in the editor exist for the case where you sit down to draw a
+whole block rather than one character.
+
+**A ghost of the character behind the grid.**  Drawing a codepoint nobody has
+drawn yet means knowing what it is supposed to look like, and the reference
+has to be the same for everybody — a hint that came from whichever fonts the
+visitor happened to have installed would have two contributors tracing two
+different shapes.  So the reference fonts are vendored, in `site/hint/`:
+
+| file | codepoints |
+|---|---:|
+| `NotoSansMono-Regular.woff2` | letters, digits, punctuation, Greek, Cyrillic |
+| `NotoSansSymbols2-Regular.woff2` | arrows, box drawing, blocks, braille, shapes |
+| `NotoSansSymbols-Regular.woff2` | dingbats and the rest of the symbol blocks |
+| `NotoSansMath-Regular.woff2` | mathematical operators |
+| `SymbolsNerdFont-Regular.woff2` | the private-use icons, Powerline included |
+
+**None of them is subsetted**, deliberately.  Cutting them down to what
+Smalti covers today would delete the hint for exactly the glyphs that are not
+drawn yet, which is the only case the ghost is for.  About 1.7 MB sits in the
+repository; a visitor downloads **one** of those files, because
+`tools/build-site.py` reads their cmaps and gives each file a `unicode-range`
+covering exactly the codepoints it owns, with no overlaps.  (Do not try to
+chunk the Nerd Font to make that download smaller.  Measured: splitting it by
+range produced 2.2 MB of parts against 1.0 MB whole, because woff2 compresses
+the whole glyph set better than its pieces.)
+
+Where a codepoint is in none of them, the editor **says so** instead of
+drawing the empty box a missing glyph produces — which a contributor would
+reasonably read as a design decision.  `make check-site` proves both halves of
+that claim: every codepoint offered a ghost really is in a shipped font, and
+every codepoint refused really is in none of them.
+
+`tools/make-hint-fonts.py` is what vendors them.  It is **not** part of
+`make`: it needs the network, and putting a third party's release schedule
+inside a byte-reproducible build would be a moving part in the one place this
+project cannot afford one.  Every source is pinned to a commit or a release
+tag, `site/hint/SOURCES.json` records the SHA-256 of what went in and what
+came out, and `--check` re-derives the lot and compares without writing:
+
+    .venv/bin/python tools/make-hint-fonts.py --check
+
+Noto is under the SIL Open Font License, the Nerd Fonts symbols under MIT;
+both licence files are vendored beside the fonts and served with them.
+
+**A repository and branch of your own.**  The editor's links normally point at
+this repository and its default branch.  Under *where edits go* you can point
+them somewhere else, and the choice is remembered as you move from glyph to
+glyph, so twenty edits land on one branch instead of scattering.  **The site
+cannot create that branch** — a GitHub URL opens an editor on a ref, it does
+not make one.  Make the first edit the ordinary way, then paste the branch
+GitHub made for it into the box.  While a branch other than the default is in
+force the editor offers both doors, create-the-file and edit-the-file, because
+what the build knows about which glyphs exist is only true of the default
+branch.
+
 ## Drawing a glyph
 
 Create `glyphs/7x14/regular/2192.txt`:
