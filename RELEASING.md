@@ -75,3 +75,42 @@ teaching it a new ecosystem is a change to that project rather than this one.
 **Do not hand-edit the borrowed files.** Take a newer version of the whole set,
 or the next update silently reverts you. Smalti-specific behaviour lives in the
 `publish-fonts` job in `release-publish.yml`, which is this project's own.
+
+### The one place that rule is broken, on purpose
+
+`release-pr.yml` and `lib/checks.js` carry a local patch, marked in their
+version lines as `+ LOCAL PATCH`. It is reported upstream; until a repo-infra
+release carries the fix, **check before taking a newer set, or taking it
+reintroduces the bug.**
+
+The guard that waits for green checks before releasing excluded only the
+*current* run's jobs. So a release attempt that failed for any reason left a
+failed check run on the commit, and every later attempt read that corpse as
+"this commit has a failing check" and refused. Check runs cannot be deleted,
+so **the commit became permanently un-releasable** — and deleting the release
+branch does not help, because the block is attached to the commit.
+
+That is not theoretical: it cost Smalti its first release. `0.1.0` was
+prepared correctly, failed to open its pull request because *Allow GitHub
+Actions to create and approve pull requests* was off, and then could not be
+retried at all. Two separate faults, and the second one hid behind the first.
+
+The id-gathering now lives in `lib/checks.js` as `guardIgnoreIds`, where
+`lib/checks.test.js` tests it — including that a genuinely failing check still
+blocks a release, which is the half a careless fix would drop. It was inline
+YAML before, where nothing could test it, which is why the bug shipped.
+
+    node --test .github/workflows/lib/checks.test.js
+
+That is deliberately **not** in `make check` or CI: this repository's only
+build dependency is `python3-venv`, and adding node to the gates to test a
+borrowed file would be a poor trade. Upstream runs these tests.
+
+### If a release ever does get stuck on a poisoned commit
+
+Land any further commit on `main` and dispatch again. The guard reads the
+checks of the commit it is releasing, so a commit with a clean history
+releases normally. The prepared branch from the failed attempt can be reused
+as-is: nothing downstream reads the pull request, which is only a review
+surface — `release-publish.yml` fires on `CHANGES.md` landing on `main` and
+reads the version out of the repository.

@@ -1,5 +1,5 @@
 name: Create release PR
-# repo-infra: release-pr v1
+# repo-infra: release-pr v1 + LOCAL PATCH (release guard retry)
 #
 # BORROWED, NOT GENERATED.  This file and release-publish.yml come from the
 # repo-infra standard (~/checkouts/repo-infra,
@@ -13,6 +13,17 @@ name: Create release PR
 # version of the whole set from repo-infra, or the next update silently
 # reverts you.  Smalti-specific behaviour belongs in release-publish.yml's
 # add-on job, which is this project's own.
+#
+# THAT RULE HAS ONE DELIBERATE EXCEPTION, MARKED IN THE VERSION LINE ABOVE.
+# The guard below excluded only the CURRENT run's jobs from the checks it
+# waits on, so a release attempt that failed for any reason left a failed
+# check run on the commit and every later attempt refused to release it.
+# Check runs cannot be deleted, so that commit was releasable never again --
+# it cost oetiker/smalti its whole first release, 0.1.0.  The fix moved the
+# id-gathering into lib/checks.js:guardIgnoreIds, where lib/checks.test.js can
+# and does test it; the old version lived inline here, where nothing could.
+# Reported upstream.  WHEN A NEWER repo-infra SET ARRIVES: check whether it
+# carries that fix before taking it, or taking the set reintroduces the bug.
 #
 # Half one of a two-step release. main is protected and GITHUB_TOKEN cannot be
 # given a ruleset bypass — the bypass list takes users, teams and GitHub Apps,
@@ -40,7 +51,9 @@ permissions:
   contents: write
   pull-requests: write
   checks: read
-  # To read this run's own job ids, so the guard can exclude itself.
+  # To read the job ids of this workflow's runs on this commit — this run, so
+  # the guard can exclude itself, and any earlier attempt, so a failed one
+  # cannot block the retry.
   actions: read
 
 jobs:
@@ -76,20 +89,23 @@ jobs:
             // This job is itself a check run on this commit, so the guard has
             // to exclude its own jobs or it waits for the job doing the
             // waiting -- 15 minutes, then "Still running: Prepare the release
-            // pull request". A check run's id is its Actions job id, so this
-            // run's job list is exactly the set to ignore.
-            const { data: own } = await github.rest.actions.listJobsForWorkflowRun({
+            // pull request".  It must exclude EVERY earlier attempt too, or
+            // one failed run leaves a corpse that no retry can ever get past.
+            // checks.js:guardIgnoreIds does both, and is unit-tested; this
+            // used to be inline here, where nothing could test it.
+            const ignoreCheckRunIds = await checks.guardIgnoreIds(github, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              run_id: context.runId,
-              per_page: 100,
+              ref: context.sha,
+              workflowRef: process.env.GITHUB_WORKFLOW_REF,
+              runId: context.runId,
             });
 
             const state = await checks.waitForChecks(github, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: context.sha,
-            }, { ignoreCheckRunIds: own.jobs.map((j) => j.id) });
+            }, { ignoreCheckRunIds });
 
             if (state.timedOut) {
               core.setFailed(
