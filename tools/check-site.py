@@ -19,6 +19,9 @@ is re-derived from the glyph store and compared:
      made on the site is known to survive `make check`.
   5. the four .woff2 faces, byte for byte against build/
   6. that no template placeholder survived into index.html
+  7. the editor's ghost fonts: that every codepoint the page offers a
+     reference glyph for is really in a shipped hint font, AND that every one
+     it refuses is really absent from all of them
 
 The decode here is written out again rather than imported from build-site.py
 on purpose: a check that shares its arithmetic with the thing it checks can
@@ -27,6 +30,7 @@ only ever prove that the code is self-consistent.
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 
@@ -52,6 +56,84 @@ def decode(bits, k, w, h):
         out.append(''.join('#' if v >> (w - 1 - x) & 1 else '.'
                            for x in range(w)))
     return out
+
+
+def parse_ranges(css):
+    """Every codepoint a `unicode-range:` declaration covers, per @font-face.
+
+    Parsed out of the served CSS rather than recomputed from the fonts,
+    because the CSS is what the browser obeys.  A range the fonts justify but
+    the CSS does not declare is still a glyph the visitor never sees.
+    """
+    out = []
+    for block in css.split('@font-face')[1:]:
+        m = re.search(r'url\("hint/([^"]+)"\)', block)
+        r = re.search(r'unicode-range:\s*([^;]+);', block)
+        if not m or not r:
+            continue
+        cps = set()
+        for part in r.group(1).split(','):
+            part = part.strip()
+            lo, _, hi = part[2:].partition('-')
+            cps.update(range(int(lo, 16), int(hi or lo, 16) + 1))
+        out.append((m.group(1), cps))
+    return out
+
+
+def check_hint(site, d):
+    """Leg 7: the ghost fonts say what the data claims they say."""
+    from fontTools.ttLib import TTFont
+
+    css_path = os.path.join(site, 'hint.css')
+    if not os.path.exists(css_path):
+        bad('hint.css is missing, so the editor has no ghost font at all')
+        return 0
+    declared = parse_ranges(open(css_path, encoding='utf-8').read())
+    if not declared:
+        bad('hint.css declares no @font-face with a unicode-range, so nothing '
+            'the data marks as hintable could actually be drawn')
+        return 0
+
+    have = set()
+    for fn, css_cps in declared:
+        path = os.path.join(site, 'hint', fn)
+        if not os.path.exists(path):
+            bad(f'hint.css names hint/{fn}, which is not in the site')
+            continue
+        f = TTFont(path, lazy=True)
+        real = set(f.getBestCmap())
+        f.close()
+        if css_cps - real:
+            miss = sorted(css_cps - real)[:3]
+            bad(f'hint/{fn} is declared for {len(css_cps - real)} codepoints '
+                f'it does not contain, e.g. ' +
+                ', '.join(f'U+{c:04X}' for c in miss))
+        if css_cps & have:
+            bad(f'hint/{fn} overlaps an earlier font on '
+                f'{len(css_cps & have)} codepoints, so which one draws the '
+                f'ghost depends on CSS rule order')
+        have |= css_cps
+
+    flags = d.get('hint', '')
+    if len(flags) != len(d['cps']):
+        bad(f'the hint flags cover {len(flags)} codepoints, the site lists '
+            f'{len(d["cps"])}')
+        return 0
+    # BOTH directions.  Checking only that a "1" is real would pass a file of
+    # nothing but zeroes, which is exactly the shape of a check that has
+    # quietly stopped checking.
+    claimed = {cp for cp, b in zip(d['cps'], flags) if b == '1'}
+    denied = {cp for cp, b in zip(d['cps'], flags) if b == '0'}
+    for cp in sorted(claimed - have)[:3]:
+        bad(f'the site says U+{cp:04X} has a ghost, but no shipped hint font '
+            f'declares it')
+    for cp in sorted(denied & have)[:3]:
+        bad(f'the site says U+{cp:04X} has no ghost, but hint.css declares it '
+            f'-- the editor would refuse to show a reference it has')
+    if not claimed:
+        bad('not one listed codepoint is marked as hintable, so the ghost is '
+            'dead for the whole font')
+    return len(claimed)
 
 
 def main():
@@ -212,6 +294,13 @@ def main():
         elif open(here, 'rb').read() != open(there, 'rb').read():
             bad(f'{here} differs from {there}')
 
+    # 7 -- the editor's ghost fonts.  The page tells a contributor either
+    # "here is what this character looks like" or "there is no reference for
+    # this one", and both claims have to be true of the files it ships: the
+    # first would otherwise draw an empty box that reads as a design decision,
+    # and the second would hide a hint that is right there.
+    n_hint = check_hint(site, d)
+
     # 6 -- nothing left unsubstituted, and the specimen really is this font
     page = open(os.path.join(site, 'index.html'), encoding='utf-8').read()
     if '{{' in page:
@@ -229,6 +318,8 @@ def main():
           f'{n_committed} against a committed .txt file byte for byte')
     print(f'check-site: {n_blank} not-yet-drawn codepoints start from a blank '
           f'grid that parses')
+    print(f'check-site: {n_hint} of {len(listed)} listed codepoints have a '
+          f'ghost in the vendored hint fonts')
     if fails:
         if len(fails) > 20:
             print(f'  ... and {len(fails) - 20} more')

@@ -366,6 +366,37 @@ function tileHtml(i, px) {
 var ED = null;    // {i, face, rows, orig}
 var LAST_FOCUS = null;
 
+/* Remembered across glyphs, because the interesting session is "I am drawing
+ * a block", not "I am drawing a character".  Private browsing and a blocked
+ * storage setting both throw on access rather than returning null, so every
+ * read and write is wrapped: the editor has to work with no storage at all. */
+var PREF = { repo: 'smalti.repo', branch: 'smalti.branch', hint: 'smalti.hint' };
+
+function pref(key, fallback) {
+  try {
+    var v = localStorage.getItem(key);
+    return v === null ? fallback : v;
+  } catch (e) { return fallback; }
+}
+
+function setPref(key, value) {
+  try { localStorage.setItem(key, value); } catch (e) { /* nothing to do */ }
+}
+
+/* Where a pull request goes.  The build knows one repository and one branch;
+ * a contributor working through a block wants their edits to land together,
+ * so both can be overridden here.  THE SITE CANNOT CREATE A BRANCH -- a
+ * GitHub URL only ever opens an editor on a ref that already exists -- so the
+ * hint text says so rather than letting a typo look like a broken link. */
+function target() {
+  return {
+    repo: pref(PREF.repo, D.repo) || D.repo,
+    branch: pref(PREF.branch, D.branch) || D.branch,
+    custom: pref(PREF.repo, D.repo) !== D.repo ||
+            pref(PREF.branch, D.branch) !== D.branch
+  };
+}
+
 function route() {
   var m = /^#\/glyph\/([a-z-]+)\/([0-9A-F]+)$/.exec(location.hash);
   if (!m) { if (ED) closeEditor(true); return; }
@@ -385,7 +416,8 @@ function openEditor(i, face, fromHash) {
     i: i, face: face,
     rows: k >= 0 ? rowsOf(face, k) : blankRows(),
     orig: k >= 0 ? rowsOf(face, k) : blankRows(),
-    exists: k >= 0 && D.layers[face][k] === 'h'
+    exists: k >= 0 && D.layers[face][k] === 'h',
+    ghost: pref(PREF.hint, '1') === '1'
   };
   drawEditor();
   $('#editor').hidden = false;
@@ -400,6 +432,12 @@ function openEditor(i, face, fromHash) {
   if (location.hash !== want) history.replaceState(null, '', want);
   var first = $('.pix', $('#editor'));
   if (first) first.focus();
+  /* refresh() has already drawn the guides; this second pass is only for the
+   * ghost, once the face for THIS character has actually arrived. */
+  var drawn = ED.i;
+  ensureHintFont(ghostChar(), function () {
+    if (ED && ED.i === drawn) drawOverlay();
+  });
 }
 
 function closeEditor(silent) {
@@ -471,6 +509,140 @@ function drawEditor() {
 
 var BASE = 10, CAP = 3, XH = 5, AXIS = 7;
 
+/* ---------------------------------------------------------- the overlay --
+ *
+ * The four guide lines and the ghost of the character are drawn on ONE canvas
+ * sitting over the grid, rather than as pseudo-elements on the cells.  The
+ * pseudo-element version had the baseline a pixel below the cell it belonged
+ * to, where the next row's own background painted over it -- so the single
+ * most important line in the editor was invisible, and no amount of nudging
+ * the offset fixes a z-order problem.  A canvas has no siblings to lose to.
+ *
+ * Every position is measured off the real cell rectangles instead of being
+ * recomputed from the CSS.  The cell size changes at a media query, and a
+ * second copy of that arithmetic here would be a copy that can disagree. */
+
+function gridGeom(g) {
+  var cells = g.querySelectorAll('.pix');
+  var w = D.cell.w;
+  if (cells.length < w + 2) return null;
+  var gr = g.getBoundingClientRect();
+  var a = cells[0].getBoundingClientRect();
+  var right = cells[1].getBoundingClientRect();
+  var below = cells[w].getBoundingClientRect();
+  return {
+    W: gr.width, H: gr.height,
+    x0: a.left - gr.left, y0: a.top - gr.top,
+    cw: a.width, ch: a.height,
+    px: right.left - a.left, py: below.top - a.top
+  };
+}
+
+/* Cap height as a fraction of the font size, measured once from the ghost
+ * font itself.  Scaling the ghost so ITS capitals land on Smalti's cap line
+ * is what makes it traceable; scaling by em box instead leaves every hint a
+ * little too tall and the drawing subtly wrong. */
+var CAP_RATIO = null;
+
+function capRatio(ctx) {
+  if (CAP_RATIO !== null) return CAP_RATIO;
+  ctx.save();
+  ctx.font = '200px SmaltiHint';
+  var m = ctx.measureText('H');
+  ctx.restore();
+  var a = m && m.actualBoundingBoxAscent;
+  /* Safari shipped actualBoundingBoxAscent late; 0.714 is Noto Sans Mono's
+   * own cap height, so the fallback is the right answer for the font that
+   * owns most of the letters rather than a guess. */
+  CAP_RATIO = (a && isFinite(a) && a > 0) ? a / 200 : 0.714;
+  return CAP_RATIO;
+}
+
+/* A webfont that has not arrived yet measures as the fallback font, and a cap
+ * ratio cached from THAT is wrong for the rest of the session.  So wait for
+ * the face, throw the cached ratio away, and only then draw. */
+function ensureHintFont(ch, done) {
+  if (!document.fonts || !document.fonts.load) { done(); return; }
+  var probe = 'H' + (ch || '');
+  document.fonts.load('200px SmaltiHint', probe).then(function () {
+    CAP_RATIO = null;
+    done();
+  }, done);
+}
+
+function ghostChar() {
+  var i = ED.i;
+  if (D.hint.charAt(i) !== '1') return null;
+  if (D.textok.charAt(i) !== '1') return null;
+  return String.fromCodePoint(D.cps[i]);
+}
+
+function drawOverlay() {
+  var host = $('#editor');
+  if (!host || !ED) return;
+  var g = $('.paint', host);
+  var c = $('.ed-overlay', host);
+  if (!g || !c) return;
+  var m = gridGeom(g);
+  if (!m || !m.W) return;
+
+  var dpr = window.devicePixelRatio || 1;
+  c.width = Math.round(m.W * dpr);
+  c.height = Math.round(m.H * dpr);
+  c.style.width = m.W + 'px';
+  c.style.height = m.H + 'px';
+  var ctx = c.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, m.W, m.H);
+
+  var gapY = m.py - m.ch;
+  /* The boundary BELOW a row, which is where the baseline lives: the drawing
+   * sits on it, so it is a line between rows and not a line through one. */
+  var under = function (row) { return m.y0 + row * m.py + m.ch + gapY / 2; };
+  var over = function (row) { return m.y0 + row * m.py - gapY / 2; };
+  var baseY = under(BASE);
+
+  if (ED.ghost) {
+    var ch = ghostChar();
+    if (ch) {
+      var rows = BASE + 1 - CAP;            // cap height, in whole cells
+      var size = rows * m.py / capRatio(ctx);
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#8fb3e8';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.font = size + 'px SmaltiHint';
+      var mid = m.x0 + ((D.cell.w - 1) * m.px + m.cw) / 2;
+      ctx.fillText(ch, mid, baseY);
+      ctx.restore();
+    }
+  }
+
+  /* Four guides, four different lines.  Two of them used to be the same
+   * colour at the same opacity, which is no guide at all: you could see that
+   * something was marked and not which thing. */
+  var lines = [
+    [baseY, '#d9a72c', [], 2],              // baseline: solid, and thickest
+    [over(CAP), '#5b8bd6', [5, 3], 1],      // cap height: dashed
+    [over(XH), '#5b8bd6', [1, 3], 1],       // x-height: dotted
+    [m.y0 + AXIS * m.py + m.ch / 2, '#3fa88c', [6, 2, 1, 2], 1]  // maths axis
+  ];
+  lines.forEach(function (l) {
+    ctx.save();
+    ctx.strokeStyle = l[1];
+    ctx.setLineDash(l[2]);
+    ctx.lineWidth = l[3];
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    var y = Math.round(l[0]) + (l[3] % 2 ? 0.5 : 0);
+    ctx.moveTo(0, y);
+    ctx.lineTo(m.W, y);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
 function paintGrid() {
   var g = el('div', 'paint');
   g.setAttribute('role', 'group');
@@ -510,6 +682,19 @@ function paintGrid() {
   });
   window.addEventListener('pointerup', function () { painting = null; });
   g.addEventListener('keydown', onGridKey);
+
+  /* Out of flow, so the grid does not see it; aria-hidden and pointer-events
+   * none, so neither a screen reader nor a click ever meets it.  Everything it
+   * draws is repeated in words in the legend beside it. */
+  var c = el('canvas', 'ed-overlay');
+  c.setAttribute('aria-hidden', 'true');
+  g.appendChild(c);
+
+  /* The cell size changes at a media query and the drawer can be resized, so
+   * the overlay follows the grid's real box rather than being drawn once. */
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () { drawOverlay(); }).observe(g);
+  }
   return g;
 }
 
@@ -559,18 +744,41 @@ function sidePanel() {
   });
   side.appendChild(prev);
 
+  /* One row per line, each swatch drawn the way its line is drawn.  Two of
+   * these used to share a row and a colour, so the legend could not tell you
+   * which blue line was which -- and neither could the grid. */
   var geom = el('ul', 'ed-geom');
-  [['var(--gold)', 'baseline, under row ' + BASE],
-   ['var(--cobalt)', 'cap height at row ' + CAP + ', x-height at row ' + XH],
-   ['var(--verdigris)', 'maths axis through row ' + AXIS]].forEach(function (p) {
+  [['solid', 'baseline, under row ' + BASE],
+   ['dash', 'cap height, above row ' + CAP],
+   ['dot', 'x-height, above row ' + XH],
+   ['dashdot', 'maths axis, through row ' + AXIS]].forEach(function (p) {
     var li = el('li');
-    var i = el('i');
-    i.style.background = p[0];
+    var i = el('i', p[0]);
     li.appendChild(i);
     li.appendChild(document.createTextNode(p[1]));
     geom.appendChild(li);
   });
   side.appendChild(geom);
+
+  var ghostRow = el('p', 'ed-toggle');
+  var cb = el('input');
+  cb.type = 'checkbox';
+  cb.id = 'ed-ghost';
+  cb.checked = ED.ghost;
+  var can = D.hint.charAt(ED.i) === '1' && D.textok.charAt(ED.i) === '1';
+  cb.disabled = !can;
+  cb.addEventListener('change', function () {
+    ED.ghost = cb.checked;
+    setPref(PREF.hint, cb.checked ? '1' : '0');
+    drawOverlay();
+  });
+  var lab = el('label', null, can
+    ? ' show the character behind the grid'
+    : ' no reference glyph exists for this codepoint');
+  lab.htmlFor = 'ed-ghost';
+  ghostRow.appendChild(cb);
+  ghostRow.appendChild(lab);
+  side.appendChild(ghostRow);
 
   var path = el('p', 'ed-path');
   path.id = 'ed-path';
@@ -604,12 +812,74 @@ function sidePanel() {
   gh.target = '_blank';
   gh.rel = 'noopener';
   acts.appendChild(gh);
+
+  var alt = el('a', 'ed-alt', '');
+  alt.id = 'ed-gh-alt';
+  alt.target = '_blank';
+  alt.rel = 'noopener';
+  alt.hidden = true;
+  acts.appendChild(alt);
   side.appendChild(acts);
 
   var hint = el('p', 'ed-help');
   hint.id = 'ed-hint';
   side.appendChild(hint);
+
+  side.appendChild(targetPanel());
   return side;
+}
+
+/* Where the edits go.  Drawing one glyph is a single pull request and the
+ * defaults are right; drawing a block is twenty, and they belong together on
+ * one branch. */
+function targetPanel() {
+  var t = target();
+  var box = el('details', 'ed-target');
+  box.open = t.custom;
+  var sum = el('summary', null, 'where edits go');
+  box.appendChild(sum);
+
+  var mk = function (id, label, value, placeholder) {
+    var p = el('p');
+    var l = el('label', null, label);
+    l.htmlFor = id;
+    var inp = el('input');
+    inp.id = id;
+    inp.type = 'text';
+    inp.value = value || '';
+    inp.placeholder = placeholder;
+    inp.spellcheck = false;
+    inp.autocapitalize = 'none';
+    inp.addEventListener('input', function () {
+      setPref(id === 'ed-repo' ? PREF.repo : PREF.branch, inp.value.trim());
+      refresh();
+    });
+    p.appendChild(l);
+    p.appendChild(inp);
+    return p;
+  };
+  box.appendChild(mk('ed-repo', 'repository', t.repo, 'owner/name'));
+  box.appendChild(mk('ed-branch', 'branch', t.branch, D.branch || 'main'));
+
+  var note = el('p', 'ed-help',
+    'The branch has to exist already — a GitHub link can open an editor on a '
+    + 'branch but cannot create one. Make your first edit the usual way, then '
+    + 'paste the branch GitHub made for it here, and everything after it '
+    + 'lands on the same branch.');
+  box.appendChild(note);
+
+  var reset = el('button', null, 'back to the defaults');
+  reset.type = 'button';
+  reset.id = 'ed-target-reset';
+  reset.addEventListener('click', function () {
+    setPref(PREF.repo, D.repo || '');
+    setPref(PREF.branch, D.branch || '');
+    $('#ed-repo').value = D.repo || '';
+    $('#ed-branch').value = D.branch || '';
+    refresh();
+  });
+  box.appendChild(reset);
+  return box;
 }
 
 function copyFile(btn) {
@@ -662,33 +932,57 @@ function refresh() {
   $('#ed-path').innerHTML = 'the file is <b>' + esc(rel) + '</b>';
   $('#ed-reset').disabled = text === fileText(ED.i, ED.orig);
 
-  var gh = $('#ed-gh'), hint = $('#ed-hint');
-  if (!D.repo) {
+  var gh = $('#ed-gh'), alt = $('#ed-gh-alt'), hint = $('#ed-hint');
+  var t = target();
+  if (!t.repo) {
     gh.hidden = true;
+    alt.hidden = true;
     hint.textContent = 'This build does not know which GitHub repository it ' +
       'belongs to, so copy the file and add it at ' + rel + ' yourself.';
+    drawOverlay();
     return;
   }
   gh.hidden = false;
-  var base = 'https://github.com/' + D.repo;
+  var base = 'https://github.com/' + t.repo;
+  var editUrl = base + '/edit/' + t.branch + '/' + rel;
+  var newUrl = base + '/new/' + t.branch + '?filename=' +
+               encodeURIComponent(rel) + '&value=' + encodeURIComponent(text);
   if (ED.exists) {
     /* The file is already in the repository.  GitHub's edit view will not
      * accept prefilled content, so the honest instruction is copy and paste. */
-    gh.href = base + '/edit/' + D.branch + '/' + rel;
+    gh.href = editUrl;
     gh.textContent = 'Open this file on GitHub ↗';
     hint.innerHTML = 'This glyph is already a file in the repository. ' +
       'Copy it above, open it on GitHub, select all, paste, and GitHub will ' +
       'offer to open the pull request for you — no clone, no toolchain.';
   } else {
-    gh.href = base + '/new/' + D.branch + '?filename=' +
-              encodeURIComponent(rel) + '&value=' + encodeURIComponent(text);
+    gh.href = newUrl;
     gh.textContent = 'Open a pull request ↗';
     hint.innerHTML = 'There is no file for this glyph yet, so the link above ' +
       'opens GitHub with the path and the drawing already filled in. Commit ' +
       'it and the pull request is done. A drawing beats a computation: this ' +
       'file will override whatever the build produces today.';
   }
+  /* On a branch of your own, the build's answer to "does this file exist?"
+   * is only true of the default branch: you may have added this very glyph
+   * there an hour ago.  Rather than guess, offer the other door as well. */
+  alt.hidden = !t.custom;
+  if (t.custom) {
+    alt.href = ED.exists ? newUrl : editUrl;
+    alt.textContent = ED.exists
+      ? 'not on ' + t.branch + ' yet? create it ↗'
+      : 'already added it to ' + t.branch + '? edit it ↗';
+  }
+  drawOverlay();
 }
+
+/* Registered once, not once per editor: the drawer is rebuilt every time it
+ * opens, and a listener added there would accumulate one per glyph looked at.
+ * The ResizeObserver in paintGrid covers the cell-size media query; this is
+ * the fallback for a browser without one, and for a window resize that does
+ * not change the grid's own box (a device-pixel-ratio change on a move
+ * between monitors, which the canvas backing store cares about). */
+window.addEventListener('resize', function () { drawOverlay(); });
 
 document.addEventListener('keydown', function (e) {
   if (e.key === 'Escape' && ED) closeEditor();

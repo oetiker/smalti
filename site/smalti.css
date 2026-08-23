@@ -350,19 +350,18 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
  * row 3, x-height at row 5, and the maths axis is row 7. */
 .paint { display: grid; grid-template-columns: repeat(7, var(--u4));
          gap: 1px; background: var(--grout); border: 1px solid var(--grout2);
-         width: max-content; }
+         width: max-content; position: relative; }
 .pix { width: var(--u4); height: var(--u4); background: var(--mortar2);
        border: 0; padding: 0; cursor: crosshair; position: relative; }
 .pix.side { background: #1a1712; }
 .pix.on { background: var(--ink); }
 .pix.on.side { background: #d8d0bc; }
-.pix.base::after { content: ""; position: absolute; left: 0; right: 0;
-                   bottom: -2px; height: 1px; background: var(--gold); opacity: .85; }
-.pix.cap::before, .pix.xh::before, .pix.axis::before {
-  content: ""; position: absolute; left: 0; right: 0; top: -1px; height: 1px;
-  background: var(--cobalt); opacity: .55;
-}
-.pix.axis::before { top: 50%; background: var(--verdigris); opacity: .5; }
+/* The guide lines and the ghost are drawn on this one canvas, by
+ * smalti.js:drawOverlay().  They used to be pseudo-elements on the cells,
+ * where the baseline sat a pixel into the row below it and that row's own
+ * background painted over it -- the line existed and was never once visible.
+ * A canvas over the whole grid has no sibling that can cover it. */
+.ed-overlay { position: absolute; left: 0; top: 0; pointer-events: none; }
 .paint:focus-within { outline: 2px solid var(--gold); outline-offset: 3px; }
 .pix:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
 
@@ -375,7 +374,49 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
            font-family: var(--pixel); font-size: 14px; line-height: var(--u2);
            color: var(--ink-dim); }
 .ed-geom li { display: flex; align-items: center; gap: var(--u); }
-.ed-geom i { width: var(--u2); height: 2px; display: block; }
+/* Each swatch is drawn the way its line is drawn, so the legend distinguishes
+ * the two blue guides the way the grid does.  Colour alone would not: it is
+ * the same blue on both, deliberately, because they are the same kind of
+ * thing -- a letter-height. */
+.ed-geom i { width: var(--u3); height: 2px; display: block; flex: none;
+             background-repeat: repeat-x; background-position: 0 50%; }
+.ed-geom i.solid   { background: var(--gold); }
+.ed-geom i.dash    { background-image: linear-gradient(to right,
+                       var(--cobalt) 0 5px, transparent 5px 8px);
+                     background-size: 8px 2px; }
+.ed-geom i.dot     { background-image: linear-gradient(to right,
+                       var(--cobalt) 0 1px, transparent 1px 4px);
+                     background-size: 4px 2px; }
+.ed-geom i.dashdot { background-image: linear-gradient(to right,
+                       var(--verdigris) 0 6px, transparent 6px 8px,
+                       var(--verdigris) 8px 9px, transparent 9px 11px);
+                     background-size: 11px 2px; }
+
+.ed-toggle { display: flex; align-items: flex-start; gap: var(--u);
+             font-size: 14px; color: var(--ink-dim); margin: 0 0 var(--u3); }
+.ed-toggle input { margin: 2px 0 0; accent-color: var(--gold); flex: none; }
+.ed-toggle input:disabled + label { opacity: .6; }
+
+/* Shut by default: it is a preference, not a step.  It opens itself once it
+ * holds something other than the build's own answer, so a branch set three
+ * glyphs ago cannot quietly stay in force out of sight. */
+.ed-target { margin: var(--u3) 0 0; border-top: 1px solid var(--grout2);
+             padding-top: var(--u2); font-size: 14px; }
+.ed-target summary { cursor: pointer; color: var(--ink-dim); }
+.ed-target summary:hover { color: var(--gold); }
+.ed-target p { margin: var(--u2) 0 0; }
+.ed-target label { display: block; color: var(--ink-dim); font-size: 13px; }
+.ed-target input { width: 100%; box-sizing: border-box; margin-top: 2px;
+                   background: var(--mortar); color: var(--ink);
+                   border: 1px solid var(--grout2); padding: 4px 7px;
+                   font-family: var(--pixel); font-size: 14px; }
+.ed-target input:focus-visible { outline: 2px solid var(--gold);
+                                 outline-offset: 1px; }
+.ed-target button { margin-top: var(--u2); background: none;
+                    color: var(--ink-dim); border: 1px solid var(--grout2);
+                    padding: 4px 9px; font: inherit; cursor: pointer; }
+.ed-target button:hover { border-color: var(--gold); color: var(--gold); }
+.ed-alt { font-size: 14px; }
 
 .ed-path { font-family: var(--pixel); font-size: 14px; color: var(--ink-dim);
            margin: 0 0 var(--u); overflow-wrap: anywhere; }
