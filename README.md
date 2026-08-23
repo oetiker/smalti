@@ -3,8 +3,8 @@
 *Smalti* are the small glass tiles a mosaic is made from.  A pixel is one.
 
 Upstream Tamzen 7x14 has **189 glyphs and nothing above U+00FF**: no `§`, no
-`¶`, no dashes, no arrows, no triangles, no `…`.  Smalti adds 813 more and
-draws two faces upstream never had, so each of its **four faces carries 1002
+`¶`, no dashes, no arrows, no triangles, no `…`.  Smalti adds 815 more and
+draws two faces upstream never had, so each of its **four faces carries 1004
 glyphs**:
 
 | face | how it is made |
@@ -15,10 +15,18 @@ glyphs**:
 | Bold oblique | sheared first, emboldened second |
 
 Every glyph is an ASCII-art text file of its own, named for its codepoint.  A
-`#` is ink and a `.` is not; the drawings are the font, and the `.otb` and the
-`.ttf` are build artefacts.
+`#` is ink and a `.` is not; the drawings are the font and the `.ttf` files
+are build artefacts.
 
     make install     # builds all four faces and installs them
+
+It is a **pixel font delivered as outlines**.  Every glyph is a set of
+axis-aligned rectangles on a grid where one pixel is exactly 64 font units,
+so at its drawn size — and at every whole multiple of it — a rasteriser
+reproduces the drawing exactly, with no grey and nothing to hint.  Between
+those sizes it does not.  **See [Making it look right](#making-it-look-right)
+before configuring a terminal**; two settings decide whether you get the
+pixels or a blur.
 
 ## Lineage and licence
 
@@ -44,51 +52,219 @@ installed at once.
 
 ## Build
 
-Every face is built twice: as a bitmap `.otb`, and as an outline `.ttf`
-traced from the same bitmap.
+Each face is drawn as a bitmap strike (`.bdf`) and traced into an outline
+(`.ttf`).  The `.ttf` is the only delivered format.
 
-Needs `fonttosfnt` (Debian/Ubuntu: `xfonts-utils`) for the `.otb` files and
-`python3-venv` for the `.ttf` files.
+Needs `python3-venv`, and nothing else — no system font tooling.
 
-    make               # build all four faces, bitmap and outline, into build/
+    make               # build all four faces, .bdf and .ttf, into build/
     make venv          # just the Python dependencies, into ./.venv
     make outlines      # just the four .ttf files
     make woff2         # .woff2 for the web
-    make check         # everything: the glyph store, the built faces, and
-                       #   the proof that each .ttf matches its strike
+    make check         # all three: the glyph store and the built faces, the
+                       #   proof that each .ttf matches its strike, and the
+                       #   version in every artefact
     make check-sources    # the glyph store and the built faces only
     make check-outlines   # the .ttf-against-.bdf proof only
+    make check-version    # the version, read back out of every built face
     make headers       # rewrite every drawing into its normal form
     make index         # regenerate docs/coverage.md
     make site          # build the specimen site into build/site/
     make serve-site    # …and serve it on http://localhost:8014/
     make check-site    # prove the site ships this repository's drawings
     make preview       # show the added glyphs as ASCII art
-    make install       # copy the .otb files to ~/.local/share/fonts/smalti/
-    make install-outlines   # copy the .ttf files to …/smalti-ttf/
+    make install       # copy the .ttf files to ~/.local/share/fonts/smalti-ttf/
     make watch         # rebuild, install and reload on every save
     make restore       # put upstream Tamzen back, if Smalti misbehaves
 
 From a clean clone, `make` is enough: it creates `.venv` itself.
 
-After `make install`, reload wezterm with `Ctrl+Shift+R`.
+After `make install`, reload wezterm with `Ctrl+Shift+R`.  If it then says it
+cannot load the font, that is a stale font cache and not a failed install —
+see [The font is installed and the terminal cannot see
+it](#the-font-is-installed-and-the-terminal-cannot-see-it).
 
-### Which file to use
+### Why there is no `.otb`
 
-The `.otb` files are **bitmap-only**, so fontconfig will not serve them —
-`/etc/fonts/conf.d/70-no-bitmaps-except-emoji.conf` rejects anything with
-`outline=false`, and no browser renders an embedded bitmap strike either.
-wezterm reaches them through `config.font_dirs`:
+Smalti used to ship a second, bitmap-only format built by `fonttosfnt`.  It
+is gone.  A bitmap-only font has `outline=false`, which
+`/etc/fonts/conf.d/70-no-bitmaps-except-emoji.conf` rejects outright, and no
+browser renders an embedded strike — so it reached nothing except a wezterm
+patched to read strikes, while needing an apt package the rest of the build
+did not.  The `.ttf` renders the same pixels everywhere, and `make check`
+proves it glyph by glyph.  Dropping the format removed the last dependency
+outside pip.
 
-    font_dirs = { os.getenv('HOME') .. '/.local/share/fonts/smalti' },
-    font = wezterm.font_with_fallback { { family = 'Smalti 7x14' } },
-    font_size = 10.5,   -- 14 ppem at 96 dpi
+## Releases
 
-The `.ttf` files have real outlines, so `fc-match "Smalti 7x14"` finds them
-and every other application does too.  `make install-outlines` puts them in
-a *separate* directory on purpose: both formats carry the family name
-`Smalti 7x14`, so keeping them apart is what stops wezterm's `font_dirs`
-from seeing two candidates for every face.
+    VERSION       0.0.0 — the one place the version is written down
+    CHANGES.md    what is in each release, and what is not out yet
+
+A release is two clicks: dispatch **Create release PR** from the Actions tab,
+review the pull request it opens, and merge it.  Merging tags the version,
+builds and checks the fonts, and attaches them to the release.
+
+**See [`RELEASING.md`](RELEASING.md)** for the whole procedure, including the
+two things that look wrong and are not, and how to recover a run that failed
+halfway.
+
+The version reaches every artefact — `build-face.py` writes it into the BDF as
+`FONT_VERSION`, `trace-outline.py` copies it into the `.ttf` name table and
+`head.fontRevision` — and `make check-version` reads it back out to prove it.
+A release flow that bumps a number nothing reads is worthless.
+
+## Making it look right
+
+Smalti is drawn at 7x14 pixels.  A rasteriser reproduces those pixels exactly
+only if you tell it the right size and the right kind of antialiasing.  Get
+either wrong and you get a font that is technically correct and visually
+mush.  There are two rules, and a third thing that is not a rule at all.
+
+### 1. Use an exact size, or a whole multiple of it
+
+The em is a whole number of pixels — `upem = cell height * 64`, so 7x14 gets
+`upem = 896` and one pixel is exactly 64 units.  At **14 px** every pixel
+edge lands on a device pixel boundary, so coverage is 0 or 255 everywhere.
+The mapping is linear, so **28 px** and **42 px** are exact too.
+
+Anything in between is not.  At 20 px a one-pixel stem is 1.43 device pixels,
+and the 0.43 has to go somewhere: it becomes grey.
+
+Sizes are usually configured in **points**, and points become pixels through
+the display's dpi:
+
+    pixels = points * dpi / 72
+
+So at the usual 96 dpi, **`font_size = 10.5`** is 14 px.  At 192 dpi the same
+14 px is `font_size = 5.25`, and `10.5` would give you 28 px — also exact.
+If your terminal takes a pixel size directly, use 14, 28 or 42 and skip the
+arithmetic.
+
+| device pixels | points at 96 dpi | result |
+|---|---|---|
+| 14 | 10.5 | exact — the drawing |
+| 28 | 21 | exact, doubled |
+| 42 | 31.5 | exact, tripled |
+| anything else | — | antialiased |
+
+### 2. Grayscale antialiasing, never LCD subpixel
+
+This is the one that surprises people, because subpixel rendering normally
+makes text *better*.
+
+LCD subpixel rendering triples the horizontal sampling rate and then runs a
+filter across the result, to trade colour accuracy for apparent sharpness.
+On a font whose stems are already exactly one pixel wide, there is no
+sharpness left to buy and the filter has nothing to do but smear.  Measured
+on Smalti 7x14 Regular at 14 px, a one-pixel stem comes out as:
+
+| render target | the stem |
+|---|---|
+| grayscale | `255` |
+| LCD subpixel | `83  171  255  171  83` |
+
+A solid black column becomes a five-subpixel coloured smudge.  Across the
+regular face at 14 px, **1000 of the 1003 rendered glyphs differ from the
+drawing under LCD, and none differ under grayscale**.  The three that survive
+are `U+0020`, `U+00A0` and `U+2800` — the three with no ink in them.  It is
+not the LCD filter setting either: `FT_LCD_FILTER_NONE` spreads it
+identically.
+
+So: grayscale.  In wezterm that is `freetype_load_target = 'Light'` and
+`freetype_render_target = 'Light'`.  In fontconfig it is `rgba=none`.
+
+### 3. Hinting does not matter
+
+Hinting exists to drag outlines onto the pixel grid.  These outlines are
+already on it, so there is nothing to drag.  Measured over every glyph at
+14 px and 28 px, with hinting off, on, `TARGET_LIGHT` and forced autohint:
+**identical to the drawing in all four, zero grey pixels.**  Leave the
+setting wherever it is.
+
+### The cell
+
+A terminal sizes its cell from the font's metrics, and Smalti's are exact
+rather than tuned:
+
+| field | value | meaning |
+|---|---|---|
+| `unitsPerEm` | 896 | 14 rows x 64 units |
+| `hhea.ascent` | 704 | 11 rows above the baseline |
+| `hhea.descent` | -192 | 3 rows below |
+| `hhea.lineGap` | 0 | leading is the terminal's business |
+| `OS/2.xAvgCharWidth` | 448 | exactly the 7 px advance |
+
+So in wezterm `cell_width = 1.0` gives `ceil(7.0) = 7` columns, and
+`line_height = 1.14` gives `ceil(14 * 1.14) = 16` rows — the glyph plus two
+rows of leading, split evenly above and below the baseline.  `line_height =
+1.0` packs the rows with no leading at all.
+
+`make check-sources` verifies every one of those fields on every built face.
+Each has been wrong in a shipped build of this font at least once, and each
+time the symptom was the font looking wrong rather than the build failing.
+
+### wezterm, all together
+
+```lua
+config.font_dirs = { os.getenv 'HOME' .. '/.local/share/fonts/smalti-ttf' }
+config.font = wezterm.font_with_fallback {
+  {
+    family = 'Smalti 7x14',
+    freetype_load_target = 'Light',   -- grayscale, NOT 'HorizontalLcd'
+  },
+  {
+    family = 'JetBrains Mono',        -- or whatever you fall back to
+    freetype_load_target = 'Light',   -- the fallback needs it too, see below
+  },
+}
+config.freetype_render_target = 'Light'
+config.font_size = 10.5      -- 14 px at 96 dpi
+config.cell_width = 1.0      -- 7 px
+config.line_height = 1.14    -- 16 rows
+```
+
+**The fallback font needs the load target too.**  `freetype_load_target` is a
+per-font attribute and only reaches the rasteriser from the entry that
+actually supplies the glyph.  A fallback resolved implicitly carries no
+attributes and rasterises grayscale while the base font is LCD, or the other
+way round — invisible behind a font with full coverage, glaring behind one
+that falls back for anything it lacks.
+
+### Other terminals
+
+The two rules are the same everywhere; only the spelling changes.
+
+* **kitty** — `font_size 10.5`, and `text_composition_strategy legacy` if
+  the default thickening looks heavy.  kitty has no subpixel mode, so rule 2
+  is already satisfied.
+* **Alacritty** — `font.size = 10.5`.  Set `rgba=none` for the family in
+  fontconfig; Alacritty takes its antialiasing from there.
+* **foot** — `font=Smalti 7x14:size=10.5`, and `dpi-aware=no` if you want
+  points read against 96 dpi rather than the real display dpi.
+* **A browser or an editor** — set the size in **`px`**, not `pt`, `em` or a
+  percentage, and use 14, 28 or 42.  The specimen site offers exactly those
+  three sizes and nothing in between, for this reason.
+
+### The font is installed and the terminal cannot see it
+
+    Unable to load a font specified by your font=wezterm.font('Smalti 7x14', …)
+    configuration. Fallback(s) are being used instead
+
+If `fc-list | grep -i smalti` lists all four faces and a *freshly started*
+program finds the font, then it is installed and the message is about a
+**cache, not the install**.
+
+fontconfig builds its list of fonts once per process.  A terminal that was
+already running when you installed the font has never seen those files, and
+never will: reloading the configuration re-reads the config file, not the
+system font database.  Restarting the program fixes it — and so does
+`font_dirs`, which wezterm scans itself, on every reload, without asking
+fontconfig.  That is why the snippet above sets it even though fontconfig
+serves these files perfectly well.
+
+**Keep that directory holding `.ttf` only.**  wezterm scans `font_dirs`
+directly, including formats fontconfig would refuse, so a leftover file from
+an older build sitting beside them offers a second candidate for every face.
 
 ## Outlines
 
@@ -120,7 +296,7 @@ decides whether `o` comes out as one pinched ring or as four rectangles
 whose union is the same shape.  Contour count is not the goal; the area
 check is.
 
-`make check` is the proof, over all 4,008 glyphs of all four faces:
+`make check` is the proof, over all 4,016 glyphs of all four faces:
 
 | check | result |
 |---|---|
@@ -128,12 +304,13 @@ check is.
 | segments that are not axis-aligned | 0 |
 | coordinates off the 64-unit grid | 0 |
 | off-curve points | 0 |
-| points per glyph | 22.4 mean, 132 worst |
+| points per glyph | 22.5 mean, 132 worst |
 
-This path never runs `fonttosfnt`, so it does not inherit its broken name
-table either: nameID 6 is written, nameID 5 carries the real version, and
-nameID 10 is a whole sentence.  `head.macStyle` and `OS/2 fsSelection` are
-set from one table in the tracer, so they cannot disagree.
+Nothing in this path runs `fonttosfnt`, so nothing inherits its broken name
+table: nameID 6 is written, nameID 5 carries the real version, and nameID 10
+is a whole sentence.  `head.macStyle` and `OS/2 fsSelection` are set from one
+table in the tracer, so they cannot disagree — and `make check-sources`
+verifies that they still agree in the file that comes out.
 
 ### The build is byte-reproducible
 
@@ -151,8 +328,7 @@ sets them explicitly.
 `SOURCE_DATE_EPOCH` is the only thing that moves the bytes; nothing else in
 the tracer is clock- or environment-derived, and glyph order, edge order and
 the contour walk are all order-stable by construction rather than by
-accident.  The `.otb` files are unaffected either way — `fonttosfnt` already
-writes a fixed stamp.
+accident.
 
 ## `make watch` — the editing loop
 
@@ -177,9 +353,10 @@ would end up pointing at the old inode.
 
     glyphs/7x14/<face>/  ┐
     upstream/7x14/       ├─build-face.py──►  build/…bdf
-    build/gen/7x14/…     ┘ ──fonttosfnt───►  build/…otb
-                           ──repair-tamzen.py─►  usable in wezterm
-                           ──trace-outline.py─►  build/…ttf, usable everywhere
+    build/gen/7x14/…     ┘                     │
+                           ┌─trace-outline.py──┘
+                           ├─►  build/…ttf     usable everywhere
+                           └─►  build/…woff2   for the specimen site
 
 Three layers, and for each codepoint the build takes the first that exists:
 
@@ -210,17 +387,21 @@ normalise to NFD on macOS, and 17 cannot be a bare filename at all.
 `upstream/` holds pristine upstream BDF sources and is never edited — it keeps
 Tamzen's own filenames, because those files *are* Tamzen.  `baseline/` holds
 the exact `.otb` files that were live before this repo existed, so
-`make restore` is always a working escape hatch.
+`make restore` is always a working escape hatch.  Those are upstream Tamzen's
+own files and have nothing to do with Smalti's build, which produces no
+`.otb` at all.
 
 `docs/coverage.md`, regenerated by `make index`, says what each size and face
 actually carries.  A size with zero drawings still builds; it comes out as
 plain upstream Tamzen.  Ragged coverage is a first-class state.
 
-`repair-tamzen.py` is required on every `.otb` build, not just on upstream files:
-`fonttosfnt` itself emits the four broken metric fields (wrong EBLC
-`indexTablesSize`, wrong `hmtx` advance, wrong `OS/2` `xAvgCharWidth`, phantom
-`hhea` leading).  Without the repair the font renders **blank** in wezterm,
-because it is bitmap-only and has no outline to fall back to.
+`repair-tamzen.py` is no longer part of the build.  It repaired the four
+metric fields `fonttosfnt` emitted wrongly on every bitmap build (wrong EBLC
+`indexTablesSize`, wrong `hmtx` advance, wrong `OS/2` `xAvgCharWidth`,
+phantom `hhea` leading); with the `.otb` gone there is nothing to repair.  It
+is kept for the one job that still needs it: repairing upstream Tamzen's own
+files after `make restore`.  The same four fields are now *checked* rather
+than repaired — see [The cell](#the-cell).
 
 ## The specimen site
 
@@ -238,9 +419,9 @@ editor.  That is the property the one-file-per-glyph layout was for.
 
 Three things about it are not obvious:
 
-* **It loads the `.woff2` files, never the `.otb` files.**  An `.otb` is
-  bitmap-only and no browser draws an embedded strike, so a site built on
-  those would show nothing at all.
+* **It loads the `.woff2` files**, which are the `.ttf` outlines compressed.
+  No browser draws an embedded bitmap strike, so the outline path is the only
+  one that could ever have reached a web page.
 * **It only ever sets type at 14, 28 and 42 px**, because those are the sizes
   at which the outline reproduces the strike exactly.  A pixel font at 17px
   looks broken, so no size in between is offered.
@@ -474,7 +655,7 @@ which are copies of Tamzen's own bitmaps, so the two cannot drift apart.
 
 ## Bold
 
-All four faces carry all 1002 glyphs.  The bold face is upstream's own bold
+All four faces carry all 1004 glyphs.  The bold face is upstream's own bold
 wherever upstream drew one — 190 glyphs, hand-tuned, and nothing computed
 beats that.  The other 812 are derived from the **resolved** regular face on
 every build, so hand-drawing a regular glyph improves its bold without anyone
@@ -614,9 +795,8 @@ someone drawing a new dingbat will actually look.
   a brutal retrofit once other people have forks and open pull requests.
   Unlike Tamzen, several Smalti sizes *can* be installed side by side once
   they exist, because the size is part of the family name.
-* **`fonttosfnt` writes an incomplete name table.**  nameID 6, the PostScript
-  name, is missing although OpenType requires it; nameID 5 says
-  "Version 0.0"; nameID 10 is truncated mid-word.  None of it stops the font
-  working, and none of it is inherited by the `.ttf` files, which are written
-  by `fontTools` and never see `fonttosfnt`.  Only the `.otb` path is
-  affected, and `repair-tamzen.py` leaves the name table alone.
+* **Nothing proves a `.woff2` decompresses to the same outlines as the `.ttf`
+  it came from.**  Every other artefact is checked against the drawings; this
+  one is taken on trust from `fontTools`.  The build workflow emits a standing
+  warning naming the gap rather than hiding it.  Closing it means
+  decompressing the `.woff2` and running `check-outlines.py` on the result.

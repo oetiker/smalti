@@ -1,0 +1,288 @@
+name: Publish release (automatic)
+# repo-infra: release-publish v1
+#
+# BORROWED, NOT GENERATED -- see the note at the top of release-pr.yml.  The
+# `publish` and `finalize` jobs are the standard's, unchanged.  The
+# `publish-fonts` job between them is SMALTI'S OWN: it is the one place this
+# repository's release differs from any other, and the reason the frame does
+# not have to know that this project produces fonts.  Smalti does not run the
+# standard's `apply`, so that job name is added to `finalize`'s `needs:` by
+# hand -- if you add another add-on, add it there too or the release will be
+# published before that job has attached anything.
+#
+# Half two. Merging the release pull request lands the rolled CHANGES.md on main,
+# and that merge triggers this.
+#
+# There is deliberately no workflow_dispatch. Publishing should be a consequence
+# of merging a release pull request, never something started from a dropdown.
+# With main protected against direct pushes, that leaves exactly one route to a
+# release. Recovery does not need a manual trigger either: a failed run is re-run
+# from the Actions UI, and because the version is read from the repository rather
+# than from run inputs, the re-run does what the original attempt would have.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - CHANGES.md
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Tag and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.publish.outputs.version }}
+      tag: ${{ steps.publish.outputs.tag }}
+      release_id: ${{ steps.publish.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Tag and create the draft release
+        id: publish
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const ws = process.env.GITHUB_WORKSPACE;
+            const lib = `${ws}/.github/workflows/lib`;
+            const changesLib = require(`${lib}/changes.js`);
+            const bumpLib = require(`${lib}/bump.js`);
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const fileIO = {
+              read: (p) => fs.readFileSync(path.join(ws, p), 'utf8'),
+              write: () => { throw new Error('the publisher never writes'); },
+            };
+
+            const config = JSON.parse(fileIO.read('.github/repo-infra.json'));
+
+            // CHANGES.md is the source of truth. It is the only file every
+            // repository has, and it changes on exactly one occasion.
+            const release = changesLib.latestRelease(fileIO.read('CHANGES.md'));
+            if (!release) {
+              core.notice('CHANGES.md has no released version yet - nothing to do.');
+              return;
+            }
+            const version = release.version;
+            const tag = `v${version}`;
+
+            // Every version file is a derived copy. If one disagrees, the release
+            // pull request half-applied, and tagging now would repeat the failure
+            // that shipped an inconsistent v0.1.1 elsewhere.
+            const stale = config.version_files.filter(
+              (spec) => !bumpLib.verifyFile(spec, version, fileIO)
+            );
+            if (stale.length > 0) {
+              core.setFailed(
+                `CHANGES.md says ${version} but these disagree: `
+                + stale.map((s) => s.path).join(', ')
+              );
+              return;
+            }
+
+            // Idempotent: an ordinary pull request that edits [Unreleased] also
+            // triggers this workflow, finds the tag already present, and stops.
+            try {
+              await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+              core.notice(`${tag} is already tagged - nothing to do.`);
+              return;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+
+            // Annotated, not a bare createRef. A bare ref makes a lightweight tag,
+            // and `git describe` prefers annotated ones; the existing repositories
+            // have annotated tags and a silent switch would change local tooling
+            // behaviour for no reason.
+            const makeTag = async (name, message) => {
+              const { data: object } = await github.rest.git.createTag({
+                owner, repo, tag: name, message, object: context.sha, type: 'commit',
+              });
+              return object.sha;
+            };
+
+            await github.rest.git.createRef({
+              owner, repo, ref: `refs/tags/${tag}`,
+              sha: await makeTag(tag, `Release ${tag}`),
+            });
+            core.notice(`Tagged ${tag}.`);
+
+            if (config.moving_major_tag) {
+              const major = `v${version.split('.')[0]}`;
+              const sha = await makeTag(major, `Update ${major} to ${tag}`);
+              try {
+                await github.rest.git.updateRef({
+                  owner, repo, ref: `tags/${major}`, sha, force: true,
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+                await github.rest.git.createRef({
+                  owner, repo, ref: `refs/tags/${major}`, sha,
+                });
+              }
+              core.notice(`Moved ${major} to ${tag}.`);
+            }
+
+            // Draft, so publish add-ons (spec 2) can attach artifacts before
+            // anyone sees the release. The finalize job below publishes it.
+            const { data: created } = await github.rest.repos.createRelease({
+              owner, repo,
+              tag_name: tag,
+              name: tag,
+              body: changesLib.notesFor(fileIO.read('CHANGES.md'), version),
+              draft: true,
+              prerelease: false,
+              make_latest: 'true',
+            });
+
+            core.setOutput('version', version);
+            core.setOutput('tag', tag);
+            core.setOutput('release_id', String(created.id));
+
+  # ---------------------------------------------------------------- smalti --
+  #
+  # The add-on job.  It builds the fonts from the tagged commit and attaches
+  # them to the DRAFT release, so nobody ever sees a Smalti release without
+  # its fonts: if this fails, finalize does not run and the release stays a
+  # draft.  That is the correct outcome, not a bug to work around.
+  #
+  # It rebuilds rather than downloading the build workflow's artifact.  The
+  # build is byte-reproducible -- SOURCE_DATE_EPOCH is the only input that
+  # moves the output -- so a rebuild of the tagged tree gives the same bytes,
+  # and this way a release cannot depend on an artifact that has expired.
+  publish-fonts:
+    name: Attach the fonts
+    needs: [publish]
+    if: needs.publish.outputs.release_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # No apt step: since the bitmap .otb was dropped, the build needs
+      # nothing outside pip.
+      - name: python dependencies
+        run: make venv
+
+      # The commit's own timestamp, so the release build is reproducible from
+      # the tag alone.  Without it the fonts carry the committed fallback
+      # epoch, which is reproducible but says nothing about which commit.
+      - name: build the fonts
+        run: |
+          set -euo pipefail
+          SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+          export SOURCE_DATE_EPOCH
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
+          make
+          make woff2
+
+      # A release must not ship a font the checks have not passed.  This is
+      # the same `make check` a contributor runs, and its version leg is what
+      # proves these files carry the version being released.
+      - name: check
+        run: make check
+
+      - name: assemble the assets
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          version='${{ needs.publish.outputs.version }}'
+
+          fonts=(build/*.ttf build/*.woff2)
+          if [ ${#fonts[@]} -ne 8 ]; then
+            echo "::error::expected 4 .ttf and 4 .woff2, found ${#fonts[@]} files"
+            exit 1
+          fi
+
+          # One zip for people who want to unpack a font directory, alongside
+          # the individual files for scripted installs.
+          stage="smalti-$version"
+          mkdir -p "dist/$stage"
+          cp "${fonts[@]}" README.md LICENSE.tamzen "dist/$stage/"
+          (cd dist && zip -r -q "smalti-$version.zip" "$stage" && rm -rf "$stage")
+          cp "${fonts[@]}" dist/
+
+          printf 'attaching:\n'
+          ls -1 dist/
+
+      - name: attach them to the draft release
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const dir = `${process.env.GITHUB_WORKSPACE}/dist`;
+            const TYPES = {
+              '.ttf': 'font/ttf',
+              '.woff2': 'font/woff2',
+              '.zip': 'application/zip',
+            };
+            const files = fs.readdirSync(dir).sort();
+            if (files.length === 0) {
+              core.setFailed('nothing in dist/ to attach');
+              return;
+            }
+            for (const name of files) {
+              const data = fs.readFileSync(path.join(dir, name));
+              const { data: asset } = await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: Number('${{ needs.publish.outputs.release_id }}'),
+                name,
+                data,
+                headers: {
+                  'content-type': TYPES[path.extname(name)] || 'application/octet-stream',
+                  'content-length': data.length,
+                },
+              });
+              core.notice(`Attached ${asset.name} (${asset.size} bytes).`);
+            }
+
+  finalize:
+    name: Publish the release
+    # The standard's `apply` appends publish add-on job names here when it
+    # installs them.  Smalti does not run `apply`, so this list is maintained
+    # by hand: every add-on job must appear, or the release is published
+    # before that job has attached anything.
+    needs: [publish, publish-fonts]
+    if: needs.publish.outputs.release_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: released } = await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: Number('${{ needs.publish.outputs.release_id }}'),
+              draft: false,
+            });
+            core.notice(`Published ${released.html_url}`);
+            await core.summary
+              .addHeading(`Released ${{ needs.publish.outputs.tag }}`)
+              .addLink('Release', released.html_url)
+              .write();

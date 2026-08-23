@@ -79,6 +79,7 @@ import sys
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import glyphstore as gs      # noqa: E402  (needs the path insert above)
 
 PX = 64                      # font units per pixel; see the docstring
 
@@ -427,7 +428,9 @@ def build_font(props, glyphs, out_path, family_base=None):
     head = fb.font["head"]
     head.macStyle = mac_style
     head.lowestRecPPEM = cell_h
-    head.fontRevision = float(re.match(r"[0-9.]+", version).group(0))
+    # Not float(version): a semantic version has three parts and float() dies
+    # on the second dot.  See glyphstore.font_revision for the encoding.
+    head.fontRevision = gs.font_revision(version)
     # Not the wall clock.  See the docstring: byte-identity of these files is
     # the acceptance test for every future glyph-store change.
     stamp = timestampSinceEpoch(build_epoch())

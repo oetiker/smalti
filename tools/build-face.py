@@ -47,6 +47,15 @@ def rebrand(head, w, h):
     XLFD FONT line; both are rewritten anyway so the BDF is coherent read on
     its own.  The licence permits modification and the attribution is not
     conditional on the name, so upstream's notice stays.
+
+    FONT_VERSION IS PART OF THE RENAME
+        It is inherited, not written, and upstream's says 1.11 -- so until it
+        is rewritten here, every face claims to be Tamzen 1.11 and the .ttf
+        name table says so out loud (tools/trace-outline.py reads this
+        property for nameID 5 and head.fontRevision).  A fork that ships
+        someone else's version number is telling a font manager it is that
+        font at that revision, which is exactly the collision the rename
+        exists to end.
     """
     tag = f'{FAMILY}{w}x{h}'
     head = re.sub(r'^(FONT -[^-]*)-[^-]*-', rf'\1-{tag}-', head, flags=re.M)
@@ -55,6 +64,12 @@ def rebrand(head, w, h):
     head = re.sub(r'^COPYRIGHT "([^"]*)"$',
                   lambda m: f'COPYRIGHT "{m.group(1)}; {COPYRIGHT_ADDED}"',
                   head, flags=re.M)
+    head, n = re.subn(r'^FONT_VERSION ".*"$',
+                      f'FONT_VERSION "{gs.version()}"', head, flags=re.M)
+    if n != 1:
+        sys.exit(f'build-face.py: expected exactly one FONT_VERSION line in '
+                 f'the upstream header, found {n} -- refusing to ship a face '
+                 f'carrying an inherited version number')
     return head
 
 

@@ -34,18 +34,17 @@ jobs:
         with:
           python-version: '3.12'
 
-      # `make check` builds every face to check them, so it needs the builder.
-      - name: install fonttosfnt
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xfonts-utils
-
+      # No apt step, and that is deliberate.  The build used to need
+      # fonttosfnt (xfonts-utils) for the bitmap .otb; that format is gone and
+      # with it the last dependency this job could not get from pip.  If an
+      # apt-get ever comes back here, ask what reintroduced it.
       - name: python dependencies
         run: make venv
 
-      # Filenames, headers, glyph dimensions, per-face glyph counts, that every
-      # built face passes repair-tamzen.py with nothing left to repair, and that
-      # every traced .ttf glyph is the same shape as its .bdf strike.
+      # Filenames, headers, glyph dimensions, per-face glyph counts, the
+      # render contract every built .ttf must carry (upem, line box, advances,
+      # style bits), and the proof that every traced glyph is the same shape
+      # as its .bdf strike and rasterises to the same pixels.
       - name: check
         run: make check
 

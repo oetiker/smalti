@@ -13,7 +13,7 @@ Checks, in the order the design spec lists them:
     with no Unicode name take <control> or <unnamed>);
   * every file is exactly H rows of exactly W characters drawn from '.' and
     '#';
-  * every built face passes repair-tamzen.py with no remaining defect;
+  * every built face carries the metrics that make it render as drawn;
   * glyph counts per face are equal across the faces of a size.
 
 THE WHOLE FILE, NOT ONE LINE OF IT
@@ -24,24 +24,56 @@ THE WHOLE FILE, NOT ONE LINE OF IT
     is supposed to be enforcing.  The rule is now the one glyphstore.normalised
     states, applied to every byte.
 
+THE RENDER CONTRACT
+    A .ttf can be shaped perfectly and still render wrong, because a
+    rasteriser is told where the pixel grid is by the METRICS, not by the
+    outlines.  check-outlines.py proves the shapes; this proves the frame
+    around them:
+
+      upem == cell height * 64      one pixel is exactly 64 units, so at the
+                                    drawn size every edge lands on a device
+                                    pixel boundary -- this is the whole reason
+                                    the outline reproduces the bitmap
+      ascent - descent == upem      the line box is exactly the cell, so a
+                                    terminal's row height is the drawn height
+      lineGap == 0                  no invented leading
+      xAvgCharWidth == advance      a terminal sizes its cell from this; when
+                                    it lied, wezterm rendered every fallback
+                                    glyph at about half size
+      every advance equal           it is a monospace font or it is nothing
+      fsSelection agrees with
+        head.macStyle               they disagreed once and the four faces
+                                    never paired: no bold, no italic
+
+    Each of those has been wrong in a shipped build of this font at least
+    once.  None of them is theoretical.
+
 A CHECK THAT CANNOT FAIL MUST NOT PASS
     If the built faces this needs are absent, that is a failure, not a skip.
-    Announcing "skipping the repair check" and then exiting 0 reads to CI and
-    to a contributor as full coverage of a run that verified four rules out of
-    five.  tools/test-check-glyphs.py breaks the tree six ways and insists this
-    notices each one.
+    Announcing "skipping the built-face check" and then exiting 0 reads to CI
+    and to a contributor as full coverage of a run that verified four rules
+    out of five.  tools/test-check-glyphs.py breaks the tree seven ways and
+    insists this notices each one.
 
 A duplicate codepoint is not checked for, because one file per glyph makes it
 impossible: the filesystem enforces uniqueness.
 """
+import importlib.util
 import os
-import shutil
-import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import glyphstore as gs
+
+# Font units per pixel.  Taken from the tracer rather than re-typed here: it
+# is the number the whole render contract is built on, and two copies of it
+# would eventually be two different numbers.
+_spec = importlib.util.spec_from_file_location(
+    'trace_outline', os.path.join(HERE, 'trace-outline.py'))
+_trace = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_trace)
+PX = _trace.PX
 
 problems = []
 
@@ -114,40 +146,111 @@ def check_counts(size):
 
 
 def check_built(built, sizes):
-    """Every built .otb must already be repaired: re-running fixes nothing.
+    """Every built .ttf must carry the metrics that make it render as drawn.
 
     The faces are named, not discovered.  A glob would let a half-finished
     build -- three faces where there should be four -- satisfy this check, and
     an empty directory would satisfy it completely.  Absence is a failure with
     a way out of it, never a skip.
+
+    See THE RENDER CONTRACT in the module docstring for why each field is
+    here.  Read the compiled font, never the tracer's own numbers, so a bug
+    between the two cannot hide.
     """
-    want = [f'{gs.font_stem(size, face)}.otb'
+    from fontTools.ttLib import TTFont
+
+    # (fsSelection, macStyle, usWeightClass) each face must carry.  Bit 6 of
+    # fsSelection is REGULAR and is exclusive with BOLD and ITALIC; macStyle
+    # bit 0 is bold and bit 1 italic.  These two say the same thing in two
+    # places and every consumer reads a different one, so they must agree.
+    EXPECT = {
+        'regular':     (0x40, 0x0, 400),
+        'bold':        (0x20, 0x1, 700),
+        'italic':      (0x01, 0x2, 400),
+        'bold-italic': (0x21, 0x3, 700),
+    }
+
+    want = [(size, face, f'{gs.font_stem(size, face)}.ttf')
             for size in sizes for face in gs.FACES]
-    missing = [f for f in want if not os.path.isfile(os.path.join(built, f))]
+    missing = [f for _, _, f in want
+               if not os.path.isfile(os.path.join(built, f))]
     if missing:
         fail(f'{len(missing)} of {len(want)} built faces are missing from '
              f'{built}/ ({", ".join(missing[:4])}'
-             f'{", ..." if len(missing) > 4 else ""}), so the repair check '
+             f'{", ..." if len(missing) > 4 else ""}), so the metric check '
              f'could not run -- run `make` first, or point --built at the '
              f'directory that holds them')
         return
-    scratch = os.path.join(built, '.check')
-    os.makedirs(scratch, exist_ok=True)
-    try:
-        for f in want:
-            copy = os.path.join(scratch, f)
-            shutil.copyfile(os.path.join(built, f), copy)
-            out = subprocess.run(
-                [sys.executable, os.path.join(HERE, 'repair-tamzen.py'), copy],
-                capture_output=True, text=True)
-            if out.returncode != 0:
-                fail(f'{f}: repair-tamzen.py failed: {out.stderr.strip()}')
-            elif 'already repaired' not in out.stdout:
-                fail(f'{f}: still has defects after the build:\n'
-                     + '\n'.join(out.stdout.strip().split('\n')[1:]))
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
-    print(f'  {len(want)} built faces re-checked with repair-tamzen.py')
+
+    for size, face, name in want:
+        cell_w, cell_h = gs.cell(size)
+        upem_want = cell_h * PX
+        adv_want = cell_w * PX
+        font = TTFont(os.path.join(built, name))
+        head, hhea, os2 = font['head'], font['hhea'], font['OS/2']
+
+        def bad(what):
+            fail(f'{name}: {what}')
+
+        if head.unitsPerEm != upem_want:
+            bad(f'unitsPerEm is {head.unitsPerEm}, not {upem_want} '
+                f'(= {cell_h} rows * {PX} units per pixel).  One pixel is no '
+                f'longer a whole number of units, so nothing lands on the '
+                f'pixel grid and every glyph renders blurred')
+        if hhea.lineGap != 0:
+            bad(f'hhea.lineGap is {hhea.lineGap}, not 0 -- leading belongs to '
+                f'the terminal, not to the font')
+        box = hhea.ascent - hhea.descent + hhea.lineGap
+        if box != head.unitsPerEm:
+            bad(f'the line box is {box} units but upem is {head.unitsPerEm}; '
+                f'a row of text is then taller or shorter than the cell the '
+                f'glyphs were drawn in')
+        if (os2.sTypoAscender, os2.sTypoDescender, os2.sTypoLineGap) != \
+                (hhea.ascent, hhea.descent, hhea.lineGap):
+            bad(f'OS/2 sTypo* ({os2.sTypoAscender}, {os2.sTypoDescender}, '
+                f'{os2.sTypoLineGap}) contradicts hhea ({hhea.ascent}, '
+                f'{hhea.descent}, {hhea.lineGap}); consumers read one or the '
+                f'other and would disagree about the row height')
+        if (os2.usWinAscent, os2.usWinDescent) != (hhea.ascent, -hhea.descent):
+            bad(f'OS/2 usWin ({os2.usWinAscent}, {os2.usWinDescent}) '
+                f'contradicts hhea ({hhea.ascent}, {hhea.descent}); this is '
+                f'the pair that clips glyphs when it is too small')
+        if os2.xAvgCharWidth != adv_want:
+            bad(f'OS/2 xAvgCharWidth is {os2.xAvgCharWidth}, not {adv_want}.  '
+                f'A terminal sizes its cell from this field; when it lied by '
+                f'46% wezterm drew every fallback glyph at half size')
+
+        widths = {m[0] for m in font['hmtx'].metrics.values()}
+        if widths != {adv_want}:
+            bad(f'advances are {sorted(widths)}, not all {adv_want} -- a '
+                f'monospace font with a glyph of a different width tears the '
+                f'whole grid apart from that column on')
+
+        fs_want, mac_want, weight_want = EXPECT[face]
+        if os2.fsSelection != fs_want:
+            bad(f'OS/2 fsSelection is {os2.fsSelection:#0b}, not '
+                f'{fs_want:#0b}')
+        if head.macStyle != mac_want:
+            bad(f'head.macStyle is {head.macStyle:#0b}, not {mac_want:#0b}.  '
+                f'When this contradicted fsSelection the four faces never '
+                f'paired: bold text stayed regular')
+        if os2.usWeightClass != weight_want:
+            bad(f'OS/2 usWeightClass is {os2.usWeightClass}, not '
+                f'{weight_want}')
+
+        names = {i: font['name'].getDebugName(i) for i in (1, 2, 4, 5, 6)}
+        fam_want = f'{gs.FAMILY} {size}'
+        if names[1] != fam_want:
+            bad(f'name ID 1 is {names[1]!r}, not {fam_want!r}.  The cell size '
+                f'is part of the family on purpose, so two sizes can be '
+                f'installed side by side')
+        for i in (2, 4, 5, 6):
+            if not names[i]:
+                bad(f'name ID {i} is missing; OpenType requires it and '
+                    f'fontconfig pairs faces with 2')
+        font.close()
+
+    print(f'  {len(want)} built faces carry the render contract')
 
 
 def main():

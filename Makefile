@@ -1,28 +1,38 @@
 # Smalti 7x14 -- Tamzen 7x14 with 813 extra glyphs, in four faces.
 #
-#   make            build all four faces into build/, bitmap and outline
-#   make outlines   build only the outline .ttf faces
+#   make            build all four faces into build/, .bdf and .ttf
+#   make outlines   the .ttf faces only
+#   make woff2      the compressed web copies
 #   make preview    show the added glyphs as ASCII art
 #   make show       print every added glyph in the terminal
-#   make install    copy all four over the fonts wezterm actually loads
+#   make install    copy all four .ttf where fontconfig will find them
 #   make watch      rebuild, install and reload on every save
 #   make check      everything below: the glyph store, the built faces, and
-#                   the proof that each .ttf is the same shape as its strike
+#                   the proof that each .ttf is the same shape as its bitmap
 #   make check-sources   the glyph store and the built faces only
 #   make check-outlines  the .ttf-against-.bdf proof only
+#   make check-version   the version in VERSION, read back out of every face
 #   make headers    rewrite every drawing into its normal form
 #   make index      regenerate docs/coverage.md
 #   make site       build the specimen site into build/site/
 #   make check-site prove the site ships this repository's drawings
 #   make restore    put the untouched baselines back
 #
-# Requires: fonttosfnt (Debian/Ubuntu package xfonts-utils) for the .otb path,
-# and python3-venv for the .ttf path -- `make venv` does the rest.
+# Requires: python3-venv.  `make venv` does the rest -- nothing else, no
+# system font tooling.  Smalti used to ship a bitmap-only .otb built by
+# fonttosfnt (Debian/Ubuntu package xfonts-utils); it does not any more, and
+# dropping it took the last non-pip dependency out of the build.  See
+# README.md, "Why there is no .otb".
 
 SIZE  := 7x14
 FONT  := Smalti$(SIZE)
 
-DEST  := $(HOME)/.local/share/fonts/smalti
+# Anywhere fontconfig scans works.  The `-ttf` suffix is history -- it dates
+# from when a second directory held the bitmap .otb -- but it is kept because
+# it is what wezterm's font_dirs points at, and because it says what the
+# directory holds.  KEEP IT .ttf ONLY: wezterm scans font_dirs itself and a
+# build that reads bitmap strikes would find two candidates per face.
+DEST  := $(HOME)/.local/share/fonts/smalti-ttf
 # `restore` still targets the ORIGINAL Tamzen directory: its job is to give
 # you a working terminal back, and after the rename that means pointing
 # wezterm at upstream Tamzen, not at a Smalti-named file holding 189 glyphs.
@@ -47,19 +57,20 @@ GENTOOL := tools/glyphstore.py tools/accents.py tools/weight.py \
            tools/slant-bold.py
 
 FACES := Regular Bold Italic BoldItalic
-OTB   := $(FACES:%=build/$(FONT)-%.otb)
 TTF   := $(FACES:%=build/$(FONT)-%.ttf)
 WOFF2 := $(FACES:%=build/$(FONT)-%.woff2)
 BDF   := $(FACES:%=build/$(FONT)-%.bdf)
 
 .PHONY: all install preview show restore clean watch headers index \
-        check check-sources check-outlines venv outlines woff2 \
-        install-outlines site check-site serve-site
+        check check-sources check-outlines check-version venv outlines woff2 \
+        site check-site serve-site
 
-# The bitmap faces AND the outline faces: an .otb is invisible to fontconfig
-# and to every browser, so the .ttf is not an extra, it is how the font
-# reaches anything that is not wezterm.
-all: $(OTB) outlines
+# The .bdf strikes are the intermediate; the .ttf is the deliverable.  There
+# is no bitmap-format output any more: an .otb is invisible to fontconfig and
+# to every browser, so it reached nothing but a patched wezterm, while the
+# .ttf renders the identical pixels everywhere.  `make check-outlines` is the
+# proof of that "identical", glyph by glyph.
+all: $(BDF) outlines
 
 # STEPS are the rows where the lean drops a column: above the first the glyph
 # moves right, below the last it moves left.  More steps means more lean.
@@ -85,7 +96,9 @@ $(GEN): $(GENTOOL) $(HAND) $(UPSTREAM_R) $(UPSTREAM_B)
 	python3 tools/slant-bold.py $(SIZE)
 	@touch $@
 
-BUILDFACE := tools/build-face.py tools/glyphstore.py
+# VERSION is a prerequisite because build-face.py stamps it into the BDF's
+# FONT_VERSION, which is where the outline path reads it from.
+BUILDFACE := tools/build-face.py tools/glyphstore.py VERSION
 
 build/$(FONT)-Regular.bdf: $(GEN) $(HAND) $(UPSTREAM_R) $(BUILDFACE)
 	python3 tools/build-face.py $(SIZE) regular --out $@
@@ -102,16 +115,18 @@ build/$(FONT)-Italic.bdf: build/$(FONT)-Regular.bdf $(GEN) $(HAND) $(BUILDFACE)
 build/$(FONT)-BoldItalic.bdf: build/$(FONT)-Bold.bdf $(GEN) $(HAND) $(BUILDFACE)
 	python3 tools/build-face.py $(SIZE) bold-italic --donor $< --out $@
 
-# fonttosfnt writes a bitmap-only OTB whose scalable metrics do not describe
-# the strike; repair-tamzen.py fixes the fields wezterm depends on.
-build/%.otb: build/%.bdf tools/repair-tamzen.py
-	fonttosfnt -o $@ -- $<
-	tools/repair-tamzen.py $@
-
-# Two halves, and `check` is both.  Never let one of them answer to the name
-# `check` on its own: a check target that runs half the checks and reports
+# Three parts, and `check` is all of them.  Never let one answer to the name
+# `check` on its own: a check target that runs part of the checks and reports
 # success is worse than no check at all, because CI goes green on it.
-check: check-sources check-outlines
+check: check-sources check-outlines check-version
+
+# The version in VERSION, read back out of the finished files.  It is part of
+# `check` because the number has two hops to make -- into the BDF's
+# FONT_VERSION, then into the .ttf name table -- and either can go quiet
+# independently.  A font claiming a version it is not looks exactly like a
+# font that is fine.
+check-version: all
+	$(PY) tools/check-version.py $(SIZE)
 
 # The drawings and the built faces (design spec section 9).
 # The self-test runs FIRST and is not optional: it breaks the tree seven ways
@@ -119,9 +134,11 @@ check: check-sources check-outlines
 # something if the checker underneath it can go red, and twice now it could
 # not -- once for a drawing that had drifted out of normal form, once for a run
 # with nothing built to check.
+# $(PY), not python3: both of these now read the built .ttf with fontTools,
+# which lives in the venv.  Nothing else about them changed.
 check-sources: all
-	python3 tools/test-check-glyphs.py $(SIZE)
-	python3 tools/check-glyphs.py $(SIZE)
+	$(PY) tools/test-check-glyphs.py $(SIZE)
+	$(PY) tools/check-glyphs.py $(SIZE)
 
 headers:
 	python3 tools/glyph-headers.py
@@ -129,13 +146,22 @@ headers:
 index:
 	python3 tools/glyph-index.py
 
+# One install target, not two.  While the bitmap .otb existed there had to be
+# two, because both formats claim the same family name and fontconfig serving
+# one while wezterm's font_dirs found the other gave every face two
+# candidates.  With one format that problem is gone.
 install: all
 	@mkdir -p $(DEST)
-	cp build/$(FONT)-Regular.otb $(DEST)/$(FONT)-Regular.otb
-	cp build/$(FONT)-Bold.otb $(DEST)/$(FONT)-Bold.otb
-	cp build/$(FONT)-Italic.otb $(DEST)/$(FONT)-Italic.otb
-	cp build/$(FONT)-BoldItalic.otb $(DEST)/$(FONT)-BoldItalic.otb
-	@echo "installed to $(DEST) -- wezterm needs font_dirs and family 'Smalti $(SIZE)'"
+	cp $(TTF) $(DEST)/
+	@fc-cache -f $(DEST) >/dev/null 2>&1 || true
+	@echo "installed to $(DEST) -- family 'Smalti $(SIZE)', all four faces"
+	@if ls $(DEST)/*.otb >/dev/null 2>&1; then \
+		echo "WARNING: $(DEST) also holds .otb files.  Remove them -- a wezterm"; \
+		echo "         that reads bitmap strikes sees two candidates per face."; \
+	fi
+	@echo "A RUNNING wezterm that still cannot load the font is showing its"
+	@echo "per-process fontconfig cache, not a failed install -- see README.md,"
+	@echo "'Making it look right', for why font_dirs is the answer."
 
 # Rebuild and reload on every save.  Directories are watched, not files,
 # because editors replace a file rather than writing into it, which would
@@ -165,21 +191,28 @@ restore:
 	@echo "upstream Tamzen restored to $(TAMZEN_DEST) -- point wezterm there"
 
 clean:
-	rm -f $(BDF) $(OTB) $(TTF) $(WOFF2)
+	rm -f $(BDF) $(TTF) $(WOFF2)
 	rm -rf build/gen build/site
 	rm -rf build/selftest-*        # only if a self-test died mid-case
 
 # ------------------------------------------------------------------ outlines
 #
-# The .otb files above are bitmap-only, and a bitmap-only font is invisible to
-# most of the system: fontconfig's 70-no-bitmaps-except-emoji.conf rejects
-# anything with outline=false, and no browser renders an embedded strike.  So
-# each strike is ALSO traced into an outline .ttf -- one file per strike,
+# Each .bdf strike is traced into an outline .ttf -- one file per strike,
 # because outlines cannot vary with cell size.  tools/trace-outline.py has the
-# reasoning; `make check` proves the trace is exact.
+# reasoning; `make check-outlines` proves the trace is exact, glyph by glyph
+# and then pixel by pixel.
 #
-# This path does not use fonttosfnt and so does not inherit its broken name
-# table either, which is why repair-tamzen.py has no part in it.
+# This is the ONLY delivered format.  The bitmap .otb it replaced was
+# invisible to most of the system -- fontconfig's
+# 70-no-bitmaps-except-emoji.conf rejects anything with outline=false, and no
+# browser renders an embedded strike -- so it reached nothing but a wezterm
+# patched to read strikes.  The trace loses nothing: upem is the cell height
+# times 64, so at the drawn size and every integer multiple of it the
+# rasteriser reproduces the source bitmap exactly.
+#
+# Nothing here runs fonttosfnt, so nothing inherits its broken metrics or its
+# incomplete name table, and repair-tamzen.py has no part in the build.  That
+# tool now belongs to `make restore` alone.
 
 VENV := .venv
 PY   := $(VENV)/bin/python
@@ -195,7 +228,7 @@ $(VENV)/.stamp: requirements.txt
 outlines: $(TTF)
 woff2:    $(WOFF2)
 
-build/%.ttf: build/%.bdf tools/trace-outline.py | $(VENV)/.stamp
+build/%.ttf: build/%.bdf tools/trace-outline.py tools/glyphstore.py | $(VENV)/.stamp
 	$(PY) tools/trace-outline.py $< $@
 
 build/%.woff2: build/%.ttf | $(VENV)/.stamp
@@ -217,10 +250,9 @@ check-outlines: outlines
 # and is not covered, and lets a visitor edit any glyph's pixels and open the
 # pull request from the browser.
 #
-# IT LOADS THE .woff2 FILES, NOT THE .otb FILES.  An .otb is bitmap-only and no
-# browser draws an embedded strike, so a site built on those would show
-# nothing at all.  The outlines are exact at 14, 28 and 42 px and the page
-# offers no size in between.
+# IT LOADS THE .woff2 FILES.  The outlines are exact at 14, 28 and 42 px and
+# the page offers no size in between, because a size in between is where the
+# pixels stop being pixels.
 #
 # Nothing under build/site/ is committed, for the same reason nothing else
 # under build/ is: generated output is generated, never discovered.
@@ -251,13 +283,3 @@ check-site: site
 serve-site: site
 	@echo "http://localhost:8014/ -- Ctrl-C to stop"
 	@cd $(SITE) && python3 -m http.server 8014
-
-# Kept separate from `install`: the .ttf files carry the same family name as
-# the .otb files, so putting both in one directory would give wezterm's
-# font_dirs two candidates for every face.  Install these where fontconfig
-# looks instead, and every other application gets the font too.
-install-outlines: outlines
-	@mkdir -p $(DEST)-ttf
-	cp $(FACES:%=build/Smalti7x14-%.ttf) $(DEST)-ttf/
-	@fc-cache -f $(DEST)-ttf >/dev/null 2>&1 || true
-	@echo "installed to $(DEST)-ttf -- fontconfig serves family 'Smalti 7x14'"

@@ -5,9 +5,9 @@
 # drawings is `make check-site` -- both runnable locally, because a rule that
 # only GitHub can run is a rule a contributor cannot check before pushing.
 #
-# It does NOT need fonttosfnt.  The page loads the .woff2 files, which come
-# from the outline path (BDF -> .ttf -> .woff2) and never touch the bitmap
-# .otb path; a browser cannot render an .otb at all.
+# The page loads the .woff2 files, which come from the outline path
+# (BDF -> .ttf -> .woff2).  Nothing here needs system font tooling -- and
+# since the bitmap .otb was dropped, neither does anything else.
 name: pages
 
 on:

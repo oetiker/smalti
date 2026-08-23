@@ -11,11 +11,18 @@ that quietly verified less than it claimed:
     writes (a trailing blank line, CRLF endings) passed, because only the
     header LINE was compared;
   * a run with no built faces to check announced that it was skipping the
-    repair check and then exited 0, so four rules out of five read as five.
+    built-face check and then exited 0, so four rules out of five read as five.
 
 Each case below breaks one thing and insists check-glyphs.py notices.  Case 1
 is the control: without a clean tree that passes, a checker that failed on
 everything would score full marks here.
+
+The five metric cases are not invented failures.  Every one of them is a
+defect this font actually shipped with, back when the built face came out of
+fonttosfnt: the advance width and the average width disagreed, a phantom
+lineGap appeared, and fsSelection said REGULAR on all four faces so none of
+them ever paired.  The build no longer goes anywhere near that tool, which is
+exactly when a check stops being exercised and starts being decorative.
 
 Each case runs against a sandbox under build/, never against the working tree,
 so an interrupted run cannot leave a broken drawing behind.  glyphs/ is copied
@@ -48,7 +55,7 @@ def sandbox():
     os.mkdir(os.path.join(d, 'build'))
     os.symlink(os.path.join(ROOT, gs.GEN_ROOT), os.path.join(d, 'build', 'gen'))
     for face in gs.FACES:
-        name = gs.font_stem(SIZE, face) + '.otb'
+        name = gs.font_stem(SIZE, face) + '.ttf'
         src = os.path.join(ROOT, 'build', name)
         if not os.path.isfile(src):
             shutil.rmtree(d, ignore_errors=True)
@@ -66,6 +73,26 @@ def run(d):
 
 def drawing(d, cp=0x00A7):
     return os.path.join(d, 'glyphs', SIZE, 'regular', gs.filename(cp))
+
+
+def built(d, face='regular'):
+    return os.path.join(d, 'build', gs.font_stem(SIZE, face) + '.ttf')
+
+
+def edit_font(path, mutate):
+    """Load a face, break it, write it back.
+
+    lazy=False and a write to a SEPARATE path, then a rename.  TTFont reads
+    tables on demand, so saving over the file it is still reading produces a
+    font that is neither the original nor the edit -- which reads here as a
+    checker that failed for the wrong reason.
+    """
+    from fontTools.ttLib import TTFont
+    font = TTFont(path, lazy=False)
+    mutate(font)
+    font.save(path + '.tmp')
+    font.close()
+    os.replace(path + '.tmp', path)
 
 
 # ---- the cases.  Each takes the sandbox and breaks one thing. --------------
@@ -105,18 +132,58 @@ def missing_header(d):
 def no_built_faces(d):
     """nothing built to check -- must fail, not skip"""
     for face in gs.FACES:
-        os.remove(os.path.join(d, 'build', gs.font_stem(SIZE, face) + '.otb'))
+        os.remove(built(d, face))
 
 
 def half_built(d):
     """three faces where there should be four"""
-    os.remove(os.path.join(d, 'build',
-                           gs.font_stem(SIZE, 'bold-italic') + '.otb'))
+    os.remove(built(d, 'bold-italic'))
+
+
+# ---- the render contract.  Each is a defect this font has really had. ------
+
+def wrong_upem(d):
+    """upem no longer a whole number of pixels -- nothing lands on the grid"""
+    def m(f):
+        f['head'].unitsPerEm = 1000
+    edit_font(built(d), m)
+
+
+def xavg_lie(d):
+    """xAvgCharWidth understates the advance, as fonttosfnt's did by 46%"""
+    def m(f):
+        f['OS/2'].xAvgCharWidth = int(f['OS/2'].xAvgCharWidth * 0.54)
+    edit_font(built(d), m)
+
+
+def phantom_linegap(d):
+    """invented leading, which pushes the row height off the cell"""
+    def m(f):
+        f['hhea'].lineGap = 64
+    edit_font(built(d), m)
+
+
+def style_bits_disagree(d):
+    """fsSelection says REGULAR on the bold face, so the faces never pair"""
+    def m(f):
+        f['OS/2'].fsSelection = 0x40
+    edit_font(built(d, 'bold'), m)
+
+
+def one_wide_glyph(d):
+    """a single glyph with a different advance tears the grid from there on"""
+    def m(f):
+        name = f.getGlyphOrder()[5]
+        w, lsb = f['hmtx'][name]
+        f['hmtx'][name] = (w + 64, lsb)
+    edit_font(built(d), m)
 
 
 CASES = [(clean, True), (trailing_blank_line, False), (trailing_space, False),
          (crlf, False), (missing_header, False), (no_built_faces, False),
-         (half_built, False)]
+         (half_built, False), (wrong_upem, False), (xavg_lie, False),
+         (phantom_linegap, False), (style_bits_disagree, False),
+         (one_wide_glyph, False)]
 
 
 def main():

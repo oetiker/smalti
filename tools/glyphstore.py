@@ -54,9 +54,61 @@ UPSTREAM_ROOT = 'upstream'
 # spellings of the family name would let a renamed build slip past the check.
 FAMILY = 'Smalti'
 
+# The version this build claims.  It lives in a file of its own, holding
+# nothing else, because the release workflow rewrites it unattended: a whole
+# file written from one shell variable cannot corrupt its surroundings the way
+# a mistaken sed across a source file can, and the release commit's diff is
+# then one line that says only what it means.  Nothing else in the tree may
+# spell a version number; every artefact takes it from here.
+VERSION_FILE = os.path.join(ROOT, 'VERSION')
+
 
 class GlyphError(Exception):
     """A malformed glyph file.  Always carries path and line number."""
+
+
+# ----------------------------------------------------------------- version --
+
+def version():
+    """The project version as MAJOR.MINOR.PATCH, from the VERSION file."""
+    try:
+        with open(VERSION_FILE) as fh:
+            raw = fh.read().strip()
+    except OSError as e:
+        raise GlyphError(f'cannot read {VERSION_FILE}: {e}')
+    if not re.fullmatch(r'\d+\.\d+\.\d+', raw):
+        raise GlyphError(f'{VERSION_FILE}: not a MAJOR.MINOR.PATCH version: '
+                         f'{raw!r}')
+    return raw
+
+
+def font_revision(v=None):
+    """head.fontRevision for a version string, as MAJOR.MMPP.
+
+    head.fontRevision is a 16.16 fixed-point number: one unit is 1/65536, so
+    it carries about four decimal places and no more.  Two digits each for
+    minor and patch is the widest encoding that still ORDERS correctly --
+    0.1.0 becomes 0.0100 and 0.1.1 becomes 0.0101, six units apart.  The
+    obvious alternative of three digits each does not survive the rounding: a
+    patch bump would move the number by less than one unit and two different
+    releases would compare equal.
+
+    The full version is always in nameID 5, which is the field anything
+    human-facing shows.  This number exists for machines comparing builds.
+
+    A short version is padded, so a foreign BDF carrying FONT_VERSION "1.11"
+    still converts -- this tool is pointed at upstream's own files too.
+    """
+    parts = (v if v is not None else version()).split('.')
+    if not 1 <= len(parts) <= 3 or not all(p.isdigit() for p in parts):
+        raise GlyphError(f'not a version number: {v!r}')
+    major, minor, patch = (int(p) for p in (parts + ['0', '0'])[:3])
+    if minor > 99 or patch > 99:
+        raise GlyphError(
+            f'version {v or version()!r}: minor and patch must each stay '
+            f'below 100 to fit head.fontRevision -- widen the encoding in '
+            f'glyphstore.font_revision() before releasing this')
+    return float(f'{major}.{minor:02d}{patch:02d}')
 
 
 # ---------------------------------------------------------------- geometry --

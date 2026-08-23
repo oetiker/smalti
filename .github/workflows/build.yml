@@ -11,15 +11,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-  # Called by release.yml so a release ships exactly what CI built.
-  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Never cancel a build a release is waiting on.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
@@ -36,82 +33,64 @@ jobs:
         with:
           python-version: '3.12'
 
-      # fonttosfnt turns the BDF into a bitmap OTB; it has no pip equivalent.
-      - name: install fonttosfnt
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xfonts-utils
-          fonttosfnt --help 2>&1 | head -1 || true
-
+      # No apt step, and that is deliberate.  fonttosfnt (xfonts-utils) built
+      # the bitmap .otb and had no pip equivalent; the .otb is gone and this
+      # job now installs nothing outside pip.  If an apt-get comes back here,
+      # ask what reintroduced it.
+      #
       # Project-local .venv holding fontTools, for the outline build.
       - name: python dependencies
         run: make venv
 
+      # `make` builds the .bdf strikes and traces the .ttf; `make woff2`
+      # compresses each .ttf for the web.  Both, because both are shipped.
       - name: build
-        run: make
+        run: |
+          make
+          make woff2
 
-      # The one build-output check that needs no glyph sources: repairing an
-      # already-repaired face must find nothing left to fix.  If a face still
-      # reports a defect here, fonttosfnt output changed under us and the font
-      # would render blank in wezterm.
-      #
-      # ORDER IS LOAD-BEARING.  repair-tamzen.py is a repair tool, and it
-      # edits the file IN PLACE.  It works as a check only because `make` has
-      # already run it, which makes this second run a no-op that reports
-      # "already repaired".  Move this step ahead of the build and it will
-      # silently repair the defect and then report success.
-      #
-      # A step that checked nothing must never report success either, so the
-      # count of files actually verified is tracked and has to be non-zero.
-      # An empty build/*.otb glob under nullglob is exactly that trap: it
-      # would leave the check a no-op with a green tick.
-      # The outline faces are what fontconfig and browsers actually get, so the
-      # artefact this job uploads must be the one that was proved correct --
-      # every glyph's filled area against its lit pixel count, then the
-      # rendered raster against the bitmap at 1x, 2x and 3x.
+      # The outline faces are what fontconfig, every browser and every editor
+      # actually get, so the artefact this job uploads must be the one that
+      # was proved correct -- every glyph's filled area against its lit pixel
+      # count, then the rendered raster against the bitmap at 1x, 2x and 3x.
       - name: the traced outlines match the bitmaps
         run: make check-outlines
 
-      - name: built faces carry no remaining defect
+      # A STEP THAT CHECKED NOTHING MUST NOT REPORT SUCCESS.
+      #
+      # This step verifies no fonts itself -- it audits whether the steps
+      # above did.  So it counts, and the count has to be non-zero.  An empty
+      # glob under nullglob is exactly the trap: no files, no check, green
+      # tick.  It has caught that here once already.
+      - name: every built font was verified by some step
         run: |
           set -o pipefail
           shopt -s nullglob
-          fonts=(build/*.otb build/*.ttf build/*.woff2)
+          fonts=(build/*.ttf build/*.woff2)
           if [ ${#fonts[@]} -eq 0 ]; then
             echo "::error::the build produced no font files in build/"
             exit 1
           fi
           printf 'built: %s\n' "${fonts[@]}"
 
-          checked=0
-          otb=(build/*.otb)
-          if [ ${#otb[@]} -gt 0 ]; then
-            out=$(tools/repair-tamzen.py "${otb[@]}")
-            printf '%s\n' "$out"
-            clean=$(printf '%s\n' "$out" | grep -c 'already repaired' || true)
-            if [ "$clean" -ne "${#otb[@]}" ]; then
-              echo "::error::${#otb[@]} faces built but only $clean were free of defects"
-              exit 1
-            fi
-            checked=$((checked + ${#otb[@]}))
-          fi
-
-          # Proved by `make check-outlines` in the step above.  If that step is
-          # ever removed, remove this too -- counting a file as verified when
-          # nothing verified it is the failure this whole tally exists to stop.
+          # Proved by `make check-outlines` in the step above, and by the
+          # render contract in `make check-sources` on the validate workflow.
+          # If either is ever removed, remove this too -- counting a file as
+          # verified when nothing verified it is the failure this tally exists
+          # to stop.
           ttf=(build/*.ttf)
-          checked=$((checked + ${#ttf[@]}))
-
-          if [ "$checked" -eq 0 ]; then
-            echo "::error::${#fonts[@]} font files were built and none of them could be" \
-                 "verified -- this step has no check for any of these formats, so it" \
-                 "must fail rather than pass having checked nothing"
+          if [ ${#ttf[@]} -ne 4 ]; then
+            echo "::error::${#ttf[@]} .ttf faces built, expected 4"
             exit 1
           fi
+          checked=${#ttf[@]}
+
           echo "verified $checked of ${#fonts[@]} built font files"
 
-          # Not fatal: a format this step cannot verify yet is a gap to close,
-          # not a broken build.  It is named here so it cannot go unnoticed.
+          # Not fatal: a format no step can verify yet is a gap to close, not
+          # a broken build.  It is named here so it cannot go unnoticed.
+          # TODAY THAT IS THE .woff2 -- nothing proves one decompresses to the
+          # same outlines as the .ttf it came from.
           if [ "$checked" -ne "${#fonts[@]}" ]; then
             echo "::warning::$(( ${#fonts[@]} - checked )) built font files went" \
                  "unverified -- no check exists here for their format"
@@ -128,7 +107,6 @@ jobs:
         with:
           name: smalti-fonts
           path: |
-            build/*.otb
             build/*.ttf
             build/*.woff2
           if-no-files-found: error
