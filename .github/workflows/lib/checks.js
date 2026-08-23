@@ -1,4 +1,6 @@
-// repo-infra: workflow-lib v1
+// repo-infra: workflow-lib v1 + LOCAL PATCH (guardIgnoreIds)
+// See the note in release-pr.yml's header: this is the one place the
+// borrowed set is deliberately edited here rather than upstream first.
 'use strict';
 
 // Everything that reported on the commit, whatever workflow produced it. The
@@ -49,4 +51,49 @@ async function waitForChecks(github, params, opts = {}) {
   }
 }
 
-module.exports = { checkState, waitForChecks };
+// The workflow file name out of GITHUB_WORKFLOW_REF, which looks like
+//   owner/repo/.github/workflows/release-pr.yml@refs/heads/main
+function workflowFile(workflowRef) {
+  const m = /\.github\/workflows\/([^@]+)/.exec(workflowRef || '');
+  return m ? m[1] : null;
+}
+
+// Every check run on this commit that this workflow produced, in ANY of its
+// runs -- which is the set a guard waiting on its own commit must ignore.
+//
+// Ignoring only the current run is not enough, and the failure it causes is
+// permanent. Seen on oetiker/smalti's first release: attempt 1 died on a
+// permissions 403, leaving a failed check run on the commit; attempt 2 saw
+// that dead run, said "Failing checks on this commit: Prepare the release
+// pull request", and refused. Attempt 3 saw two. Check runs cannot be
+// deleted, so the commit could never be released, and deleting the release
+// branch did not help -- the block is attached to the commit, not the branch.
+//
+// A check run's id is its Actions job id, so the job lists of this workflow's
+// runs on this commit are exactly the ids to drop.
+async function guardIgnoreIds(github, {
+  owner, repo, ref, workflowRef, runId,
+}) {
+  const jobsOf = async (run_id) => github.paginate(
+    github.rest.actions.listJobsForWorkflowRun,
+    { owner, repo, run_id, per_page: 100 },
+  );
+
+  const ids = new Set();
+  const file = workflowFile(workflowRef);
+  if (file) {
+    const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+      owner, repo, workflow_id: file, head_sha: ref, per_page: 100,
+    });
+    for (const run of runs) {
+      (await jobsOf(run.id)).forEach((j) => ids.add(j.id));
+    }
+  }
+  // Always this run too. A run that has only just started can be missing from
+  // listWorkflowRuns for a moment, and losing our own job id there is the
+  // original deadlock: the guard waits for the job doing the waiting.
+  if (runId) (await jobsOf(runId)).forEach((j) => ids.add(j.id));
+  return [...ids];
+}
+
+module.exports = { checkState, waitForChecks, guardIgnoreIds };
