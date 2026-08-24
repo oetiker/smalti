@@ -1,0 +1,54 @@
+# One description, two packages.  The Makefile invokes nfpm twice with
+# different environment variables, because the two ecosystems disagree about
+# the package name, the architecture word and the font directory, and nfpm has
+# a single global `name:` field.  Environment expansion covers every field;
+# nfpm's `overrides:` block does not, which is why it is not used.
+#
+# NO SCRIPTLETS.  Both distributions' fontconfig packages carry triggers that
+# rebuild the font cache when files appear under /usr/share/fonts.  A
+# hand-written fc-cache postinst runs at the wrong moment relative to that
+# trigger and is one more thing that can fail on a machine that is not ours.
+#
+# fontconfig is RECOMMENDED, not depended on: a font is usable by consumers
+# that never touch fontconfig, and where fontconfig is absent there is no
+# cache to refresh.  Debian's own font packages depend on nothing for this.
+
+name: "${PKG_NAME}"
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${PKG_VERSION}"
+release: "1"
+section: "fonts"
+priority: "optional"
+maintainer: "Tobias Oetiker <tobi@oetiker.ch>"
+homepage: "https://github.com/oetiker/smalti"
+# Tamsyn's licence is a custom permissive text, not a standard SPDX
+# identifier, so this names it rather than approximating it.  The full text
+# ships in the package.
+license: "LicenseRef-Tamsyn"
+description: |
+  pixel terminal font with wide Unicode coverage
+  Smalti is a bitmap terminal font delivered as outlines: the em is a whole
+  number of pixels, so a rasteriser reproduces the drawing exactly at the
+  drawn size and every whole multiple of it.
+  .
+  It is a fork of Tamzen 7x14, which has 189 glyphs and nothing above U+00FF.
+  Smalti adds 815 more and draws two faces upstream never had, so each of its
+  four faces carries 1004 glyphs.
+
+recommends:
+  - fontconfig
+
+contents:
+  - src: build/Smalti7x14-Regular.ttf
+    dst: ${PKG_FONTDIR}/Smalti7x14-Regular.ttf
+  - src: build/Smalti7x14-Bold.ttf
+    dst: ${PKG_FONTDIR}/Smalti7x14-Bold.ttf
+  - src: build/Smalti7x14-Italic.ttf
+    dst: ${PKG_FONTDIR}/Smalti7x14-Italic.ttf
+  - src: build/Smalti7x14-BoldItalic.ttf
+    dst: ${PKG_FONTDIR}/Smalti7x14-BoldItalic.ttf
+  - src: README.md
+    dst: /usr/share/doc/${PKG_NAME}/README.md
+  - src: LICENSE.tamzen
+    dst: /usr/share/doc/${PKG_NAME}/LICENSE.tamzen

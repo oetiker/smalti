@@ -16,6 +16,7 @@
 #   make index      regenerate docs/coverage.md
 #   make site       build the specimen site into build/site/
 #   make check-site prove the site ships this repository's drawings
+#   make packages   build the .deb and the .rpm into build/
 #   make restore    put the untouched baselines back
 #
 # Requires: python3-venv.  `make venv` does the rest -- nothing else, no
@@ -64,7 +65,8 @@ BDF   := $(FACES:%=build/$(FONT)-%.bdf)
 .PHONY: all install preview show restore clean watch headers index \
         check check-sources check-outlines check-version venv outlines woff2 \
         print-dest \
-        site check-site serve-site
+        site check-site serve-site \
+        deb rpm packages
 
 # The .bdf strikes are the intermediate; the .ttf is the deliverable.  There
 # is no bitmap-format output any more: an .otb is invisible to fontconfig and
@@ -200,6 +202,7 @@ clean:
 	rm -f $(BDF) $(TTF) $(WOFF2)
 	rm -f build/*.otb              # stale output of a format this no longer builds
 	rm -f build/nfpm build/nfpm_*.tar.gz
+	rm -f build/*.deb build/*.rpm
 	rm -rf build/gen build/site
 	rm -rf build/selftest-*        # only if a self-test died mid-case
 
@@ -322,3 +325,25 @@ $(NFPM):
 	echo "$(NFPM_SHA256)  build/$(NFPM_TAR)" | sha256sum --check -; \
 	tar -xzf build/$(NFPM_TAR) -C build nfpm
 	@touch $@
+
+# Read once, here, so the two recipes and the file names cannot disagree.
+PKG_VERSION := $(shell cat VERSION)
+DEB := build/fonts-smalti_$(PKG_VERSION)-1_all.deb
+RPM := build/smalti-fonts-$(PKG_VERSION)-1.noarch.rpm
+
+packages: $(DEB) $(RPM)
+deb: $(DEB)
+rpm: $(RPM)
+
+# The .ttf files are prerequisites, so a package can never be built from a
+# stale face.  nfpm is order-only: re-downloading it must not rebuild a
+# package that is otherwise current.
+$(DEB): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
+	PKG_NAME=fonts-smalti PKG_ARCH=all PKG_VERSION=$(PKG_VERSION) \
+	PKG_FONTDIR=/usr/share/fonts/truetype/smalti \
+	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p deb -t $@
+
+$(RPM): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
+	PKG_NAME=smalti-fonts PKG_ARCH=noarch PKG_VERSION=$(PKG_VERSION) \
+	PKG_FONTDIR=/usr/share/fonts/smalti \
+	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p rpm -t $@
