@@ -441,7 +441,7 @@ def main():
                               fontdir="/usr/share/fonts/smalti"))
 
         # 5 -- a version that is not VERSION
-        expect_fail("wrong version", "version",
+        expect_fail("wrong version", "version is not",
                     deb=build(tmp / "c4", packager="deb", version="9.9.9"))
 
         # 6 -- a maintainer script, which this package must never carry
@@ -569,10 +569,15 @@ def check_deb(path):
     if "Architecture: all" not in info:
         fail("deb: architecture is not all")
 
-    # dpkg-deb --info lists the control files it found; a maintainer script
-    # shows up there.
+    # Read the control tarball, NOT `dpkg-deb --info`.  --info prints control
+    # file names with no leading path, so a substring test against it can never
+    # fire -- a check that would have passed every package forever.
+    ctrl = subprocess.run(["dpkg-deb", "--ctrl-tarfile", str(path)],
+                          check=True, capture_output=True)
+    names = subprocess.run(["tar", "-t"], input=ctrl.stdout,
+                           check=True, capture_output=True, text=True).stdout.split()
     for script in ("preinst", "postinst", "prerm", "postrm"):
-        if f"/{script}" in info:
+        if f"./{script}" in names:
             fail(f"deb: must carry no maintainer scripts, found {script}")
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -727,11 +732,9 @@ Compare the timestamps in the two listings. If the mtimes move, add an explicit 
 
 This is the designed fallback, not a failure of the task. Add to `README.md` under "Known gaps" the sentence: *"The `.deb` and `.rpm` are not byte-reproducible: nfpm embeds a value that moves between builds. The `.ttf` files inside them are, and `make check-packages` proves they are the checked ones."*
 
-And in Task 5's job, after `make check-packages`, add:
-```yaml
-      - name: say what is not proven
-        run: echo "::warning::packages are not byte-reproducible -- see README, Known gaps"
-```
+**Do not edit `build.yml` here** — Task 5 has not created the `packages` job
+yet. Instead record the outcome in the ledger, and Task 5 adds the standing
+warning step if and only if this task found the packages irreproducible.
 
 - [ ] **Step 4: Report the finding before continuing**
 
@@ -801,6 +804,12 @@ Append to `.github/workflows/build.yml`:
 
       - name: prove what is inside them
         run: make check-packages
+
+      # ONLY IF Task 4 found the packages irreproducible.  Delete this step if
+      # it found them byte-identical -- a warning that names a gap that does
+      # not exist trains people to ignore warnings.
+      - name: say what is not proven
+        run: echo "::warning::packages are not byte-reproducible -- see README, Known gaps"
 
       - uses: actions/upload-artifact@v7
         with:
