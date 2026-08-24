@@ -199,6 +199,7 @@ restore:
 clean:
 	rm -f $(BDF) $(TTF) $(WOFF2)
 	rm -f build/*.otb              # stale output of a format this no longer builds
+	rm -f build/nfpm build/nfpm_*.tar.gz
 	rm -rf build/gen build/site
 	rm -rf build/selftest-*        # only if a self-test died mid-case
 
@@ -290,3 +291,33 @@ check-site: site
 serve-site: site
 	@echo "http://localhost:8014/ -- Ctrl-C to stop"
 	@cd $(SITE) && python3 -m http.server 8014
+
+# ------------------------------------------------------------------ packages
+#
+# Two OS packages, built by nfpm from one description.  See
+# docs/superpowers/specs/2026-08-24-os-packages-design.md.
+#
+# NOTHING HERE IS REACHABLE FROM `all` OR `check`.  The font build needs
+# python3-venv and nothing else, and packaging must not quietly change that:
+# a contributor who never builds a package downloads nothing and installs
+# nothing.
+
+NFPM_VERSION := 2.47.0
+# Pinned here, beside the version, and NOT taken from the checksums.txt that
+# ships next to the tarball -- a checksum fetched from the same place as the
+# file it checks proves only that the download did not corrupt.
+NFPM_SHA256  := 0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783
+NFPM_TAR     := nfpm_$(NFPM_VERSION)_Linux_x86_64.tar.gz
+NFPM_URL     := https://github.com/goreleaser/nfpm/releases/download/v$(NFPM_VERSION)/$(NFPM_TAR)
+NFPM         := build/nfpm
+
+# `sha256sum --check` exits non-zero on a mismatch, which stops the recipe
+# before anything is extracted.  The tarball is removed either way so a failed
+# download cannot be mistaken for a good one on the next run.
+$(NFPM):
+	@mkdir -p build
+	curl -fsSL -o build/$(NFPM_TAR) $(NFPM_URL)
+	@echo "$(NFPM_SHA256)  build/$(NFPM_TAR)" | sha256sum --check -
+	tar -xzf build/$(NFPM_TAR) -C build nfpm
+	@rm -f build/$(NFPM_TAR)
+	@touch $@
