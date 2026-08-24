@@ -1,0 +1,66 @@
+# One description, two packages.  The Makefile invokes nfpm twice with
+# different environment variables, because the two ecosystems disagree about
+# the package name, the architecture word and the font directory, and nfpm has
+# a single global `name:` field.  The Makefile pipes this file through
+# `envsubst` before nfpm sees it, because nfpm's own expansion reaches only
+# top-level scalars (name, arch, version, license, maintainer) but not the
+# src: and dst: paths inside contents:, which is the one place this design
+# must vary per format.  nfpm's `overrides:` block is not used.
+#
+# NO SCRIPTLETS.  Both distributions' fontconfig packages carry triggers that
+# rebuild the font cache when files appear under /usr/share/fonts.  A
+# hand-written fc-cache postinst runs at the wrong moment relative to that
+# trigger and is one more thing that can fail on a machine that is not ours.
+#
+# fontconfig is RECOMMENDED, not depended on: a font is usable by consumers
+# that never touch fontconfig, and where fontconfig is absent there is no
+# cache to refresh.  Debian's own font packages depend on nothing for this.
+#
+# mtime IS SET EXPLICITLY.  nfpm 2.47.0 ignores SOURCE_DATE_EPOCH -- it
+# timestamps package contents with the wall clock regardless -- so without
+# this field two consecutive `make packages` runs on an unchanged tree
+# produce different bytes, which would break this project's
+# byte-reproducibility guarantee.  PKG_MTIME comes from the same
+# tools/glyphstore.py build_epoch() the .ttf faces are stamped from, so the
+# fonts and the packages built from them agree about what "now" was.
+
+name: "${PKG_NAME}"
+arch: "${PKG_ARCH}"
+platform: "linux"
+version: "${PKG_VERSION}"
+release: "1"
+mtime: "${PKG_MTIME}"
+section: "fonts"
+priority: "optional"
+maintainer: "Tobias Oetiker <tobi@oetiker.ch>"
+homepage: "https://github.com/oetiker/smalti"
+# Tamsyn's licence is a custom permissive text, not a standard SPDX
+# identifier, so this names it rather than approximating it.  The full text
+# ships in the package.
+license: "LicenseRef-Tamsyn"
+description: |
+  pixel terminal font with wide Unicode coverage
+  Smalti is a bitmap terminal font delivered as outlines: the em is a whole
+  number of pixels, so a rasteriser reproduces the drawing exactly at the
+  drawn size and every whole multiple of it.
+  .
+  It is a fork of Tamzen 7x14, which has 189 glyphs and nothing above U+00FF.
+  Smalti adds 815 more and draws two faces upstream never had, so each of its
+  four faces carries 1004 glyphs.
+
+recommends:
+  - fontconfig
+
+contents:
+  - src: build/Smalti7x14-Regular.ttf
+    dst: ${PKG_FONTDIR}/Smalti7x14-Regular.ttf
+  - src: build/Smalti7x14-Bold.ttf
+    dst: ${PKG_FONTDIR}/Smalti7x14-Bold.ttf
+  - src: build/Smalti7x14-Italic.ttf
+    dst: ${PKG_FONTDIR}/Smalti7x14-Italic.ttf
+  - src: build/Smalti7x14-BoldItalic.ttf
+    dst: ${PKG_FONTDIR}/Smalti7x14-BoldItalic.ttf
+  - src: README.md
+    dst: /usr/share/doc/${PKG_NAME}/README.md
+  - src: LICENSE.tamzen
+    dst: /usr/share/doc/${PKG_NAME}/LICENSE.tamzen

@@ -10,8 +10,8 @@ between that you review.
    yet; closing that pull request cancels the release.
 
 2. **Review the changelog and merge the pull request.** The merge tags
-   `vX.Y.Z`, builds and checks the fonts, attaches them to the release, and
-   publishes it.
+   `vX.Y.Z`, builds and checks the fonts and the `.deb`/`.rpm` packages,
+   attaches all of them to the release, and publishes it.
 
 Everything that decides the version comes from the repository, not from the
 run: `CHANGES.md` is the source of truth for what is being released, and
@@ -32,11 +32,12 @@ stored personal token or a GitHub App to create, store and rotate, to save one
 click on a pull request somebody is reviewing anyway. Seeing the banner is the
 system working.
 
-**The release is a draft for a minute or two.** The fonts are built and
-checked *after* the tag exists and attached to a draft, so nobody can see a
-Smalti release without its fonts. The last job flips it to published. If the
-font job fails, the release stays a draft — which is the right outcome, not a
-bug.
+**The release is a draft for a minute or two.** The fonts and the packages
+are built and checked *after* the tag exists and attached to a draft, so
+nobody can see a Smalti release without them. The last job flips it to
+published, and it waits on both add-on jobs to do so. If either the font job
+or the packages job fails, the release stays a draft — which is the right
+outcome, not a bug.
 
 ## Why it is two steps and not a push from a workflow
 
@@ -74,7 +75,13 @@ teaching it a new ecosystem is a change to that project rather than this one.
 
 **Do not hand-edit the borrowed files.** Take a newer version of the whole set,
 or the next update silently reverts you. Smalti-specific behaviour lives in the
-`publish-fonts` job in `release-publish.yml`, which is this project's own.
+`publish-fonts` and `publish-packages` jobs in `release-publish.yml`, which are
+this project's own. The standard's `apply` would normally append an add-on
+job's name to `finalize`'s `needs:` list when it installs the job; Smalti does
+not run `apply`, so that list — currently
+`[publish, publish-fonts, publish-packages]` — is maintained by hand. Add a
+third add-on job and add its name there too, or the release publishes before
+that job has attached anything.
 
 ### The one place that rule is broken, on purpose
 

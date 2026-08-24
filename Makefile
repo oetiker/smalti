@@ -16,13 +16,25 @@
 #   make index      regenerate docs/coverage.md
 #   make site       build the specimen site into build/site/
 #   make check-site prove the site ships this repository's drawings
+#   make packages   build the .deb and the .rpm into build/
+#   make deb        build the .deb only
+#   make rpm        build the .rpm only
+#   make check-packages  prove the .deb and .rpm carry what they should
 #   make restore    put the untouched baselines back
 #
-# Requires: python3-venv.  `make venv` does the rest -- nothing else, no
-# system font tooling.  Smalti used to ship a bitmap-only .otb built by
-# fonttosfnt (Debian/Ubuntu package xfonts-utils); it does not any more, and
+# The font build requires: python3-venv.  `make venv` does the rest -- nothing
+# else, no system font tooling.  Smalti used to ship a bitmap-only .otb built
+# by fonttosfnt (Debian/Ubuntu package xfonts-utils); it does not any more, and
 # dropping it took the last non-pip dependency out of the build.  See
 # README.md, "Why there is no .otb".
+#
+# The `make packages` target additionally requires: `envsubst` (Debian/Ubuntu:
+# gettext-base) to expand environment variables in the package configuration
+# before passing it to nfpm.
+#
+# The `make check-packages` target additionally requires: `dpkg-deb`, `rpm`
+# and `cpio` (Debian/Ubuntu: dpkg, rpm, cpio) to open the built packages with
+# the package managers' own tools.
 
 SIZE  := 7x14
 FONT  := Smalti$(SIZE)
@@ -64,7 +76,8 @@ BDF   := $(FACES:%=build/$(FONT)-%.bdf)
 .PHONY: all install preview show restore clean watch headers index \
         check check-sources check-outlines check-version venv outlines woff2 \
         print-dest \
-        site check-site serve-site
+        site check-site serve-site \
+        deb rpm packages check-packages
 
 # The .bdf strikes are the intermediate; the .ttf is the deliverable.  There
 # is no bitmap-format output any more: an .otb is invisible to fontconfig and
@@ -199,6 +212,8 @@ restore:
 clean:
 	rm -f $(BDF) $(TTF) $(WOFF2)
 	rm -f build/*.otb              # stale output of a format this no longer builds
+	rm -f build/nfpm build/nfpm_*.tar.gz
+	rm -f build/*.deb build/*.rpm
 	rm -rf build/gen build/site
 	rm -rf build/selftest-*        # only if a self-test died mid-case
 
@@ -290,3 +305,73 @@ check-site: site
 serve-site: site
 	@echo "http://localhost:8014/ -- Ctrl-C to stop"
 	@cd $(SITE) && python3 -m http.server 8014
+
+# ------------------------------------------------------------------ packages
+#
+# Two OS packages, built by nfpm from one description.  See
+# docs/superpowers/specs/2026-08-24-os-packages-design.md.
+#
+# NOTHING HERE IS REACHABLE FROM `all` OR `check`.  The font build needs
+# python3-venv and nothing else, and packaging must not quietly change that:
+# a contributor who never builds a package downloads nothing and installs
+# nothing.
+
+NFPM_VERSION := 2.47.0
+# Pinned here, beside the version, and NOT taken from the checksums.txt that
+# ships next to the tarball -- a checksum fetched from the same place as the
+# file it checks proves only that the download did not corrupt.
+NFPM_SHA256  := 0660ca602b2d2d2ae4781a06c692b3eeb9d437ffea05b831d76e41f4a3188783
+NFPM_TAR     := nfpm_$(NFPM_VERSION)_Linux_x86_64.tar.gz
+NFPM_URL     := https://github.com/goreleaser/nfpm/releases/download/v$(NFPM_VERSION)/$(NFPM_TAR)
+NFPM         := build/nfpm
+
+# `sha256sum --check` exits non-zero on a mismatch, which stops the recipe
+# before anything is extracted.  The tarball is removed either way so a failed
+# download cannot be mistaken for a good one on the next run.
+$(NFPM):
+	@mkdir -p build
+	@set -e; \
+	trap 'rm -f build/$(NFPM_TAR)' EXIT; \
+	curl -fsSL -o build/$(NFPM_TAR) $(NFPM_URL); \
+	echo "$(NFPM_SHA256)  build/$(NFPM_TAR)" | sha256sum --check -; \
+	tar -xzf build/$(NFPM_TAR) -C build nfpm
+	@touch $@
+
+# Read once, here, so the two recipes and the file names cannot disagree.
+PKG_VERSION := $(shell cat VERSION)
+DEB := build/fonts-smalti_$(PKG_VERSION)-1_all.deb
+RPM := build/smalti-fonts-$(PKG_VERSION)-1.noarch.rpm
+
+# The stamp nfpm needs to make package contents byte-reproducible; see
+# packaging/nfpm.yaml, "mtime IS SET EXPLICITLY".  Plain python3, not $(PY):
+# glyphstore.py needs nothing from the venv, and this is evaluated at Makefile
+# parse time, before any recipe -- including the one that creates the venv --
+# has run.  Reads SOURCE_DATE_EPOCH itself, via tools/glyphstore.py
+# build_epoch(), so it moves with whatever the caller exported.
+PKG_MTIME := $(shell python3 -c \
+    "import sys; sys.path.insert(0, 'tools'); import glyphstore as gs; \
+    print(gs.build_epoch_rfc3339())")
+
+packages: $(DEB) $(RPM)
+deb: $(DEB)
+rpm: $(RPM)
+
+# The .ttf files are prerequisites, so a package can never be built from a
+# stale face.  nfpm is order-only: re-downloading it must not rebuild a
+# package that is otherwise current.
+$(DEB): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
+	PKG_NAME=fonts-smalti PKG_ARCH=all PKG_VERSION=$(PKG_VERSION) \
+	PKG_FONTDIR=/usr/share/fonts/truetype/smalti PKG_MTIME=$(PKG_MTIME) \
+	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p deb -t $@
+
+$(RPM): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
+	PKG_NAME=smalti-fonts PKG_ARCH=noarch PKG_VERSION=$(PKG_VERSION) \
+	PKG_FONTDIR=/usr/share/fonts/smalti PKG_MTIME=$(PKG_MTIME) \
+	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p rpm -t $@
+
+# Read with the package managers' own tools, and prove the .ttf files inside
+# are the ones `make check` already validated.  The self-test runs FIRST and
+# is not optional, for the same reason check-sources runs its own first.
+check-packages: packages
+	$(PY) tools/test-check-packages.py
+	$(PY) tools/check-packages.py --deb $(DEB) --rpm $(RPM)

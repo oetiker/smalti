@@ -123,3 +123,46 @@ jobs:
             build/*.woff2
           if-no-files-found: error
           retention-days: 14
+
+  # The OS packages.  This is the ONE place in the repository that installs an
+  # apt package, and it buys an honest check rather than a decorative one: the
+  # only trustworthy test of an .rpm is `rpm -qp` on the real file, and our own
+  # reader checking our own writer would prove nothing.
+  #
+  # It is a separate job, not a step in `build`, so that the font build's green
+  # state keeps meaning "the fonts are fine" with no packaging tooling involved.
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # rpm brings rpm2cpio; cpio is separate and the checker needs both to
+      # unpack the .rpm.  dpkg-deb is already on the runner.  gettext-base
+      # supplies envsubst, which make packages uses to expand the package config.
+      - name: packaging tooling
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm cpio gettext-base
+
+      - name: python dependencies
+        run: make venv
+
+      - name: build the fonts and the packages
+        run: |
+          set -euo pipefail
+          make
+          make packages
+
+      - name: prove what is inside them
+        run: make check-packages
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages
+          path: |
+            build/*.deb
+            build/*.rpm
+          if-no-files-found: error
+          retention-days: 14

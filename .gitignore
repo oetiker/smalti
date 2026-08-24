@@ -2,3 +2,7 @@
 /build/
 # python dependencies for the outline build; recreate with `make venv`
 /.venv/
+# subagent-driven-development scratch: ledger, briefs, review packages
+/.superpowers/
+# python bytecode
+__pycache__/

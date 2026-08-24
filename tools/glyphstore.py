@@ -30,6 +30,7 @@ upstream never drew -- italic, bold-italic -- simply have no layer 2.
 Because one file holds one glyph, a duplicate codepoint is impossible rather
 than merely checked for: the filesystem enforces uniqueness.
 """
+import datetime
 import os
 import re
 import unicodedata
@@ -109,6 +110,47 @@ def font_revision(v=None):
             f'below 100 to fit head.fontRevision -- widen the encoding in '
             f'glyphstore.font_revision() before releasing this')
     return float(f'{major}.{minor:02d}{patch:02d}')
+
+
+# ------------------------------------------------------------- build stamp --
+
+# The build stamp when SOURCE_DATE_EPOCH is unset.  A committed constant, not
+# the clock -- see tools/trace-outline.py, "THE OUTPUT MUST BE
+# BYTE-REPRODUCIBLE".  This is 2026-01-01T00:00:00Z, the year Smalti forked
+# from Tamzen.
+FALLBACK_EPOCH = 1767225600
+
+
+def build_epoch():
+    """Unix seconds to stamp into build outputs that must not carry the wall
+    clock: head.created/head.modified in the .ttf faces, and mtime in the
+    .deb/.rpm packages.
+
+    Reads SOURCE_DATE_EPOCH -- the reproducible-builds convention, which also
+    lets CI pin it -- and falls back to the constant above when it is unset.
+    This is the ONE place that reads that variable, so the fonts and the
+    packages built from them can never disagree about what "now" was.
+    """
+    raw = os.environ.get("SOURCE_DATE_EPOCH")
+    if raw is None or not raw.strip():
+        return FALLBACK_EPOCH
+    try:
+        return int(raw.strip())
+    except ValueError:
+        raise SystemExit(f"SOURCE_DATE_EPOCH is not an integer: {raw!r}")
+
+
+def build_epoch_rfc3339():
+    """build_epoch(), formatted the way nfpm's `mtime:` config field wants it.
+
+    nfpm ignores SOURCE_DATE_EPOCH entirely (as of 2.47.0): left to itself it
+    stamps package contents with the wall clock, which would make every
+    `make packages` run produce different bytes even with the environment
+    variable exported.  Its `mtime:` field is the only override it honours,
+    and it takes RFC3339, not Unix seconds.
+    """
+    return datetime.datetime.fromtimestamp(
+        build_epoch(), tz=datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # ---------------------------------------------------------------- geometry --
