@@ -316,8 +316,9 @@ NFPM         := build/nfpm
 # download cannot be mistaken for a good one on the next run.
 $(NFPM):
 	@mkdir -p build
-	curl -fsSL -o build/$(NFPM_TAR) $(NFPM_URL)
-	@echo "$(NFPM_SHA256)  build/$(NFPM_TAR)" | sha256sum --check -
+	@set -e; \
+	trap 'rm -f build/$(NFPM_TAR)' EXIT; \
+	curl -fsSL -o build/$(NFPM_TAR) $(NFPM_URL); \
+	echo "$(NFPM_SHA256)  build/$(NFPM_TAR)" | sha256sum --check -; \
 	tar -xzf build/$(NFPM_TAR) -C build nfpm
-	@rm -f build/$(NFPM_TAR)
 	@touch $@
