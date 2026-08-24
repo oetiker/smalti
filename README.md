@@ -57,6 +57,13 @@ Each face is drawn as a bitmap strike (`.bdf`) and traced into an outline
 
 Needs `python3-venv`, and nothing else — no system font tooling.
 
+`make packages` additionally needs `envsubst` (Debian/Ubuntu: `gettext-base`)
+to expand environment variables in the package configuration before passing
+it to nfpm. `make check-packages` additionally needs `dpkg-deb`, `rpm` and
+`cpio` (Debian/Ubuntu: `dpkg`, `rpm`, `cpio`) to open the built packages with
+the package managers' own tools. Neither is needed to build or check the
+fonts themselves.
+
     make               # build all four faces, .bdf and .ttf, into build/
     make venv          # just the Python dependencies, into ./.venv
     make outlines      # just the four .ttf files
@@ -67,6 +74,9 @@ Needs `python3-venv`, and nothing else — no system font tooling.
     make check-sources    # the glyph store and the built faces only
     make check-outlines   # the .ttf-against-.bdf proof only
     make check-version    # the version, read back out of every built face
+    make packages       # build the .deb and .rpm into build/
+    make check-packages # open both with dpkg-deb and rpm, and prove they
+                        #   carry the same fonts make check just validated
     make headers       # rewrite every drawing into its normal form
     make index         # regenerate docs/coverage.md
     make site          # build the specimen site into build/site/
