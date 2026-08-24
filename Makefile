@@ -342,6 +342,16 @@ PKG_VERSION := $(shell cat VERSION)
 DEB := build/fonts-smalti_$(PKG_VERSION)-1_all.deb
 RPM := build/smalti-fonts-$(PKG_VERSION)-1.noarch.rpm
 
+# The stamp nfpm needs to make package contents byte-reproducible; see
+# packaging/nfpm.yaml, "mtime IS SET EXPLICITLY".  Plain python3, not $(PY):
+# glyphstore.py needs nothing from the venv, and this is evaluated at Makefile
+# parse time, before any recipe -- including the one that creates the venv --
+# has run.  Reads SOURCE_DATE_EPOCH itself, via tools/glyphstore.py
+# build_epoch(), so it moves with whatever the caller exported.
+PKG_MTIME := $(shell python3 -c \
+    "import sys; sys.path.insert(0, 'tools'); import glyphstore as gs; \
+    print(gs.build_epoch_rfc3339())")
+
 packages: $(DEB) $(RPM)
 deb: $(DEB)
 rpm: $(RPM)
@@ -351,12 +361,12 @@ rpm: $(RPM)
 # package that is otherwise current.
 $(DEB): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
 	PKG_NAME=fonts-smalti PKG_ARCH=all PKG_VERSION=$(PKG_VERSION) \
-	PKG_FONTDIR=/usr/share/fonts/truetype/smalti \
+	PKG_FONTDIR=/usr/share/fonts/truetype/smalti PKG_MTIME=$(PKG_MTIME) \
 	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p deb -t $@
 
 $(RPM): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
 	PKG_NAME=smalti-fonts PKG_ARCH=noarch PKG_VERSION=$(PKG_VERSION) \
-	PKG_FONTDIR=/usr/share/fonts/smalti \
+	PKG_FONTDIR=/usr/share/fonts/smalti PKG_MTIME=$(PKG_MTIME) \
 	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p rpm -t $@
 
 # Read with the package managers' own tools, and prove the .ttf files inside

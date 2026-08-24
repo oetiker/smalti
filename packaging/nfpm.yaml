@@ -15,12 +15,21 @@
 # fontconfig is RECOMMENDED, not depended on: a font is usable by consumers
 # that never touch fontconfig, and where fontconfig is absent there is no
 # cache to refresh.  Debian's own font packages depend on nothing for this.
+#
+# mtime IS SET EXPLICITLY.  nfpm 2.47.0 ignores SOURCE_DATE_EPOCH -- it
+# timestamps package contents with the wall clock regardless -- so without
+# this field two consecutive `make packages` runs on an unchanged tree
+# produce different bytes, which would break this project's
+# byte-reproducibility guarantee.  PKG_MTIME comes from the same
+# tools/glyphstore.py build_epoch() the .ttf faces are stamped from, so the
+# fonts and the packages built from them agree about what "now" was.
 
 name: "${PKG_NAME}"
 arch: "${PKG_ARCH}"
 platform: "linux"
 version: "${PKG_VERSION}"
 release: "1"
+mtime: "${PKG_MTIME}"
 section: "fonts"
 priority: "optional"
 maintainer: "Tobias Oetiker <tobi@oetiker.ch>"

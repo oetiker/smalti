@@ -83,21 +83,9 @@ import glyphstore as gs      # noqa: E402  (needs the path insert above)
 
 PX = 64                      # font units per pixel; see the docstring
 
-# The build stamp when SOURCE_DATE_EPOCH is unset.  A committed constant, not
-# the clock -- see "THE OUTPUT MUST BE BYTE-REPRODUCIBLE" above.  This is
-# 2026-01-01T00:00:00Z, the year Smalti forked from Tamzen.
-FALLBACK_EPOCH = 1767225600
-
-
-def build_epoch():
-    """Unix seconds to stamp into head.created / head.modified."""
-    raw = os.environ.get("SOURCE_DATE_EPOCH")
-    if raw is None or not raw.strip():
-        return FALLBACK_EPOCH
-    try:
-        return int(raw.strip())
-    except ValueError:
-        raise SystemExit(f"SOURCE_DATE_EPOCH is not an integer: {raw!r}")
+# build_epoch() lives in glyphstore.py now -- it also stamps package mtimes,
+# and "THE OUTPUT MUST BE BYTE-REPRODUCIBLE" above demands there be exactly
+# one definition of SOURCE_DATE_EPOCH's fallback, not one per consumer.
 
 # ---------------------------------------------------------------- BDF input
 
@@ -433,7 +421,7 @@ def build_font(props, glyphs, out_path, family_base=None):
     head.fontRevision = gs.font_revision(version)
     # Not the wall clock.  See the docstring: byte-identity of these files is
     # the acceptance test for every future glyph-store change.
-    stamp = timestampSinceEpoch(build_epoch())
+    stamp = timestampSinceEpoch(gs.build_epoch())
     head.created = head.modified = stamp
     # A pixel font has no curves to smooth and no hints to run: ask for
     # grey-scale rendering at every size and leave grid-fitting off.
