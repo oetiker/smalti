@@ -1,8 +1,11 @@
 # One description, two packages.  The Makefile invokes nfpm twice with
 # different environment variables, because the two ecosystems disagree about
 # the package name, the architecture word and the font directory, and nfpm has
-# a single global `name:` field.  Environment expansion covers every field;
-# nfpm's `overrides:` block does not, which is why it is not used.
+# a single global `name:` field.  The Makefile pipes this file through
+# `envsubst` before nfpm sees it, because nfpm's own expansion reaches only
+# top-level scalars (name, arch, version, license, maintainer) but not the
+# src: and dst: paths inside contents:, which is the one place this design
+# must vary per format.  nfpm's `overrides:` block is not used.
 #
 # NO SCRIPTLETS.  Both distributions' fontconfig packages carry triggers that
 # rebuild the font cache when files appear under /usr/share/fonts.  A

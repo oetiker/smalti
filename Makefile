@@ -17,13 +17,19 @@
 #   make site       build the specimen site into build/site/
 #   make check-site prove the site ships this repository's drawings
 #   make packages   build the .deb and the .rpm into build/
+#   make deb        build the .deb only
+#   make rpm        build the .rpm only
 #   make restore    put the untouched baselines back
 #
-# Requires: python3-venv.  `make venv` does the rest -- nothing else, no
-# system font tooling.  Smalti used to ship a bitmap-only .otb built by
-# fonttosfnt (Debian/Ubuntu package xfonts-utils); it does not any more, and
+# The font build requires: python3-venv.  `make venv` does the rest -- nothing
+# else, no system font tooling.  Smalti used to ship a bitmap-only .otb built
+# by fonttosfnt (Debian/Ubuntu package xfonts-utils); it does not any more, and
 # dropping it took the last non-pip dependency out of the build.  See
 # README.md, "Why there is no .otb".
+#
+# The `make packages` target additionally requires: `envsubst` (Debian/Ubuntu:
+# gettext-base) to expand environment variables in the package configuration
+# before passing it to nfpm.
 
 SIZE  := 7x14
 FONT  := Smalti$(SIZE)
