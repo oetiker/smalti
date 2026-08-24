@@ -102,11 +102,24 @@ outside pip.
 
 A release is two clicks: dispatch **Create release PR** from the Actions tab,
 review the pull request it opens, and merge it.  Merging tags the version,
-builds and checks the fonts, and attaches them to the release.
+builds and checks the fonts and the `.deb`/`.rpm` packages, and attaches all
+of them to the release.
 
 **See [`RELEASING.md`](RELEASING.md)** for the whole procedure, including the
 two things that look wrong and are not, and how to recover a run that failed
 halfway.
+
+### From a package
+
+Every release attaches a `.deb` and an `.rpm`.
+
+    sudo apt install ./fonts-smalti_0.1.0-1_all.deb    # Debian, Ubuntu
+    sudo rpm -i smalti-fonts-0.1.0-1.noarch.rpm        # Fedora, RHEL, openSUSE
+
+Both install the four faces where fontconfig finds them and carry no
+maintainer scripts: the distributions' own `fontconfig` triggers rebuild the
+cache.  There is no apt or yum repository to add — that would need a signing
+key this project does not have.
 
 The version reaches every artefact — `build-face.py` writes it into the BDF as
 `FONT_VERSION`, `trace-outline.py` copies it into the `.ttf` name table and

@@ -259,13 +259,97 @@ jobs:
               core.notice(`Attached ${asset.name} (${asset.size} bytes).`);
             }
 
+  # ---------------------------------------------------------------- smalti --
+  #
+  # A second add-on job, following the same seam as publish-fonts: it needs
+  # `publish`, consumes its release_id, builds the packages from the tagged
+  # commit and attaches them to the DRAFT release.  If this fails, finalize
+  # does not run and the release stays a draft -- the correct outcome, not a
+  # bug.
+  #
+  # It rebuilds rather than downloading the packages job's artifact, for the
+  # same reason publish-fonts rebuilds the fonts: the build is byte-
+  # reproducible, so a rebuild of the tagged tree gives the same bytes, and a
+  # release cannot then depend on an artifact that has expired.
+  publish-packages:
+    name: Attach the OS packages
+    needs: [publish]
+    if: needs.publish.outputs.release_id != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # rpm and cpio build the .rpm; gettext-base supplies envsubst, which
+      # `make packages` uses to fill in the nfpm template.
+      - name: packaging tooling
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm cpio gettext-base
+
+      - name: python dependencies
+        run: make venv
+
+      # The commit's own timestamp, so the release build is reproducible from
+      # the tag alone.  Without it the packages carry the committed fallback
+      # epoch, which is reproducible but says nothing about which commit.
+      - name: build the packages
+        run: |
+          set -euo pipefail
+          SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+          export SOURCE_DATE_EPOCH
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
+          make
+          make packages
+
+      # A release must not ship a package the checks have not passed.
+      - name: check
+        run: make check-packages
+
+      - name: attach them to the draft release
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const dir = `${process.env.GITHUB_WORKSPACE}/build`;
+            const TYPES = {
+              '.deb': 'application/vnd.debian.binary-package',
+              '.rpm': 'application/x-rpm',
+            };
+            const files = fs.readdirSync(dir)
+              .filter(f => f.endsWith('.deb') || f.endsWith('.rpm')).sort();
+            if (files.length !== 2) {
+              core.setFailed(`expected one .deb and one .rpm, found ${files.length}`);
+              return;
+            }
+            for (const name of files) {
+              const data = fs.readFileSync(path.join(dir, name));
+              const { data: asset } = await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: Number('${{ needs.publish.outputs.release_id }}'),
+                name,
+                data,
+                headers: {
+                  'content-type': TYPES[path.extname(name)] || 'application/octet-stream',
+                  'content-length': data.length,
+                },
+              });
+              core.notice(`Attached ${asset.name} (${asset.size} bytes).`);
+            }
+
   finalize:
     name: Publish the release
     # The standard's `apply` appends publish add-on job names here when it
     # installs them.  Smalti does not run `apply`, so this list is maintained
     # by hand: every add-on job must appear, or the release is published
     # before that job has attached anything.
-    needs: [publish, publish-fonts]
+    needs: [publish, publish-fonts, publish-packages]
     if: needs.publish.outputs.release_id != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5

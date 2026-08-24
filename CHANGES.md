@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 
+- **`.deb` and `.rpm` packages.** Every release now attaches one of each, so Smalti can be installed and removed by a package manager instead of by hand. Both are built by a pinned `nfpm` from one description, hold the four `.ttf` faces and nothing else, and carry no maintainer scripts — the distributions' own `fontconfig` triggers rebuild the cache. `make check-packages` opens them with `dpkg-deb` and `rpm` and proves the fonts inside are byte-identical to the ones `make check` validated. No apt or yum repository is hosted: that would need a signing key, which would be the first credential this project owns.
+
 ### Changed
 
 - **Smalti's own workflows moved off the Node 20 actions.** GitHub had begun annotating every run with a deprecation notice and was already forcing those actions onto Node 24. `checkout` and `setup-python` go to `@v7`, `upload-artifact` to `@v7`, and the three Pages actions to `configure-pages@v6`, `upload-pages-artifact@v5` and `deploy-pages@v5`. Only the four workflows this project owns changed — the borrowed repo-infra jobs were already current, and inside `release-publish.yml` only the Smalti-specific `publish-fonts` job was touched.
