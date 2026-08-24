@@ -19,6 +19,7 @@
 #   make packages   build the .deb and the .rpm into build/
 #   make deb        build the .deb only
 #   make rpm        build the .rpm only
+#   make check-packages  prove the .deb and .rpm carry what they should
 #   make restore    put the untouched baselines back
 #
 # The font build requires: python3-venv.  `make venv` does the rest -- nothing
@@ -30,6 +31,10 @@
 # The `make packages` target additionally requires: `envsubst` (Debian/Ubuntu:
 # gettext-base) to expand environment variables in the package configuration
 # before passing it to nfpm.
+#
+# The `make check-packages` target additionally requires: `dpkg-deb`, `rpm`
+# and `cpio` (Debian/Ubuntu: dpkg, rpm, cpio) to open the built packages with
+# the package managers' own tools.
 
 SIZE  := 7x14
 FONT  := Smalti$(SIZE)
@@ -72,7 +77,7 @@ BDF   := $(FACES:%=build/$(FONT)-%.bdf)
         check check-sources check-outlines check-version venv outlines woff2 \
         print-dest \
         site check-site serve-site \
-        deb rpm packages
+        deb rpm packages check-packages
 
 # The .bdf strikes are the intermediate; the .ttf is the deliverable.  There
 # is no bitmap-format output any more: an .otb is invisible to fontconfig and
@@ -353,3 +358,10 @@ $(RPM): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
 	PKG_NAME=smalti-fonts PKG_ARCH=noarch PKG_VERSION=$(PKG_VERSION) \
 	PKG_FONTDIR=/usr/share/fonts/smalti \
 	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p rpm -t $@
+
+# Read with the package managers' own tools, and prove the .ttf files inside
+# are the ones `make check` already validated.  The self-test runs FIRST and
+# is not optional, for the same reason check-sources runs its own first.
+check-packages: packages
+	$(PY) tools/test-check-packages.py
+	$(PY) tools/check-packages.py --deb $(DEB) --rpm $(RPM)
