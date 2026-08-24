@@ -141,8 +141,9 @@ jobs:
           python-version: '3.12'
 
       # rpm brings rpm2cpio; cpio is separate and the checker needs both to
-      # unpack the .rpm.  dpkg-deb is already on the runner.
-      - name: rpm tooling
+      # unpack the .rpm.  dpkg-deb is already on the runner.  gettext-base
+      # supplies envsubst, which make packages uses to expand the package config.
+      - name: packaging tooling
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm cpio gettext-base
 
       - name: python dependencies
@@ -151,8 +152,6 @@ jobs:
       - name: build the fonts and the packages
         run: |
           set -euo pipefail
-          SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
-          export SOURCE_DATE_EPOCH
           make
           make packages
 
