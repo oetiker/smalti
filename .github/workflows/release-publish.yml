@@ -297,11 +297,21 @@ jobs:
       # The commit's own timestamp, so the release build is reproducible from
       # the tag alone.  Without it the packages carry the committed fallback
       # epoch, which is reproducible but says nothing about which commit.
+      #
+      # Written to $GITHUB_ENV, not just exported in this step, so the later
+      # `check` step sees the SAME value.  A job-level `env:` cannot express
+      # this because the value needs a shell (`git log`) to compute -- so it
+      # is computed once here instead.  If `check` ever rebuilds the packages
+      # (it does not today), it must rebuild them with the timestamp that was
+      # actually attached, not a fresh `git log` reading taken moments later.
+      - name: pin the build timestamp
+        run: |
+          set -euo pipefail
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
+
       - name: build the packages
         run: |
           set -euo pipefail
-          SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
-          export SOURCE_DATE_EPOCH
           echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
           make
           make packages

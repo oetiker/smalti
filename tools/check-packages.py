@@ -92,10 +92,18 @@ def check_deb(path):
     # Read the control tarball, NOT `dpkg-deb --info`.  --info prints control
     # file names with no leading path, so a substring test against it can never
     # fire -- a check that would have passed every package forever.
+    #
+    # Keep the whole pipeline in bytes.  --ctrl-tarfile emits a binary tar
+    # stream; text=True would decode it as UTF-8 and apply universal-newline
+    # translation, turning any 0x0D byte (a CRLF in a control file, or a
+    # non-ASCII maintainer name) into 0x0A before it gets re-encoded -- which
+    # corrupts the stream and makes `tar -t` fail on a well-formed package.
+    # Only the member names, not the stream, need to become text.
     ctrl = subprocess.run(["dpkg-deb", "--ctrl-tarfile", str(path)],
-                          check=True, capture_output=True, text=True)
-    names = subprocess.run(["tar", "-t"], input=ctrl.stdout,
-                           check=True, capture_output=True, text=True).stdout.split()
+                          check=True, capture_output=True)
+    names_raw = subprocess.run(["tar", "-t"], input=ctrl.stdout,
+                               check=True, capture_output=True).stdout
+    names = names_raw.decode().split()
     for script in ("preinst", "postinst", "prerm", "postrm"):
         if f"./{script}" in names:
             fail(f"deb: must carry no maintainer scripts, found {script}")
@@ -128,7 +136,25 @@ def check_rpm(path):
         fail(f"rpm: must carry no maintainer scripts, found:\n{scripts}")
 
     with tempfile.TemporaryDirectory() as tmp:
-        cpio = subprocess.run(["rpm2cpio", str(path)], check=True, capture_output=True)
+        # Do NOT use check=True here.  rpm2cpio validates the cpio archive it
+        # writes by comparing bytes copied against the package's declared
+        # RPMSIGTAG_PAYLOADSIZE header.  nfpm 2.47.0 declares that field as
+        # the sum of the six payload files' *content* bytes, but the real
+        # cpio archive it writes is larger by the cpio headers and trailer,
+        # so the comparison always fails and rpm2cpio exits 1 -- while having
+        # written a complete, correct payload.  Measured twice independently
+        # on build/smalti-fonts-0.1.0-1.noarch.rpm: exit 1, stderr completely
+        # empty, 373240 bytes of valid cpio payload on stdout; extracting it
+        # and diffing against build/ shows all four .ttf byte-identical.
+        # Patching just that one header field to the true archive size makes
+        # the same rpm2cpio binary exit 0 on the same file, confirming the
+        # cause.  So: don't trust the exit status, but don't trust empty
+        # output either -- an empty payload still FAILS below.  There is
+        # nothing on stderr to log; rpm2cpio never wrote anything there.
+        cpio = subprocess.run(["rpm2cpio", str(path)], capture_output=True)
+        if not cpio.stdout:
+            fail("rpm: rpm2cpio produced no payload")
+            return
         # rpm payload members carry ABSOLUTE names.  Without
         # --no-absolute-filenames, cpio ignores cwd and tries to write to the
         # real /usr/share/... -- it dies with a permission error here, and on
