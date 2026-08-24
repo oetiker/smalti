@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 
-- **`.deb` and `.rpm` packages.** Every release now attaches one of each, so Smalti can be installed and removed by a package manager instead of by hand. Both are built by a pinned `nfpm` from one description, hold the four `.ttf` faces and nothing else, and carry no maintainer scripts — the distributions' own `fontconfig` triggers rebuild the cache. `make check-packages` opens them with `dpkg-deb` and `rpm` and proves the fonts inside are byte-identical to the ones `make check` validated. No apt or yum repository is hosted: that would need a signing key, which would be the first credential this project owns.
+- **`.deb` and `.rpm` packages.** Every release now attaches one of each, so Smalti can be installed and removed by a package manager instead of by hand. Both are built by a pinned `nfpm` from one description, hold the four `.ttf` faces plus `README.md` and `LICENSE.tamzen` under `/usr/share/doc`, and carry no maintainer scripts — the distributions' own `fontconfig` triggers rebuild the cache. `make check-packages` opens them with `dpkg-deb` and `rpm` and proves the fonts inside are byte-identical to the ones `make check` validated. No apt or yum repository is hosted: that would need a signing key, which would be the first credential this project owns.
 
 ### Changed
 
