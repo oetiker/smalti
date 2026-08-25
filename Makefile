@@ -36,7 +36,38 @@
 # and `cpio` (Debian/Ubuntu: dpkg, rpm, cpio) to open the built packages with
 # the package managers' own tools.
 
-SIZE  := 7x14
+# Every size this repository builds.  With no SIZE on the command line the
+# targets below re-enter make once per size; with SIZE set, this file is the
+# single-size build it has always been.
+SIZES := 7x14 8x16
+
+# Targets that mean "do this for every size".  Targets that span sizes --
+# packages, site, index, compare -- are NOT here; they run once and read all
+# sizes themselves.
+FANOUT := all check check-sources check-outlines check-version \
+          outlines woff2 install preview show
+
+# Targets that are not per-size. Some are genuinely size-independent (clean,
+# venv, headers); others span sizes (site, index, packages) but are still
+# single-size today. Both kinds re-enter once, with the first size, so nothing
+# that worked before this change stops working. Tasks 11 and 12 promote the
+# cross-size ones to read every size.
+PASSTHRU := clean venv headers index print-dest restore \
+            site check-site serve-site deb rpm packages check-packages watch
+
+ifndef SIZE
+.PHONY: $(FANOUT) $(PASSTHRU)
+$(FANOUT):
+	@for s in $(SIZES); do \
+	    echo "==> $@ [$$s]"; \
+	    $(MAKE) --no-print-directory SIZE=$$s $@ || exit 1; \
+	done
+
+$(PASSTHRU):
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) $@
+else
+
+SIZE ?= 7x14
 FONT  := Smalti$(SIZE)
 
 # Anywhere fontconfig scans works.  The `-ttf` suffix is history -- it dates
@@ -375,3 +406,5 @@ $(RPM): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
 check-packages: packages
 	$(PY) tools/test-check-packages.py
 	$(PY) tools/check-packages.py --deb $(DEB) --rpm $(RPM)
+
+endif
