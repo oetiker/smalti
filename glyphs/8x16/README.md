@@ -47,85 +47,94 @@ FONT_DESCENT 4
 (cap height and x-height both live in that band, confirmed against `A` and
 `x`), rows 12..15 are the descent (confirmed against `g`).
 
-## Horizontal bias rule (Step 2/3)
+## Horizontal placement (Step 2/3)
 
-At 8 columns wide there is no true centre column: a stem at column 3 leaves
-3 columns to its left and 4 to its right; a stem at column 4 leaves 4 to its
-left and 3 to its right.
+At 8 columns wide there is no true centre column, unlike at 7 (which has one:
+index 3). This section was rewritten after a first pass asked one question
+("which side does the spare column fall on?") of every symmetric glyph and
+got a messy answer. The real picture is **three separate rules for three
+separate kinds of glyph**, found by measuring the ink window
+(leftmost/rightmost lit column, 0-indexed) of every symmetric capital, digit
+and symbol in `upstream/8x16/Tamzen8x16r.bdf`, and comparing each against its
+own `7x14` counterpart, with `tools/show-glyphs.py`. Use whichever rule
+matches the kind of glyph being drawn -- do not average them into one number.
 
-The first pass at this rule (see git history) read a "stem column" off 8
-hand-picked glyphs. That sample was too thin -- 2 glyphs agreeing against 1
-dissenting is not enough basis for a rule ~292 hand-drawn glyphs inherit. The
-measurement below replaces it with the **ink window** (leftmost/rightmost lit
-column, 0-indexed) of every left-right-symmetric glyph in a much larger,
-representative set: 11 symmetric capitals, 2 symmetric digits, and 18
-symbols, all read from `upstream/8x16/Tamzen8x16r.bdf` with
-`tools/show-glyphs.py`.
+### 1. The stem rule -- a single centred vertical stroke
 
-In an 8-wide cell a symmetric glyph of *even* ink-width sits dead centre (the
-blank columns split evenly, e.g. width 6 leaves 1 blank on each side) and
-carries no bias information. A symmetric glyph of *odd* ink-width forces the
-one extra blank column onto one side or the other -- *that* is the bias
-signal, and it is far more reliable than picking out a "stem" by eye.
+Glyphs whose ink *is* a single vertical stroke (or a stroke plus symmetric
+serifs) consistently centre on **column 4**, not column 3:
 
-Four of the 18 symbols are mirror **pairs** (`(`/`)`, `<`/`>`, `[`/`]`,
-`{`/`}`) -- individually asymmetric, symmetric only as a pair. Each pair's
-two halves straddle the 3.5 axis and cancel exactly, which confirms upstream
-mirrors them correctly but contributes no net bias evidence; they are
-recorded separately below rather than mixed into the vote.
-
-| glyph | ink window (min,max col) | width | verdict |
+| glyph | 7x14 window | 8x16 window | reading |
 |---|---|---|---|
-| A | (1,6) | 6 | tie |
-| H | (1,6) | 6 | tie |
-| I | (2,6) | 5 | **right** (extra blank on the left) |
-| M | (1,7) | 7 | **right** |
-| O | (1,6) | 6 | tie |
-| T | (1,7) | 7 | **right** |
-| U | (1,6) | 6 | tie |
-| V | (1,6) | 6 | tie |
-| W | (1,7) | 7 | **right** |
-| X | (1,7) | 7 | **right** |
-| Y | (1,7) | 7 | **right** |
-| 0 | (1,6) | 6 | tie |
-| 8 | (1,6) | 6 | tie |
-| `*` | (1,6) | 6 | tie |
-| `#` | (1,6) | 6 | tie (crossbars run cols 1-6) |
-| `%` | (1,7) | 7 | **right** |
-| `+` | (1,7) | 7 | **right** (vertical stem col 4; horizontal bar cols 1-7, midpoint 4) |
-| `=` | (1,6) | 6 | tie |
-| `_` | (0,7) | 8 | tie (fills the full cell by design, joins across cells) |
-| `-` | (1,6) | 6 | tie |
-| `^` | (1,5) | 5 | **left** (extra blank on the right) -- dissents |
-| `~` | (1,7) | 7 | **right**, but `~` is an asymmetric wave by design, not a true symmetry test -- weak evidence |
-| `\|` | (4,4) | 1 | **right** (col 4 alone: 4 blank left, 3 blank right) |
+| `\|` | (3,3) | (4,4) | single-column stem, shifted right one column |
+| `I`  | (1,5) width 5 | (2,6) width 5 | same width, shifted right one column (stem at col 4; serif bar cols 2-6, midpoint 4) |
+| `+`  | (1,5) width 5 | (1,7) width 7, stem at col 4 | vertical stroke centres on col 4; its bar widens too (see rule 2) |
+| `^`  | (2,4) width 3 | (1,5) width 5 | **dissents** -- widened but held its centre at column 3 |
 
-Mirror pairs, recorded separately (cancel, no net vote):
+**Rule: a hand-drawn centred stem goes at column 4** (4 columns of space to
+the left, 3 to the right). This is what box-drawing verticals and arrow
+shafts must follow, because *consistency across glyphs* is what matters
+there -- a stem that wanders between column 3 and column 4 from glyph to
+glyph is visibly broken in a way a single glyph's own asymmetry is not.
+`^` is upstream's own drawing and is vendored as-is (nothing under
+`upstream/` is edited); it is recorded as the one glyph that does not follow
+this rule, not silently folded into the majority.
 
-| pair | halves (min,max) | 
-|---|---|
-| `(` / `)` | (3,5) / (2,4) -- straddle 3.5, correctly mirrored |
-| `<` / `>` | (1,5) / (2,6) -- straddle 3.5, correctly mirrored |
-| `[` / `]` | (3,6) / (1,4) -- straddle 3.5, correctly mirrored |
-| `{` / `}` | (0,6) / (1,7) -- straddle 3.5, correctly mirrored |
+### 2. The letter box -- ordinary letterforms
 
-**Rule: bias right -- column 4.** Of the 23 non-paired symmetric glyphs
-above, 12 are ties (even width, no signal) and 11 carry a directional
-signal. **10 of those 11 (91%) put the extra blank column on the left**,
-i.e. their own ink sits centred on column 4 rather than column 3: `I` `M`
-`T` `W` `X` `Y` `%` `+` `~` `|`. Only **`^` dissents** (1 of 11), landing on
-column 3 instead. This is a strong majority, not a coin flip, and it
-confirms and strengthens the original `|`/`+` reading rather than changing
-it: when a hand-drawn glyph needs a single centred vertical stem in the
-8-wide cell, put it at **column 4** (4 columns of space to the left, 3 to
-the right).
+Column 0 is a **left gutter**: no plain letter, digit or arithmetic symbol
+in the sample ever puts ink there. Column 7 is the same gutter *unless* the
+letterform needs the extra width, in which case the ink grows into it. Going
+from 7x14 to 8x16 **added a column of width, it did not shift the glyph** --
+the left edge of the ink stays at column 1 in both sizes:
 
-**Dissent, recorded rather than smoothed over:** `^` is upstream's own
-drawing and is vendored as-is (see house rule: nothing under `upstream/` is
-edited), so it is not "fixed" to column 4. The column-4 rule above governs
-*new, hand-drawn* glyphs under `glyphs/8x16/`; it does not retroactively
-re-centre `^` or any other upstream bitmap that disagrees with it. The four
-mirror pairs are not evidence either way -- each pair's two halves straddle
-the 3.5 axis by design rather than either half picking a single centre
-column, and `~` is included for completeness but is weak evidence since a
-tilde is not vertically symmetric by design in the first place.
+| group | 7x14 window | 8x16 window | change |
+|---|---|---|---|
+| `A H O U V 0 8 * # = -` | (1,5) width 5 | (1,6) width 6 | +1 column, added on the right; col 0 stays clear both sizes |
+| `M T W X Y` | (1,5) width 5 | (1,7) width 7 | +2 columns, added on the right; col 0 stays clear both sizes |
+| `+` (its bar) | cols 1-5 | cols 1-7 | same pattern as the wide letters |
+| `~` | n/a (asymmetric by design) | (1,7) | reaches col 7 like the wide letters; weak evidence since `~` isn't a symmetric shape to begin with |
+
+**Rule: draw letter-like glyphs in columns 1..6.** If the design genuinely
+needs more width, extend into column 7, never column 0 -- upstream never
+uses column 0 for an interior letterform, so a new drawing that did would be
+the outlier, not the norm.
+
+**One upstream inconsistency, recorded rather than smoothed over:** `%`
+breaks the "column 0 stays clear" pattern above -- at 7x14 it is flush
+*left*, window (0,5), and at 8x16 it is flush *right*, window (1,7). That is
+upstream's own glyph, drawn independently at each size, and it is vendored
+as-is; it is not evidence against the column-0-gutter rule for *new*
+drawings, just proof that upstream itself is not perfectly consistent across
+sizes.
+
+### 3. The cell-spanning case -- glyphs that must connect
+
+Box-drawing, rules and blocks are a **different population from letters, not
+an edge case of it**, and they use the full cell, columns 0..7, with no
+gutter on either side. This isn't a stylistic choice like rules 1 and 2 --
+it's a correctness requirement: a horizontal rule that stops at column 6
+comes apart at every cell boundary when two cells are drawn side by side.
+
+Measured directly against the 309 existing `glyphs/7x14/regular/*.txt`
+drawings (the population this project will grow at 8x16 too): **150 of 309
+span the full cell edge-to-edge**, and the rest sit inside the letter box of
+rule 2 (131 touch neither edge; a further 28 touch exactly one edge --
+`%`-style outliers and asymmetric marks like `«`/`»`). This is a genuine
+two-(plus)-population split, not one spectrum: **decide which population a
+new glyph belongs to first** -- does it need to butt against its neighbour?
+-- and then apply rule 2 or rule 3, never something in between. A glyph that
+"almost" spans the cell (say, columns 0..6) is not a compromise; it is a
+box-drawing glyph with a seam, which is a bug.
+
+### Mirror pairs (not evidence for any of the above)
+
+`(`/`)`, `<`/`>`, `[`/`]`, `{`/`}` are each individually asymmetric and
+symmetric only as a pair; at 8x16 each pair's two halves straddle the 3.5
+axis and cancel exactly (e.g. `(` is (3,5), `)` is (2,4)). That confirms
+upstream mirrors them correctly but is not a data point for rules 1 or 2 --
+neither half is picking a single centre column on its own. For what it's
+worth, `(` shifted right by one column between font sizes (like `|` and `I`)
+while `)` did not move at all -- each curve was drawn independently by the
+type designer, not as a matched pair-rule, so this is mentioned for
+completeness rather than used as evidence.
