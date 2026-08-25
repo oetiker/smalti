@@ -155,3 +155,60 @@ worth, `(` shifted right by one column between font sizes (like `|` and `I`)
 while `)` did not move at all -- each curve was drawn independently by the
 type designer, not as a matched pair-rule, so this is mentioned for
 completeness rather than used as evidence.
+
+### 4. The axis-lock rule -- porting a drawing between sizes
+
+When an 8x16 drawing is ported from an existing 7x14 one, the question is
+which row it goes on, and there are only two valid answers.
+
+**Baseline-tracking is the default.** Its ink moves down with the baseline --
+row 10 at 7x14, row 11 at 8x16 (`FONT_ASCENT` 11 vs 12, baseline = ascent -
+1). This is what every letterform does, because a letter is drawn relative to
+the baseline, and the baseline itself moved down one row when the descent
+band grew from 3 rows to 4.
+
+**Axis-locked is the exception**, and it is allowed only when both of these
+hold:
+
+* the 8x16 drawing is a **direct copy of a specific upstream glyph** (not a
+  freehand redraw), and
+* that upstream glyph is **confirmed unchanged-row across both upstream
+  BDFs** -- measured, not eyeballed.
+
+A glyph with no such anchor is baseline-tracking. No exceptions by feel.
+
+**The measured evidence** (reproduced by parsing `upstream/7x14/Tamzen7x14r.bdf`
+and `upstream/8x16/Tamzen8x16r.bdf` with `tools/show-glyphs.py`, not copied
+from an earlier report):
+
+| glyph | codepoint | 7x14 row(s) | 8x16 row(s) | verdict |
+|---|---|---|---|---|
+| `-` | U+002D | row 7 | row 7 | unchanged -> **axis-locked** |
+| `*` | U+002A | rows 5-9 | rows 5-9 | unchanged -> **axis-locked** |
+| `+` | U+002B | bar row 7 | bar row 7 | bar unchanged -> **axis-locked** (only its stem grew, top and bottom; the bar itself did not move) |
+| `<` | U+003C | apex row 7 | apex row 7 | unchanged -> **axis-locked** |
+| `>` | U+003E | apex row 7 | apex row 7 | unchanged -> **axis-locked** |
+| `=` | U+003D | rows 5, 8 | rows 6, 9 | +1 row, matches the baseline shift -> **baseline-tracking** |
+| `A` | U+0041 | top row 3, bottom row 9 | top row 3, bottom row 10 | bottom follows baseline (top coincides by chance -- the cap sits near the top of the ascent band on both sizes) -> **baseline-tracking** |
+| `U` | U+0055 | tail touches the baseline, row 10 | tail touches the baseline, row 11 | tail is defined *by* the baseline, moves with it -> **baseline-tracking** |
+
+These are two disjoint populations, not one spectrum. `-`, `*`, `+`, `<` and
+`>` are fixed-shape symbols drawn around their own centre -- upstream redrew
+each one bigger at 8x16 without sliding it down the cell. `=`, `A` and `U` are
+anchored to the letter baseline, and the baseline itself moved, so their ink
+moved with it.
+
+**The row-7 maths axis.** `-`, `+` (its bar), `<` and `>` (their apexes) all
+sit on **row 7** in both sizes -- name this axis explicitly, because any new
+glyph that joins a formula (comparison operators, further arrows, anything
+meant to line up with `+`/`-`) belongs on it too, not on a baseline-relative
+row.
+
+**Why this must be written down, not rediscovered per glyph:** axis-locking
+is the exception and it is easy to reach for out of habit ("it looked centred
+in the cell, so I kept it where it was") without checking that both
+conditions above actually hold. A glyph that is merely *visually* centred but
+was hand-drawn fresh, or copied from a symbol upstream did not redraw
+unchanged, must default to baseline-tracking -- the anchor has to be measured
+evidence from both upstream BDFs, never a guess from how the 7x14 version
+looked.
