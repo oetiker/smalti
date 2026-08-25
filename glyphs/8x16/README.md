@@ -95,10 +95,19 @@ the left edge of the ink stays at column 1 in both sizes:
 | `+` (its bar) | cols 1-5 | cols 1-7 | same pattern as the wide letters |
 | `~` | n/a (asymmetric by design) | (1,7) | reaches col 7 like the wide letters; weak evidence since `~` isn't a symmetric shape to begin with |
 
-**Rule: draw letter-like glyphs in columns 1..6.** If the design genuinely
-needs more width, extend into column 7, never column 0 -- upstream never
-uses column 0 for an interior letterform, so a new drawing that did would be
-the outlier, not the norm.
+**Rule: draw letter-like glyphs in columns 1..6, and draw them WIDER than the
+7x14 original, not padded.** Of the 23 symmetric glyphs measured across both
+sizes, 18 changed ink width going from 7x14 to 8x16 (the two groups in the
+table above); only 5 kept their 7x14 width unchanged -- 3 of those (`|`, `I`,
+`(`) shifted right by one column instead, and 2 (`^`, `)`) neither widened
+nor moved. A hand-drawn 8x16 letter should follow the majority: **redraw it
+wider to fill the extra column**, the same way upstream's own letters did.
+A 7x14 drawing with a blank column stapled on the right will sit visibly
+thin next to upstream's neighbours -- that is a padding mistake, not a valid
+interpretation of "add one column." Extend into column 7 only if the design
+genuinely needs the width; never use column 0 -- upstream never puts an
+interior letterform there, so a new drawing that did would be the outlier,
+not the norm.
 
 **One upstream inconsistency, recorded rather than smoothed over:** `%`
 breaks the "column 0 stays clear" pattern above -- at 7x14 it is flush
@@ -126,6 +135,14 @@ new glyph belongs to first** -- does it need to butt against its neighbour?
 -- and then apply rule 2 or rule 3, never something in between. A glyph that
 "almost" spans the cell (say, columns 0..6) is not a compromise; it is a
 box-drawing glyph with a seam, which is a bug.
+
+**This rule coexists with rule 1, it does not override it.** A box-drawing
+vertical still centres its stroke on column 4 exactly as rule 1 says -- it
+just also runs the full 16 rows, edge to edge, rather than stopping short
+top or bottom. Its horizontal partner runs the full 8 columns, edge to
+edge, the same way. Centring and full-span are answers to two different
+questions (where does the stroke sit vs. how far does it reach) and a
+box-drawing glyph needs both answers at once.
 
 ### Mirror pairs (not evidence for any of the above)
 
