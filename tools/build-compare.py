@@ -33,6 +33,9 @@ H_LABEL = 'H() letterforms -- Latin Extended-A (Ruling R13)'
 
 # Batch order from design doc section 7, largest block first: each entry
 # matches a Unicode-block byte prefix against the 309 hand-drawn 7x14
+# codepoints the design doc's batch table was built from.  Task 10x added
+# two more (U+26C1, U+26F6) outside that 329-tile target set -- they fall
+# into the MISC_LABEL catch-all below, so the 309 total below is now 311.
 # codepoints.  Labels quote the design doc's own wording so the chart and the
 # plan never disagree.  Anything left over after these seven falls into the
 # eighth, catch-all batch below; the ninth batch is the fixed H() list.
@@ -69,16 +72,17 @@ def hand_codepoints(size, face):
 def target_groups():
     """[(label, [codepoints...])] in batch order -- the union target set.
 
-    This is every codepoint 8x16 still needs a hand drawing for: the 309
+    This is every codepoint 8x16 still needs a hand drawing for: the 311
     glyphs already hand-drawn at 7x14 (the pattern to draw against), plus the
     20 H() letters that parity requires but have no 7x14 hand file to read
     the set from.
     """
     hand7 = sorted(hand_codepoints(SIZE_SMALL, FACE))
-    if len(hand7) != 309:
+    if len(hand7) != 311:
         raise SystemExit(
             f'glyphs/{SIZE_SMALL}/{FACE}/ holds {len(hand7)} drawings, not '
-            f'the 309 the design doc\'s batch table (section 7) is built '
+            f'the 311 the design doc\'s batch table (section 7) plus task 10x\'s '
+            f'two extra glyphs is built '
             f'from -- the GROUPS table in this script has gone stale and '
             f'needs re-deriving against the new set')
 
