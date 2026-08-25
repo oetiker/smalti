@@ -82,13 +82,28 @@ def slant(head):
     return head
 
 
-def render(cp, bm, w, h, swidth):
+def font_yoff(head):
+    """The font's own descent, read from its FONTBOUNDINGBOX header line.
+
+    Every glyph BBX in this font shares the font's descent -- upstream's own
+    glyphs do (see glyphstore.Bdf), and generated/hand glyphs must match them
+    to sit on the same baseline.  7x14's descent is -3, 8x16's is -4; reading
+    it from the header rather than a literal is what makes render() correct at
+    both sizes without a second, size-keyed definition of the same number.
+    """
+    m = re.search(r'^FONTBOUNDINGBOX \d+ \d+ -?\d+ (-?\d+)$', head, re.M)
+    if not m:
+        sys.exit('build-face.py: no FONTBOUNDINGBOX in the header')
+    return int(m.group(1))
+
+
+def render(cp, bm, w, h, swidth, yoff):
     """A glyph block for art that has no upstream block to inherit from."""
     return (f'STARTCHAR U+{cp:04X}\n'
             f'ENCODING {cp}\n'
             f'SWIDTH {swidth}\n'
             f'DWIDTH {w} 0\n'
-            f'BBX {w} {h} 0 -3\n'
+            f'BBX {w} {h} 0 {yoff}\n'
             f'BITMAP\n' + '\n'.join(gs.hexrows(bm, w)) + '\nENDCHAR\n')
 
 
@@ -118,6 +133,7 @@ def main():
         meta, swidth = {}, base.swidth
         expect = None
 
+    yoff = font_yoff(head)
     resolved = gs.resolve(size, face)
     if not resolved:
         sys.exit(f'build-face.py: no glyphs resolved for {size}/{face}')
@@ -139,7 +155,7 @@ def main():
             blocks[cp] = ('STARTCHAR ' + meta[cp] + 'BITMAP\n'
                           + '\n'.join(gs.hexrows(bm, w)) + '\nENDCHAR\n')
         else:
-            blocks[cp] = render(cp, bm, w, h, swidth)
+            blocks[cp] = render(cp, bm, w, h, swidth, yoff)
 
     head = re.sub(r'^CHARS \d+$', f'CHARS {len(blocks)}', head, flags=re.M)
     out = [head + '\n']

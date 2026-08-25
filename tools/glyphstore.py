@@ -316,7 +316,7 @@ class Bdf:
         self.w, self.h = int(m.group(1)), int(m.group(2))
         self.swidth = re.search(r'^SWIDTH (\S+ \S+)$', text, re.M).group(1)
         self.head, _, rest = text.partition('\nSTARTCHAR ')
-        self.blocks, self.pre, self.bitmaps = {}, {}, {}
+        self.blocks, self.pre, self.bitmaps, self.heights = {}, {}, {}, {}
         for chunk in ('STARTCHAR ' + rest).split('STARTCHAR ')[1:]:
             body, _, _tail = chunk.partition('ENDCHAR')
             cp = int(re.search(r'^ENCODING (-?\d+)', body, re.M).group(1))
@@ -325,6 +325,13 @@ class Bdf:
             self.pre[cp] = head
             self.bitmaps[cp] = [int(x, 16) for x in bits.strip().split('\n')] \
                 if bits.strip() else []
+            # The glyph's OWN BBX height, which need not equal self.h: a few
+            # upstream letters draw one row taller than the cell (see
+            # resolve() below).  Kept per-glyph so a truncated or otherwise
+            # corrupt BITMAP block can be told apart from that deliberate
+            # overshoot.
+            self.heights[cp] = int(re.search(r'^BBX \d+ (\d+) ', head, re.M)
+                                    .group(1))
 
 
 def upstream_bdf(size, face):
@@ -367,7 +374,25 @@ def resolve(size, face):
         out[cp] = ('gen', pack(rows, w))
     path = upstream_bdf(size, face)
     if path and os.path.exists(path):
-        for cp, bm in Bdf(path).bitmaps.items():
+        bdf = Bdf(path)
+        for cp, bm in bdf.bitmaps.items():
+            declared = bdf.heights[cp]
+            if len(bm) != declared:
+                raise GlyphError(f'{path}: U+{cp:04X} declares BBX height '
+                                 f'{declared} but its BITMAP has {len(bm)} '
+                                 f'rows -- corrupt glyph block')
+            # Upstream draws a handful of letters one row taller than the
+            # cell -- a deliberate cap-line overshoot for round letterforms
+            # (O Q a b d g h l m n p q r u w y at 8x16), always on top: their
+            # BBX y-offset matches FONTBOUNDINGBOX's, only the height differs.
+            # The gen/hand layers, and every generator that reads bitmaps()
+            # (embolden.py, slant-bdf.py, slant-bold.py), work in one uniform
+            # h-row grid with no notion of a per-glyph offset, so trim the
+            # overshoot row here to fit it.  This does not touch what ships:
+            # build-face.py copies upstream's own BBX block verbatim for any
+            # glyph this layer wins, overshoot included.
+            if declared > h:
+                bm = bm[declared - h:]
             out[cp] = ('upstream', bm)
     for cp, rows in read_dir(hand_dir(size, face), w, h).items():
         out[cp] = ('hand', pack(rows, w))
