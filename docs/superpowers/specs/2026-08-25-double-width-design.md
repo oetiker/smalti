@@ -7,8 +7,13 @@ Target release: 0.3.0 (NOT 0.2.0 — see §12)
 ## 1. What ships
 
 Sixty-two glyphs that occupy **two terminal cells** instead of one, drawn at
-8x16 so each is a 16x16 square.  They are the emoji-width symbols Smalti has
-been deliberately stepping over since it started.
+**both cell sizes** — 14x14 at 7x14 and 16x16 at 8x16, each a perfect square.
+They are the emoji-width symbols Smalti has been deliberately stepping over
+since it started.
+
+That is **124 hand drawings**.  The set is 62 codepoints; every one is drawn
+twice, because a pixel drawing does not scale between cell sizes — the same
+reason the 8x16 release redraws rather than derives.
 
 ## 2. Why this is possible at all, and what it cannot do
 
@@ -135,7 +140,6 @@ The oblique is the open question of §11.
 
 * **No CJK.**  This is 62 symbols, not an ideograph set.  The blocks Smalti
   covers, and nothing else.
-* **No 7x14.**  See §11 decision 1.
 * **No Ambiguous-width characters.**  §8 risk 3.
 * **No change to how narrow glyphs work.**  Every existing drawing keeps its
   meaning and its file, byte for byte.
@@ -144,19 +148,22 @@ The oblique is the open question of §11.
 
 The first task of implementation is a **spike, not a drawing**: hand-build a
 face containing ONE wide glyph, install it, and look at it in wezterm and one
-other terminal.
+other terminal.  **Do this at 7x14 FIRST**, then 8x16 — the narrower cell is
+the more likely to be mis-measured, so a failure shows up there soonest.
 
 If a mixed-advance monospace face is mis-measured (§8 risk 1), the feature is
-dead and 62 drawings would have been wasted.  Sixty-two drawings is several
-days of the owner's judgement; the spike is an hour.  **Do not invert that
-order.**
+dead and 124 drawings would have been wasted.  That is well over a week of the
+owner's judgement; the spike is an hour.  **Do not invert that order.**
 
 ## 11. Open decisions
 
-1. **Which cell sizes.**  Provisionally **8x16 only** for 0.3.0, with the store
-   built to carry both: 62 drawings rather than 124, at the size where the extra
-   detail actually pays, and 7x14 can follow once the machinery is proven.  The
-   owner has not ruled; overriding this costs one line in the plan.
+1. **Which cell sizes — DECIDED 2026-08-25: BOTH.**  The owner ruled against
+   the provisional 8x16-only scope.  So 0.3.0 is 124 drawings, not 62.
+
+   The consequence to plan around: the spike of §10 must clear BOTH sizes
+   before drawing starts, not just 8x16.  A mixed-advance face is a risk per
+   size, and 7x14's narrower cell is the more likely of the two to be
+   mis-measured, so it is the one to test first.
 2. **Whether wide glyphs lean in the oblique faces.**  A 16-wide glyph has
    twice the horizontal room, so the same 2-pixel lean reads as half the slope.
    Options: same absolute lean, same visual slope (4 px), or no lean at all —
