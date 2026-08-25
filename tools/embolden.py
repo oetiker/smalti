@@ -37,8 +37,9 @@ import weight
 from weight import widen
 
 SIZE = sys.argv[1] if len(sys.argv) > 1 else '7x14'
+w, _h = gs.cell(SIZE)
 # widen() reads its width from module state, so set it before the first call.
-weight.set_width(int(SIZE.split('x')[0]))
+weight.set_width(w)
 
 # Shapes, not strokes: identical in both weights.  Widening a filled circle
 # or a braille dot does not make it bold, it makes it lopsided -- and braille
@@ -56,7 +57,6 @@ TWIN = {0x391: 'A', 0x392: 'B', 0x395: 'E', 0x396: 'Z', 0x397: 'H', 0x399: 'I',
         0x39A: 'K', 0x39C: 'M', 0x39D: 'N', 0x39F: 'O', 0x3A1: 'P', 0x3A4: 'T',
         0x3A5: 'Y', 0x3A7: 'X', 0x3BF: 'o'}
 
-w, _h = gs.cell(SIZE)
 regular = gs.bitmaps(SIZE, 'regular')
 if not regular:
     sys.exit(f'embolden.py: the {SIZE} regular face resolved to nothing')

@@ -20,7 +20,9 @@ instead, so shearing first and emboldening second loses no ink.
 
 The low-bit mask is derived from the width, not the constant 0xFE it used to
 be.  At 7 wide bit 0 is BDF row padding; at 8 wide it is column 7, and clearing
-it deletes a real column with no visible error.
+it deletes a real column with no visible error.  tools/slant-bdf.py already
+derives its own pad mask this way (PAD_MASK = 0xFF << (8 - CELL_W) & 0xFF) --
+this module was the one straggler still using the 7-wide-only constant.
 """
 CELL_W = 7
 

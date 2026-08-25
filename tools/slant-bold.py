@@ -42,10 +42,10 @@ from weight import widen
 
 def main():
     size = sys.argv[1] if len(sys.argv) > 1 else '7x14'
+    w, _h = gs.cell(size)
     # widen() reads its width from module state, so set it before the first
     # call below.
-    weight.set_width(int(size.split('x')[0]))
-    w, _h = gs.cell(size)
+    weight.set_width(w)
     bold = gs.bitmaps(size, 'bold')
     italic = gs.bitmaps(size, 'italic')
     upright = gs.bitmaps(size, 'regular')
