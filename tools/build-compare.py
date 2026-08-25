@@ -112,16 +112,33 @@ def tile(cp, built7, built8):
     face has not actually built is never placed in that span's DOM in the
     first place -- there is then nothing for any font, real or substituted,
     to draw.
+
+    An empty span is ambiguous, though: it looks the same whether the
+    codepoint was never drawn, or IS built but simply renders as nothing
+    (e.g. U+0020 SPACE).  So a `missing` class -- a CSS-only dashed box, the
+    familiar "no glyph here" look -- is added whenever the codepoint is
+    absent from `built7`/`built8`, i.e. whenever the span is left empty.
+    That is a presence check against the built cmap, never a check of what
+    the glyph looks like, so a present-but-blank glyph never gets a box: it
+    stays a plain empty span, exactly as before this change.  The box itself
+    is a border on the still-empty span, NOT a character -- adding any
+    character (a box-drawing glyph, `.notdef`, tofu, an emoji) here would
+    reopen the exact substitution hole the paragraph above guards against,
+    because it would put text back in the DOM for a font's own fallback
+    matching to act on.
     """
     label = f'U+{cp:04X}'
-    ch7 = html.escape(chr(cp), quote=False) if cp in built7 else ''
-    ch8 = html.escape(chr(cp), quote=False) if cp in built8 else ''
+    present7, present8 = cp in built7, cp in built8
+    ch7 = html.escape(chr(cp), quote=False) if present7 else ''
+    ch8 = html.escape(chr(cp), quote=False) if present8 else ''
+    cls7 = 'glyph g7' if present7 else 'glyph g7 missing'
+    cls8 = 'glyph g8' if present8 else 'glyph g8 missing'
     return (
         '<div class="tile">'
         f'<span class="cp" title="{html.escape(gs.unicode_name(cp))}">{label}</span>'
         '<div class="pair">'
-        f'<span class="glyph g7">{ch7}</span>'
-        f'<span class="glyph g8">{ch8}</span>'
+        f'<span class="{cls7}">{ch7}</span>'
+        f'<span class="{cls8}">{ch8}</span>'
         '</div></div>'
     )
 
@@ -225,13 +242,26 @@ h2 {{
 .glyph {{ line-height: 1; text-align: center; }}
 .g7 {{ font-family: "SmaltiCompare7x14"; font-size: {px7}px; }}
 .g8 {{ font-family: "SmaltiCompare8x16"; font-size: {px8}px; }}
+/* "missing" tiles a codepoint absent from that face's built cmap -- see the
+ * long comment on tile() in build-compare.py for why this MUST stay a CSS
+ * border and never a character.  Sized to the advance width/height a real
+ * glyph would occupy at this font-size (font-size * cell_w/cell_h, cell_h),
+ * so a placeholder box never shifts the tile layout relative to a drawn
+ * glyph sitting next to it. */
+.glyph.missing {{
+  display: inline-block; box-sizing: border-box;
+  border: 1px dashed var(--ink-dim);
+}}
+.g7.missing {{ width: {px7 * 7 // 14}px; height: {px7}px; }}
+.g8.missing {{ width: {px8 * 8 // 16}px; height: {px8}px; }}
 </style>
 </head>
 <body>
 <h1>Smalti compare — {SIZE_SMALL} at {px7}px beside {SIZE_LARGE} at {px8}px</h1>
 <p class="sub">{total_drawn} of {total} target glyphs drawn at {SIZE_LARGE}.
-An empty right-hand tile is a glyph nobody has drawn yet -- it must look
-empty, never borrowed from another font.</p>
+A dashed box is a glyph nobody has drawn yet at that size -- it must never be
+a borrowed glyph from another font. A blank tile with no box means the
+codepoint IS drawn and is legitimately empty (e.g. a space).</p>
 {sections}
 </body>
 </html>
