@@ -33,9 +33,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import glyphstore as gs
+import weight
 from weight import widen
 
 SIZE = sys.argv[1] if len(sys.argv) > 1 else '7x14'
+# widen() reads its width from module state, so set it before the first call.
+weight.set_width(int(SIZE.split('x')[0]))
 
 # Shapes, not strokes: identical in both weights.  Widening a filled circle
 # or a braille dot does not make it bold, it makes it lopsided -- and braille

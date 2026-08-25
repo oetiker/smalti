@@ -17,8 +17,33 @@ The rightward fallback is also what lets the BOLD OBLIQUE exist at all.  A
 sheared glyph puts ink in column 0 on its lower rows, where there is nothing
 to the left to widen into; the run rule quietly widens those rows rightward
 instead, so shearing first and emboldening second loses no ink.
+
+The low-bit mask is derived from the width, not the constant 0xFE it used to
+be.  At 7 wide bit 0 is BDF row padding; at 8 wide it is column 7, and clearing
+it deletes a real column with no visible error.
 """
 CELL_W = 7
+
+
+def set_width(w):
+    """Set the cell width the rule works at.
+
+    Kept as module state rather than a parameter because embolden.py and
+    slant-bold.py both call widen() in loops and there is exactly one width in
+    play per run.
+    """
+    global CELL_W
+    CELL_W = w
+
+
+def _mask():
+    """The packed-row bits that are real columns at this width.
+
+    A BDF row is padded to a whole byte, MSB first, so column c is bit 7-c and
+    the low 8-CELL_W bits are padding.  At 7 wide that mask is 0xFE; at 8 wide
+    it is 0xFF, and using 0xFE there would delete column 7.
+    """
+    return (0xFF << (8 - CELL_W)) & 0xFF
 
 
 def runs(v):
@@ -48,5 +73,5 @@ def widen(bm):
                 n |= 1 << (7 - (s - 1))
             elif e < CELL_W - 1 and (nxt is None or nxt - e > 2):
                 n |= 1 << (7 - (e + 1))
-        out.append(n & 0xFE)
+        out.append(n & _mask())
     return out
