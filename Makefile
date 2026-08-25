@@ -45,14 +45,23 @@ SIZES := 7x14 8x16
 # packages, site, index, compare -- are NOT here; they run once and read all
 # sizes themselves.
 FANOUT := all check check-sources check-outlines check-version \
-          outlines woff2 install preview show
+          outlines woff2 install preview show clean
 
-# Targets that are not per-size. Some are genuinely size-independent (clean,
-# venv, headers); others span sizes (site, index, packages) but are still
+# Targets that are not per-size. Some are genuinely size-independent (venv,
+# headers); others span sizes (site, index, packages) but are still
 # single-size today. Both kinds re-enter once, with the first size, so nothing
 # that worked before this change stops working. Tasks 11 and 12 promote the
 # cross-size ones to read every size.
-PASSTHRU := clean venv headers index print-dest restore \
+#
+# clean is deliberately NOT here even though sweeping build/ is itself
+# size-independent work: its recipe opens with `rm -f $(BDF) $(TTF)
+# $(WOFF2)`, which are SIZE-scoped variables, so as a passthru it only ever
+# cleaned the first size in $(SIZES) and left every other size's artifacts
+# sitting in build/.  That is dangerous here specifically because
+# byte-reproducibility is checked by a clean-rebuild-and-compare: artifacts
+# that survive "clean" let a rebuild compare against itself.  clean is in
+# FANOUT so every size is actually swept.
+PASSTHRU := venv headers index print-dest restore \
             site check-site serve-site deb rpm packages check-packages watch
 
 ifndef SIZE
@@ -120,7 +129,14 @@ all: $(BDF) outlines
 # STEPS are the rows where the lean drops a column: above the first the glyph
 # moves right, below the last it moves left.  More steps means more lean.
 #   make STEPS=4,7,10 install
-STEPS := 5,8
+#
+# Per-size, because the two step rows are a visual judgement call at each
+# cell height, not something derivable from CELL_W or CELL_H alone.  7x14 is
+# settled; 8x16 is NOT.  STEPS ?= keeps the `make STEPS=... install` override
+# on the command line working as before.
+STEPS_7x14 := 5,8
+STEPS_8x16 := UNDECIDED  # placeholder -- owner has not picked a lean yet, see task 4
+STEPS      ?= $(STEPS_$(SIZE))
 
 # One ordered recipe, because the generators feed each other: the bold face is
 # emboldened from the RESOLVED regular face, the italic is sheared from it, and

@@ -64,9 +64,21 @@ import glyphstore as gs
 CELL_W = 7
 STEPS = (5, 8)       # rows where the displacement drops by one column
 
-# Bit 7 is column 0 and bit 1 is column 6; bit 0 is the padding column and
-# must stay clear, so every shift is masked back to 0xFE.
-PAD_MASK = 0xFF << (8 - CELL_W) & 0xFF
+
+def pad_mask():
+    """The packed-row bits that are real columns at the current CELL_W.
+
+    A BDF row is padded to a whole byte, MSB first, so column c is bit 7-c
+    and the low 8-CELL_W bits are padding.  This must be a FUNCTION of
+    CELL_W, not a constant computed once at import: CELL_W is still the
+    default 7 at that point, and main() only reassigns CELL_W itself, so a
+    module-level `PAD_MASK = 0xFF << (8 - CELL_W) & 0xFF` evaluated here
+    would freeze at 0xFE and silently clear column 7 at every width above 7
+    (tools/weight.py's _mask() and tools/slant-bold.py document the same
+    trap).  Calling this after CELL_W is set keeps it live.
+    """
+    return 0xFF << (8 - CELL_W) & 0xFF
+
 
 # Punctuation that reads as text and should lean with the letters around it.
 PUNCT = {0x23, 0x3A, 0x3B, 0x21, 0x3F}       # # : ; ! ?
@@ -88,16 +100,28 @@ def is_slanted(cp):
 
 
 def move(v, k):
-    return (v >> k) & PAD_MASK if k >= 0 else (v << -k) & PAD_MASK
+    mask = pad_mask()
+    return (v >> k) & mask if k >= 0 else (v << -k) & mask
 
 
 def has_room(rows):
     """False if any row would push ink out of the cell in either direction."""
+    mask = pad_mask()
     for r, v in enumerate(rows):
         k = offset(r)
-        if k > 0 and v & ((1 << (k + 1)) - 1):
-            return False
-        if k < 0 and v & (PAD_MASK ^ (PAD_MASK >> -k)):
+        if k > 0:
+            # Shifting right by k loses ink from the rightmost k columns.
+            # Column c is bit 7-c, so the rightmost k columns of a CELL_W
+            # wide row are bits (8-CELL_W)..(8-CELL_W+k-1).  At CELL_W=7
+            # that is bits 1..k, and testing bits 0..k (as this used to)
+            # gave the same answer only because bit 0 is always-clear
+            # padding there; at CELL_W=8 there is no padding bit to absorb
+            # the extra bit and the wider test wrongly rejected glyphs that
+            # actually had room.
+            overflow = ((1 << k) - 1) << (8 - CELL_W)
+            if v & overflow:
+                return False
+        if k < 0 and v & (mask ^ (mask >> -k)):
             return False
     return True
 
@@ -114,9 +138,6 @@ def main():
         argv = argv[2:]
     size = argv[0] if argv else '7x14'
     CELL_W, _h = gs.cell(size)
-    if CELL_W != 7:
-        sys.exit(f'slant-bdf.py: the lean below spends 7x14 side bearings, '
-                 f'not {size}')
 
     regular = gs.bitmaps(size, 'regular')
     if not regular:
