@@ -36,8 +36,17 @@ if len(sys.argv) != 3:
     sys.exit(__doc__)
 BDF, OUT = sys.argv[1], sys.argv[2]
 
+# The real cell size, read from the BDF's own FONTBOUNDINGBOX rather than
+# hand-parsed from a size string -- this script's only size-bearing input is
+# BDF, not a SIZE argument, so gs.Bdf() is the one place that width and
+# height can come from without inventing a second, possibly-disagreeing
+# source of truth (and, unlike measuring a specific glyph, is not thrown off
+# by upstream's own per-glyph overshoot -- see accents.marks()).
+_meta = gs.Bdf(BDF)
+W, CELLH = _meta.w, _meta.h
+
 g = accents.load(BDF)
-mark = accents.marks(g)
+mark = accents.marks(g, CELLH)
 
 def rows_used(bm):
     return [i for i, v in enumerate(bm) if v]
@@ -65,7 +74,7 @@ def compose(base_cp, mark_cp, upper):
         return [a | b for a, b in zip(base, m)], None
     # Collision: the letter is tall.  Typography's own answer is a raised
     # comma beside the letter rather than a mark on top of it.
-    free = [c for c in range(7) if not any(v & (1 << (7 - c)) for v in base)]
+    free = [c for c in range(W) if not any(v & (1 << (7 - c)) for v in base)]
     if not free:
         return None, 'no free column'
     col = 1 << (7 - max(free))
@@ -79,8 +88,20 @@ def compose(base_cp, mark_cp, upper):
 # leftward -- because there is no bold original to copy them from.
 BOLD = 'Bold' in re.search(r'^WEIGHT_NAME "([^"]*)"', open(BDF).read(), re.M).group(1)
 
+# The literal art below is pixel-drawn at 7x14 -- unlike the composed
+# accents above, there is no formula that stretches a drawing to a taller
+# cell, only a person redrawing it (the same reason gen-braille.py,
+# gen-arrows.py and gen-circled-digits.py carry a per-size GEOMETRY/guard
+# rather than scaling their own drawings). At any other cell size H() is a
+# no-op: the codepoint falls through to the ordinary "no decomposition and
+# not hand-drawn" skip below, same as any other glyph this generator cannot
+# yet produce -- nothing beats a wrong drawing, per glyphstore.py's own rule.
+HAND_CELL = (7, 14)
+
 hand = {}
 def H(ch, art):
+    if (W, CELLH) != HAND_CELL:
+        return
     rows = art.strip('\n').split('\n')
     assert len(rows) == 14 and all(len(r) == 7 for r in rows), ch
     bm = accents.pack(rows)
@@ -145,7 +166,7 @@ for cp in range(0x0100, 0x0180):
     blocks.append((cp, name, bm))
 
 for cp, name, bm in blocks:
-    gs.write_glyph(os.path.join(OUT, gs.filename(cp)), cp, accents.art(bm))
+    gs.write_glyph(os.path.join(OUT, gs.filename(cp)), cp, accents.art(bm, W))
 
 print(f'{OUT}: {len(blocks)} Latin Extended-A glyphs')
 for cp, ch, note in notes:
