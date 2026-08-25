@@ -74,6 +74,17 @@ $(FANOUT):
 
 $(PASSTHRU):
 	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) $@
+
+# The 7x14-against-8x16 review chart (design doc section 6).  Spans both
+# sizes and runs once, so it lives here rather than in FANOUT or PASSTHRU.
+#
+# Not a check.  `make check` proves things; `make compare` shows things.  It
+# is never a prerequisite of check and it gates nothing.
+.PHONY: compare
+compare:
+	@$(MAKE) --no-print-directory woff2
+	python3 tools/build-compare.py
+	@echo "open build/compare/index.html"
 else
 
 SIZE ?= 7x14
