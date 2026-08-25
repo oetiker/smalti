@@ -135,7 +135,7 @@ all: $(BDF) outlines
 # settled; 8x16 is NOT.  STEPS ?= keeps the `make STEPS=... install` override
 # on the command line working as before.
 STEPS_7x14 := 5,8
-STEPS_8x16 := UNDECIDED  # placeholder -- owner has not picked a lean yet, see task 4
+STEPS_8x16 := 6,9  # owner's choice, 2026-08-25 -- see docs/superpowers/specs/2026-08-25-8x16-design.md §11
 STEPS      ?= $(STEPS_$(SIZE))
 
 # One ordered recipe, because the generators feed each other: the bold face is
