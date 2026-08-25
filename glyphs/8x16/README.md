@@ -69,7 +69,7 @@ serifs) consistently centre on **column 4**, not column 3:
 | `\|` | (3,3) | (4,4) | single-column stem, shifted right one column |
 | `I`  | (1,5) width 5 | (2,6) width 5 | same width, shifted right one column (stem at col 4; serif bar cols 2-6, midpoint 4) |
 | `+`  | (1,5) width 5 | (1,7) width 7, stem at col 4 | vertical stroke centres on col 4; its bar widens too (see rule 2) |
-| `^`  | (2,4) width 3 | (1,5) width 5 | **dissents** -- widened but held its centre at column 3 |
+| `^`  | (1,5) width 5 | (1,5) width 5 | **dissents** -- completely unchanged between sizes, centred on column 3 while everything around it widened |
 
 **Rule: a hand-drawn centred stem goes at column 4** (4 columns of space to
 the left, 3 to the right). This is what box-drawing verticals and arrow
