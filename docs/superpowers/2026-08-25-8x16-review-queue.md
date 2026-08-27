@@ -166,3 +166,97 @@ including `279E`/`27A0` from 2 px to 14 and `27A2`/`27A3` from 2 px to 4.
 | glyph | what |
 |---|---|
 | `U+2722` FOUR TEARDROP-SPOKED ASTERISK | Drawn at rows 4–10, not the rows 5–10 the batch brief specified.  **The reason is decisive: the 7x14 drawing is byte-identical to upstream's own 7x14 `+`, and the 8x16 drawing is byte-identical to upstream's own 8x16 `+`** (both verified by comparison, not by eye).  Upstream answered this exact question for this exact shape.  The instructed band would have forced either a two-row bar — 38% *heavier*, the opposite of its intent — or a stem with two arms above and three below.  Recommended: accept. |
+
+---
+
+# Pass 5 — the 30 unanchored Greek
+
+The other 30 of the `03xx` block: the ones the anchored pass (`5014099`) could
+not resolve because nothing in the tree or upstream is byte-identical to them.
+
+**The wide comparison returned almost nothing, and that is the finding.**  All
+49 Greek drawings were compared against every glyph of all four upstream BDFs
+(`7x14{r,b}`, `8x16{r,b}`) and every in-tree drawing at both sizes.  Upstream
+carries **no Greek at all** — all four files stop at U+00FF.  Among the 30, the
+only byte-identities that exist are the two `5014099` already named: `0398`≡
+`03B8` and `03BC`≡`00B5`.  So the batch is genuinely unanchored: 30 freehand
+redraws against upstream's neighbouring **Latin**, not ports.  The classifier
+also ran: **all 30 are letter-box**, none cell-spanning (none lights both
+column 0 and column 6 at 7x14).
+
+## The descender line: row 14, not row 13
+
+**The batch's single biggest call.**  Every descending Greek at 7x14 bottoms on
+row 12.  Baseline-tracking alone (+1 row) would put them on row 13 at 8x16.
+They are on **row 14**.
+
+The census that decides it, over all four upstream BDFs:
+
+| size | letter descenders bottom at | who else is down there |
+|---|---|---|
+| 7x14 | **split**: `g j ý þ ÿ ¡ ¿` on 12, `p q y , ; ¸ ç` on 13 | `( ) [ ] _ { } $ Q` also on 12 |
+| 8x16 | **unified**: `g j p q y , ; ¸ ç ¡ ¿ ý þ ÿ` — all 15 on **14** | row 13 holds only `( ) / @ [ \ ] _ | ¦` |
+
+Upstream merged both 7x14 families onto one line at 8x16, and moved `g` **two**
+rows to do it.  The 7x14 Greek had followed `g`'s shallower depth.  At 8x16
+there is no letter-shaped thing on row 13 — a Greek descender there would be
+the only one in the font at that depth.  All nine descenders in this batch
+(`β γ ζ η μ ξ ρ ς φ χ ψ`) therefore bottom on 14, three rows below the baseline,
+exactly like `p`.
+
+**Confirm this with fresh eyes.**  If it is wrong, eleven glyphs are wrong
+together, and batch 10g's `00B5` inherits it.
+
+## Three bowls that floated above the baseline at 7x14 now sit on it
+
+`ρ`, `ς` and `φ` all close their bowl on row 9 at 7x14 — **one row above the
+baseline** — with the stem starting at row 10.  `o`, `c`, `p`, `b`, `d`, `q` all
+close on row 10 there.  The likely cause is arithmetic: at 7x14 only two rows
+exist below the baseline, so a three-row stem had to start on it.
+
+At 8x16 there are three rows below the baseline, so the compromise is not
+forced.  `ρ` and `ς` now close on row 11 with `o`/`c`, and `φ`'s bowl is
+centred on its stem as before.  Cost: `ρ`'s and `ς`'s bowls gained **two** rows
+where everything else in the batch gained one.  It is a design change, not a
+port, and it is the direct consequence of the descender ruling above.
+
+## Distinctions the extra column changed
+
+| what | at 7x14 | at 8x16 | note |
+|---|---|---|---|
+| `U+03C7` χ vs upstream `x` | 6 px apart (χ has a 1-row waist and a doubled leg row; `x` has a 2-row waist) | **3 px apart** — χ's body is now byte-identical to upstream 8x16 `x`, differing only by the descender | 7x14's difference reads as a compromise (χ needed its leg at column 1 by row 11 to start the tail), not a deliberate distinction. `x` at 8x16 already has the 1-row waist χ wanted. **Separation went DOWN. Worth a second opinion.** |
+| `U+03C9` ω vs upstream `w` | 2 px apart | **6 px apart** | ω's rows 5–9 are byte-identical to `w` at *both* sizes; only the closing differs. At 7x14 ω closes in one row with 1 px feet; at 8x16 the three stems sit 3 columns apart instead of 2, so a 1 px foot can no longer bridge them and the close takes two rows. A §4.1 lift, but it was forced by geometry, not chosen. |
+| `U+03BE` ξ's two waves | upper wave 2 rows, lower wave **1** row — visibly lopsided | both waves 2 rows | A clean §4.1 lift: the extra row went exactly where 7x14 had run out. |
+| `U+0398` Θ / `U+03B8` θ bar | row 6 of the 3–10 body: 2 side rows above, 3 below | row 7 of the 3–11 body: **3 above, 3 below** | 8x16's 7 interior rows have a true centre; 7x14's 6 did not. |
+
+## Θ and θ are still byte-identical
+
+The hard constraint from `5014099` is held: `0398` and `03B8` are the same
+bytes, as at 7x14.  The extra column would now permit them to differ (a
+lowercase θ could take a shorter bowl), but that would invent a distinction the
+7x14 face does not draw, so it was not acted on.  **Recorded as an open
+question, not a decision.**
+
+## Drawing μ has fixed `U+00B5` — but 00B5 is not in this commit
+
+`03BC` is byte-identical to in-tree `00B5` MICRO SIGN at 7x14.  `00B5` belongs
+to batch **10g** and is still absent at 8x16.  Whoever draws 10g must copy
+`glyphs/8x16/regular/03BC.txt` verbatim rather than redraw it, or the identity
+breaks.  Upstream carries `00B5` at neither size, so there is no other anchor.
+
+## Deviations from the batch brief, kept on purpose
+
+| glyph | what | the measurement |
+|---|---|---|
+| `U+039B` Λ | 7x14 draws a **2-row 1 px apex**; 8x16 uses a **1-row 2 px apex** over a 3-row taper | At 8 columns the apex must be 2 px wide (there is no centre column — in-tree `0394` Δ and upstream `A` both use `...##...`). Holding 7x14's 2-row apex would make a 2×2 block, which reads blunt, not pointed. The taper was lengthened to 3 rows instead, so Λ stays pointier than Δ exactly as it is at 7x14 — the distinction moved rather than being dropped. |
+| `U+03A6` Φ, `U+03A8` Ψ, `U+03C6` φ, `U+03C8` ψ | drawn in columns **1–7**, not the 1–6 letter box | Each has a centred vertical stem, which README rule 1 puts on column 4. A 1–6 box gives that stem counters of 2 and 1 — visibly lopsided inside one glyph. 1–7 gives 2 and 2. This is what upstream does for its own centre-stem forms (`m`, `w`, `x` are 1–7), and what the committed `03A4` Τ, `03A5` Υ, `03A7` Χ already do. |
+| `U+03C4` τ | bar on columns 1–6, stem on column **4** — 3 columns left of it, 2 right | Not centred, deliberately. 7x14 τ puts its foot's right end exactly under the bar's right end; stem 4 + foot 5–6 + bar 1–6 preserves that, stem 3 + foot 4–5 does not. Upstream's own `t` leans the other way by the same one column (stem 3 in a 1–6 bar), so a lean is house style; only the direction differs. |
+
+## Drawings the implementer distrusts — pass 5
+
+| glyph | what is wrong |
+|---|---|
+| `U+03B3` γ | **The weakest drawing in the batch, and the one most wanted for a second opinion.** Its body is byte-identical to upstream 8x16 `v` (as it is to `v` at 7x14 — a measured anchor, and it keeps γ and the committed `03BD` ν differing only by the tail). But `v` ends **2 px wide** at 8x16 where it ended 1 px at 7x14, so γ's tail has to narrow from 2 px to 1 px right at the baseline, and it drops from the *right* half of the V's point. Every other descender in the font is 1 px the whole way. The alternative — rebuilding γ on `x`'s geometry (columns 1–7 converging to a 1 px point) — gives a clean tail but throws away the `v` anchor and makes γ wider than ν. The implementer would not defend this trade hard. |
+| `U+03BA` κ | The lower arm's terminal is a 3 px blob (`.#..###.`) where 7x14's is 2 px. The upper arm now runs 4 rows against the lower arm's 2, where 7x14 is 3 against 2 — the arm had to start at column 6 to fill the wider box, and stepping one column per row to the junction takes four rows. It reads slightly top-heavy. |
+| `U+03B9` ι | The stem stays on column 2 (7x14's left edge, per README rule 2) while the foot and its terminal curl widen right, so the gap between stem and terminal grew from 2 columns to 3. At 10 px of ink it is the lightest glyph in the batch and it now looks a little sprawled for its weight. |
+| `U+03A6` Φ / `U+03C6` φ | 24.2% and 21.9% ink — the densest in the batch, and their two full-width `.#######` bars embolden to a solid `########`, an entirely filled row. Faithful to 7x14 (24.5% / 20.4%) and the gate is green at every face, but they are the two glyphs most likely to read as blobs at 1x. |
