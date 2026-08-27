@@ -179,10 +179,32 @@ not resolve because nothing in the tree or upstream is byte-identical to them.
 (`7x14{r,b}`, `8x16{r,b}`) and every in-tree drawing at both sizes.  Upstream
 carries **no Greek at all** — all four files stop at U+00FF.  Among the 30, the
 only byte-identities that exist are the two `5014099` already named: `0398`≡
-`03B8` and `03BC`≡`00B5`.  So the batch is genuinely unanchored: 30 freehand
-redraws against upstream's neighbouring **Latin**, not ports.  The classifier
-also ran: **all 30 are letter-box**, none cell-spanning (none lights both
-column 0 and column 6 at 7x14).
+`03B8` and `03BC`≡`00B5`.  The classifier also ran: **all 30 are letter-box**,
+none cell-spanning (none lights both column 0 and column 6 at 7x14).
+
+**Correction, added after the batch was first written.**  "Genuinely
+unanchored" was the conclusion of a byte-identity sweep, and byte-identity is
+the wrong test for a letterform.  Allowing a **vertical flip** finds two
+distance-0 anchors the sweep could not see:
+
+| glyph | anchor at 7x14 | Hamming |
+|---|---|---:|
+| `U+0393` Γ | `vflip(` upstream 7x14 `L)` | **0** |
+| `U+039B` Λ | `vflip(` upstream 7x14 `V)` | **0** |
+
+and a third at distance 2, closer than anything the sweep reported:
+
+| `U+0398` Θ | upstream 7x14 `8` (its waist opened to a full bar) | **2** |
+
+So three of the seven capitals were determined, not designed.  Γ and Θ were
+drawn correctly anyway — Γ came out byte-identical to `vflip(` upstream 8x16
+`L)` and Θ byte-identical to upstream 8x16 `8` with row 7 opened, both by
+independent reasoning.  Λ did not; see the ruling below.
+
+**The lesson for the remaining blocks: search flips and rotations, not only
+byte-identity.**  A pixel letterform's nearest relative is often a reflected
+one, and the sweep that reports "nothing" is only reporting nothing *of the
+kind it looked for*.
 
 ## The descender line: row 14, not row 13
 
@@ -237,20 +259,48 @@ lowercase θ could take a shorter bowl), but that would invent a distinction the
 7x14 face does not draw, so it was not acted on.  **Recorded as an open
 question, not a decision.**
 
-## Drawing μ has fixed `U+00B5` — but 00B5 is not in this commit
-
-`03BC` is byte-identical to in-tree `00B5` MICRO SIGN at 7x14.  `00B5` belongs
-to batch **10g** and is still absent at 8x16.  Whoever draws 10g must copy
-`glyphs/8x16/regular/03BC.txt` verbatim rather than redraw it, or the identity
-breaks.  Upstream carries `00B5` at neither size, so there is no other anchor.
-
 ## Deviations from the batch brief, kept on purpose
 
 | glyph | what | the measurement |
 |---|---|---|
-| `U+039B` Λ | 7x14 draws a **2-row 1 px apex**; 8x16 uses a **1-row 2 px apex** over a 3-row taper | At 8 columns the apex must be 2 px wide (there is no centre column — in-tree `0394` Δ and upstream `A` both use `...##...`). Holding 7x14's 2-row apex would make a 2×2 block, which reads blunt, not pointed. The taper was lengthened to 3 rows instead, so Λ stays pointier than Δ exactly as it is at 7x14 — the distinction moved rather than being dropped. |
 | `U+03A6` Φ, `U+03A8` Ψ, `U+03C6` φ, `U+03C8` ψ | drawn in columns **1–7**, not the 1–6 letter box | Each has a centred vertical stem, which README rule 1 puts on column 4. A 1–6 box gives that stem counters of 2 and 1 — visibly lopsided inside one glyph. 1–7 gives 2 and 2. This is what upstream does for its own centre-stem forms (`m`, `w`, `x` are 1–7), and what the committed `03A4` Τ, `03A5` Υ, `03A7` Χ already do. |
 | `U+03C4` τ | bar on columns 1–6, stem on column **4** — 3 columns left of it, 2 right | Not centred, deliberately. 7x14 τ puts its foot's right end exactly under the bar's right end; stem 4 + foot 5–6 + bar 1–6 preserves that, stem 3 + foot 4–5 does not. Upstream's own `t` leans the other way by the same one column (stem 3 in a 1–6 bar), so a lean is house style; only the direction differs. |
+
+## RULED: `U+039B` Λ was re-cut to its anchor — the owner may want to overrule
+
+Λ was first drawn freehand with a **1-row 2 px apex over a 3-row taper**, on
+the reasoning that 7x14's 2-row apex becomes a 2×2 block at 8 columns and
+"reads blunt, not pointed", with the pointier-than-Δ distinction moved into a
+longer taper instead.  That is a coherent argument and it was made without
+knowing an anchor existed.
+
+It has been replaced by `vflip(` upstream 8x16 `V)` placed on rows 3–11, which
+is what the 7x14 Hamming-0 relationship to `V` requires, and which is how the
+other 22 anchored glyphs in this block were decided.  Measured consequences:
+
+| | freehand version | anchored version | at 7x14 |
+|---|---:|---:|---:|
+| vs `vflip(`8x16 `V)` | 4 | **0** | 0 |
+| vs committed `2227` ∧ | 6 | **2** | 1 |
+
+The freehand Λ broke a 1-pixel relationship with a drawing already committed
+at 8x16.  Upstream itself accepted the 2 px apex held for two rows in its own
+8x16 `V`, and Λ *is* `V` flipped in this typeface — so the "reads blunt"
+objection is one upstream already answered for the letterform Λ is made from.
+
+**The open question is whether upstream was right.**  If the owner prefers the
+pointier freehand cut, it is one edit, and Λ then stops matching `V` and
+`2227`.  Nothing else in the batch depends on it.
+
+## `U+00B5` MICRO SIGN was drawn in this batch, outside the `03xx` block
+
+Deliberate, and a scope call worth knowing about.  `00B5` is byte-identical to
+`03BC` μ at 7x14, upstream carries it at **neither** size, and nothing derives
+it — the filesystem is the index, so it is created by hand or not at all.
+Leaving it for batch **10g** meant a later drawer could redraw it and silently
+break an identity that holds at 7x14.  It is therefore a byte-for-byte copy of
+`glyphs/8x16/regular/03BC.txt`, committed here.  **Batch 10g is one glyph
+shorter and must not draw it again.**
 
 ## Drawings the implementer distrusts — pass 5
 
