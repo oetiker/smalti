@@ -209,6 +209,7 @@ check-version: all
 # $(PY), not python3: both of these now read the built .ttf with fontTools,
 # which lives in the venv.  Nothing else about them changed.
 check-sources: all
+	$(PY) tools/test-glyphstore.py
 	$(PY) tools/test-check-glyphs.py $(SIZE)
 	$(PY) tools/check-glyphs.py $(SIZE)
 

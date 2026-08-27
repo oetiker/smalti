@@ -60,7 +60,9 @@ TWIN = {0x391: 'A', 0x392: 'B', 0x395: 'E', 0x396: 'Z', 0x397: 'H', 0x399: 'I',
 regular = gs.bitmaps(SIZE, 'regular')
 if not regular:
     sys.exit(f'embolden.py: the {SIZE} regular face resolved to nothing')
-bold_base = gs.Bdf(gs.upstream_bdf(SIZE, 'bold')).bitmaps
+# cell_bitmaps(), NOT the raw .bitmaps attribute: sixteen upstream letters
+# draw one row taller than the cell, and TWIN copies two of them (`O`, `o`).
+bold_base = gs.Bdf(gs.upstream_bdf(SIZE, 'bold')).cell_bitmaps(gs.cell(SIZE)[1])
 outdir = gs.gen_dir(SIZE, 'bold')
 
 counts = {'embolden': 0, 'keep': 0, 'twin': 0}
