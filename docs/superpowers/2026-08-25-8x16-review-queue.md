@@ -39,6 +39,56 @@ cost can be re-examined once the whole set exists and can be judged together.
 | `U+2735` / `U+2743` | Each ends with a 3-column spoke where its neighbouring spokes are 2, because the source's 2-wide feature straddled column 3.  Slightly lumpy.  Rotational symmetry holds. |
 | `U+2736` / `U+2737` | Identical ink counts (40/64) and near mirror-images of each other.  Inherited from 7x14 (27 vs 25 there), not introduced here, and they sit 12 px apart — well outside the tight band. |
 
+## The quote ornaments' height — measured evidence against them
+
+`U+275B` `U+275C` `U+275D` `U+275E` (high) and `U+275F` `U+2760` (low) were
+grown from 4 rows to 5, following the project's default: top fixed, bottom
+grown one row **to the new baseline**.
+
+**Upstream answers this question differently for the same kind of mark, from
+the same starting band.**  Measured from both upstream BDFs:
+
+| glyph | 7x14 band | 8x16 band | rows |
+|---|---|---|---|
+| upstream `'` | rows 2–5 | rows 1–4 | 4 → **4** |
+| upstream `"` | rows 2–5 | rows 1–4 | 4 → **4** |
+| upstream `,` | rows 9–13 | rows 10–14 | 5 → **5** |
+| our `275B`–`275E` | rows 2–5 | rows 2–6 | 4 → **5** |
+| our `275F`/`2760` | rows 8–11 | rows 8–12 | 4 → **5** |
+
+Upstream's `'` and `"` start at *exactly* the same band as ours and keep their
+row count, moving **up** instead of growing down.  Its `,` likewise keeps five
+rows and shifts.  A floating mark never touches the baseline, so "grown to the
+new baseline" arguably does not apply to it at all.
+
+The implementer named this as their weakest call and asked for it to be looked
+at.  The result is a fat 5-row wedge where upstream would have drawn a 4-row
+mark one row higher.  **Six glyphs turn on this.**
+
+Not a strict rule violation: none of the six is byte-identical to an upstream
+glyph, so the anchor rule does not formally reach them.  It is the *kind*
+evidence that is strong.
+
+## Drawings the implementer distrusts — pass 3
+
+| glyph | what is wrong |
+|---|---|
+| `U+2762` HEAVY EXCLAMATION MARK ORNAMENT | Given a 4-column stem at columns 2–5 so it matches `2763`, whose heart is cell-spanning and centres on 3.5 — a column-4 stem overhung the heart's tip and read as broken.  But `2762` **alone** has no reason to leave the column-4 stem axis, and it is now a 4×6 block: +4.2 density points, the largest jump in the batch.  This also leaves two centring rules unreconciled inside one batch — bars on column 4, exclamations on 3.5 — the same situation `271A` versus `271B`/`271D` produced in pass 1. |
+| `U+2761` CURVED STEM PARAGRAPH SIGN ORNAMENT | Freehand: upstream carries no `¶` at either size, so there is no anchor of any kind.  The bowl interior was widened from 1 column to 2, and the two descenders at columns 4 and 6 with a single-column gap read mechanically rather than drawn. |
+| `U+2767` ROTATED FLORAL HEART BULLET | Now has exactly the same ink count as `U+2766` (22), where at 7x14 they were 18 against 17.  `2765` **is** a true 90° rotation of `2764` and that was preserved; `2767` is **not** a rotation of `2766`, and that asymmetry is inherited from 7x14 rather than introduced.  Second opinion, not a redraw. |
+
+## The bars now stand taller than the brackets
+
+`U+2758`/`U+2759`/`U+275A` sit at rows 1–13; the twelve bracket ornaments sit
+at rows 2–13.  At 7x14 the bars were **shorter** than the brackets, so the
+relationship is inverted.
+
+This is not a mistake and not a free choice: `2758` is byte-identical to
+upstream's 7x14 `|`, so it is drawn as upstream's 8x16 `|`, and upstream grew
+`|` from 10 rows to 13 while growing `(` from 11 to 12.  **The inversion is
+upstream's own.**  Listed only so it is confirmed deliberately rather than
+discovered later.
+
 ## Distinctions the extra column did not lift
 
 `docs/superpowers/specs/2026-08-25-8x16-design.md` §4.1 says a 7x14 compromise
@@ -60,6 +110,12 @@ because the difference is not in the centre.
 table is a three-row leg splay (rows 9–11) against the plain stars' two.  The
 alternative is to accept that the distinction stays as thin at 8x16 as it was
 at 7x14.
+
+**Pass 3 produced the same shape of problem.**  `U+274F`/`U+2751` and
+`U+2750`/`U+2752` are 2 px apart at *both* sizes.  Those two pixels are the
+whole drop-shadowed / shadowed distinction — whether the shadow is detached at
+the corners or attached.  Separating them further would invent a difference
+Unicode does not draw.  Same decision as the star pairs above.
 
 ## Deviations from an instruction, kept on purpose
 
