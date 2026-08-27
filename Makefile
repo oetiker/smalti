@@ -210,6 +210,7 @@ check-version: all
 # which lives in the venv.  Nothing else about them changed.
 check-sources: all
 	$(PY) tools/test-glyphstore.py
+	$(PY) tools/test-weight.py
 	$(PY) tools/test-check-glyphs.py $(SIZE)
 	$(PY) tools/check-glyphs.py $(SIZE)
 
