@@ -89,6 +89,38 @@ upstream's 7x14 `|`, so it is drawn as upstream's 8x16 `|`, and upstream grew
 upstream's own.**  Listed only so it is confirmed deliberately rather than
 discovered later.
 
+## The arrows sit one row above everything drawn before them
+
+All 39 dingbat arrows hold their 7x14 rows.  Passes 1–3 — the crosses, stars
+and ornaments — were baseline-tracked and grew a row.  So this batch sits one
+row **above** them.
+
+**This is the documented rule, not a choice made in the batch.**
+`glyphs/8x16/README.md`, "The row-7 maths axis", names arrows outright: any
+new glyph that joins a formula — comparison operators, *further arrows*,
+anything meant to line up with `+`/`-` — belongs on that axis, not on a
+baseline-relative row.  The 92 generated arrows already obey it at 8x16.
+
+It is listed here anyway because it is the largest single judgement in the
+batch and it is visible: two neighbouring families now sit on different rows.
+Upstream is split the same way (`-` `*` `+` `<` `>` axis-locked; `=` `A` `U`
+baseline-tracked), so the split is real rather than an artefact — but it
+should be confirmed with fresh eyes rather than inherited silently.
+
+Holding the axis is also what kept the batch light.  A grown band would have
+had no centre row, so ruling R21 would have doubled every horizontal shaft
+from one row to two and collapsed five light/heavy pairs into each other
+(`279D`/`279E`, `279F`/`27A0`, `27B5`/`27B8`, `27BA`/`27BB`, `27BC`/`27BD`).
+
+## Drawings the implementer distrusts — pass 4
+
+| glyph | what is wrong |
+|---|---|
+| `U+27A2` / `U+27A3` 3-D lighted arrowheads | **The one most wanted for a second opinion.**  To separate them the implementer removed a pixel from the head's **silhouette**, where 7x14 removed only an **interior** pixel.  The head now reads slightly chipped rather than lit, and leaves a near-isolated pixel.  The faithful alternative puts them back 2 px from each other and 1 px from plain `27A4`.  Separation was chosen over silhouette; the implementer says they would not defend that trade hard. |
+| `U+2799` HEAVY RIGHTWARDS ARROW | Correct by the classifier and faithful to 7x14, and it still **looks like a bug**: a *heavy* rightwards arrow that stops one column short of the cell edge, sitting beside `27A1` which does not.  A run of `2799` therefore has a one-column seam.  Inherited from 7x14, where the same shortfall exists.  Fixing it at **both** sizes would be equally defensible and is not the implementer's call.  `279C`, `279D` and `279F` share the shortfall. |
+| `U+27B4` / `U+27B6` feathered arrows | The extra column bought a fourth feather pixel, landing right where the arrowhead begins.  It reads as a clean parallel feather — but it is the one place in the batch where a feature was **added** rather than ported, and at this density a fourth stroke could read as clutter. |
+| `U+27B2` CIRCLED HEAVY WHITE RIGHTWARDS ARROW | The batch's only horizontal-parity glyph.  A 1-column gap is kept between the interior head and the ring, which leaves the interior arrow centred on column 3 while the ring centres on 3.5.  Faithful to 7x14 and deliberate, but it is an asymmetry inside a single glyph. |
+
 ## Distinctions the extra column did not lift
 
 `docs/superpowers/specs/2026-08-25-8x16-design.md` §4.1 says a 7x14 compromise
@@ -116,6 +148,18 @@ at 7x14.
 whole drop-shadowed / shadowed distinction — whether the shadow is detached at
 the corners or attached.  Separating them further would invent a difference
 Unicode does not draw.  Same decision as the star pairs above.
+
+**Pass 4 has nine such pairs, and six are one family.**  `27A9` `27AA` `27AB`
+`27AC` `27AD` `27AE` `27BE` are seven outlined arrows whose only difference is
+which edge carries a shadow.  The outline alone costs 18 px of the cell,
+leaving 3–4 px to distinguish "right-shaded" from "lower-right-shadowed" from
+"open-outlined".  A fatter drop shadow on `27AD` was tried: it separated
+`27AD`/`27BE` and collided with `27A9` instead, and was reverted.  The
+remaining three are `279D`/`279F` (solid shaft against dashed shaft over a
+4-column shaft — the arithmetic minimum), `27A0`/`27A4` and `27A2`/`27A4`.
+
+Set against that, the extra column **did** lift five pairs in this batch,
+including `279E`/`27A0` from 2 px to 14 and `27A2`/`27A3` from 2 px to 4.
 
 ## Deviations from an instruction, kept on purpose
 
