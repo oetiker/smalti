@@ -354,3 +354,122 @@ shorter and must not draw it again.**
 | `U+03BA` κ | The lower arm's terminal is a 3 px blob (`.#..###.`) where 7x14's is 2 px. The upper arm now runs 4 rows against the lower arm's 2, where 7x14 is 3 against 2 — the arm had to start at column 6 to fill the wider box, and stepping one column per row to the junction takes four rows. It reads slightly top-heavy. |
 | `U+03B9` ι | The stem stays on column 2 (7x14's left edge, per README rule 2) while the foot and its terminal curl widen right, so the gap between stem and terminal grew from 2 columns to 3. At 10 px of ink it is the lightest glyph in the batch and it now looks a little sprawled for its weight. |
 | `U+03A6` Φ / `U+03C6` φ | 24.2% and 21.9% ink — the densest in the batch, and their two full-width `.#######` bars embolden to a solid `########`, an entirely filled row. Faithful to 7x14 (24.5% / 20.4%) and the gate is green at every face, but they are the two glyphs most likely to read as blobs at 1x. |
+
+---
+
+# Batch `21xx` — arrows and `™`
+
+## `tools/gen-arrows.py`'s 8x16 parts do not follow the project's own rule — NOT FIXED, needs a ruling
+
+**This is the big one in this batch, and it is deliberately left alone.**
+
+The 20 arrows in `21xx` are hand-drawn overrides — they are exactly the
+codepoints `gen-arrows.py`'s `put()` table does *not* cover. They were first
+built straight from its 8x16 part vocabulary, which looked like the safest
+possible choice. An audit measured that vocabulary against the 39 rightwards
+arrows this project has **already hand-drawn** at 8x16, and it disagrees:
+
+**The rule the hand-drawn arrows follow.** When an arrow has a shaft, the shaft
+spans the cell and **the head moves with it**, keeping its shape and staying
+flush with the tip — `U+2794` and `U+27A1` both shift their whole head one
+column right. When the head *is* the glyph, the head grows deeper instead
+(`U+27A4`). **33 of 39 preserve the tip overhang** (rightmost row 7 minus
+rightmost row 6) exactly.
+
+**What `gen-arrows.py` does at 8x16 instead.** It widens `SHAFT`, `LONG` and
+`DOUBLE`'s bars from columns 0–5 to 0–6, but leaves `HEAD`, `HEADOPN` and
+`DOUBLE`'s chevron at their 7x14 columns. The shaft then pokes one pixel past
+the point. `U+21D2` is the worst case — its right edge goes flat across rows
+6, 7, 8, so **the double arrow loses its point entirely**:
+
+        7x14 21D2          from the raw 8x16 parts
+     6  ######.            6  #######.
+     7  ......#  <- tip    7  ......#.  <- no tip
+     8  ######.            8  #######.
+
+Its comment reasons that the head is "a strict column subset of that shaft's
+row, so the shaft's own width — not theirs — decides where the merged row
+ends." That is true about ink not being *lost*, and it is a different property
+from the head being flush. It also cites upstream's `^` as precedent for
+appending a blank column — but `^` is the single glyph `glyphs/8x16/README.md`
+records as **"the one glyph that does not follow this rule"**, and rule 2 names
+appending a blank column as "a padding mistake". Measured: **0 of 237 ports in
+this tree are pure pads.**
+
+**What was done.** The 21 glyphs in this batch are hand-drawn overrides, so
+they are drawn correctly *without* touching `gen-arrows.py`. All seven headed
+arrows preserve their tip overhang; there are no pads.
+
+**What was NOT done, and is the question.** The generated layer still carries
+the defect. Measured over the `2190`–`21FF` block it generates:
+
+| | count |
+|---|---|
+| generated 8x16 arrows whose tip overhang changed from 7x14 | **16** |
+| generated 8x16 arrows that are a pure pad of their 7x14 self (same window, same ink) | **15** |
+
+Named: `219B 21A0 21A3 21A6 21AA 21AC 21C0 21F4 21F6 21F8 21FB 21FE` all went
+`+1 → +2`; `21CE 21CF 21DB 21FF` moved otherwise; the pads are `2197 2198 219D
+21AD 21AF 21B0 21B2 21B4 21B7 21BB 21D7 21D8 21DD 21F0 21F1`.
+
+**The cost of fixing it** is a change to `tools/gen-arrows.py`'s 8x16 branch
+only, which moves ~31 arrows in the built 8x16 fonts and **no tracked drawing**
+(generated arrows live in `build/gen/`). 7x14 must be proven unmoved by
+building both ways and hashing the four BDFs. **The cost of not fixing it** is
+that the hand-drawn arrows in this batch are flush and their generated
+neighbours are not — an inconsistency that already exists between the 39
+hand-drawn `27xx` arrows and the 92 generated ones, so this batch does not
+create it, only declines to widen it.
+
+## `U+2122` ™ grew a row, on precedent rather than on reasoning
+
+First derived as *unchanged* at rows 2–5: the glyph hangs between one row above
+the cap top (row 3) and the x-height top (row 5), and **both of those lines are
+identical at both sizes** — the ascent band grew downward (cap bottom 10 → 11),
+not upward. That reasoning is sound and it was wrong, because the tree already
+had the answer and it was not consulted.
+
+Four top-anchored marks are already hand-drawn at 8x16 and all four agree:
+
+| glyph | 7x14 | 8x16 |
+|---|---|---|
+| `275D` `275E` | rows 2–5, cols 0–6, ink 16 | rows 2–6, cols 0–7, ink 20 (×1.25) |
+| `275B` `275C` | rows 2–5, cols 1–4, ink 12 | rows 2–6, cols 1–5, ink 18 |
+
+`275D`/`275E` are ™'s structural twins — same band, same edge-to-edge window,
+nearly the same ink (16 vs 15). So ™ is **rows 2–6, cols 0–7, ink 15 → 18
+(×1.20)**: the top stays at row 2 and the bottom tracks the baseline. The T and
+M keep their proven 3-column shapes and the spare column goes into the gap
+(3 + 2 + 3), the only balanced split of 8.
+
+**What to look at:** ×1.20 against the twins' ×1.25. The M's vee is still one
+row deep as at 7x14, in a letterform that is now five rows tall. Deepening the
+vee to two rows would take it to ×1.33.
+
+## The ink-growth smell test is per-population, and the arrow figure is not ×1.25
+
+Carried in the handoff as "ported drawings mean ×1.25". Measured over the 237
+codepoints hand-drawn at both sizes:
+
+| population | n | mean | median |
+|---|---|---|---|
+| all ports | 237 | ×1.258 | ×1.22 |
+| band unchanged (axis-locked) | 43 | ×1.089 | ×1.10 |
+| band grew (baseline-tracking) | 194 | ×1.292 | ×1.24 |
+| `27xx` arrows | 39 | ×1.079 | ×1.08 |
+| `25xx` geometric | 19 | ×1.339 | ×1.29 |
+
+This batch came out at **×1.06**, which reads alarming against ×1.25 and is
+correct against ×1.08. Applying the global figure to `21E2` would have targeted
+21 px of ink, which is unreachable at either dash rhythm. **Say which
+population before quoting a ratio.**
+
+## `glyphs/8x16/README.md` rule 4's table is off by one for `A` (documentation only)
+
+The table gives `A` as "top row 3, bottom row 9" at 7x14 and "bottom row 10" at
+8x16. Measured from all four upstream BDFs it is rows **3–10** and rows
+**3–11**; identical in bold. The cap band is therefore 8 rows → 9 rows, not
+7 → 8. The rule's *delta* is +1 either way, so the rule itself is sound and no
+drawing is affected — but the numbers disagree with the tree, and the same
+table is the one a future drawer will measure against. `U` has the same
+off-by-one.
