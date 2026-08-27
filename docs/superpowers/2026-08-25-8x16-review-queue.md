@@ -212,60 +212,104 @@ kind it looked for*.
 row 12.  Baseline-tracking alone (+1 row) would put them on row 13 at 8x16.
 They are on **row 14**.
 
-The census that decides it, over all four upstream BDFs:
+**Upstream splits its descenders by POPULATION, not by depth.**  At 8x16 every
+letterform — `g j p q y , ; ¸ ç ¡ ¿ ý þ ÿ`, 15 glyphs — bottoms on **14**, and
+row 13 holds only brackets and rules: `( ) / @ [ \ ] _ | ¦`.  At 7x14 the
+letterforms were themselves split (`g j ý þ ÿ ¡ ¿` on 12, `p q y , ; ¸ ç` on
+13) and upstream merged them at 8x16, moving `g` **two** rows to do it.  Greek
+are letterforms, so they join the letterform line.
 
-| size | letter descenders bottom at | who else is down there |
-|---|---|---|
-| 7x14 | **split**: `g j ý þ ÿ ¡ ¿` on 12, `p q y , ; ¸ ç` on 13 | `( ) [ ] _ { } $ Q` also on 12 |
-| 8x16 | **unified**: `g j p q y , ; ¸ ç ¡ ¿ ý þ ÿ` — all 15 on **14** | row 13 holds only `( ) / @ [ \ ] _ | ¦` |
+Two facts that must be recorded rather than discovered later:
 
-Upstream merged both 7x14 families onto one line at 8x16, and moved `g` **two**
-rows to do it.  The 7x14 Greek had followed `g`'s shallower depth.  At 8x16
-there is no letter-shaped thing on row 13 — a Greek descender there would be
-the only one in the font at that depth.  All nine descenders in this batch
-(`β γ ζ η μ ξ ρ ς φ χ ψ`) therefore bottom on 14, three rows below the baseline,
-exactly like `p`.
+* **These are the first ink on row 14 anywhere in the 8x16 hand tree.**  Before
+  this batch the floor was row 13, and all sixteen glyphs there (`2758`–`275A`,
+  `2763`, `2768`–`276D`, `2770`–`2775`) are ornamental brackets and a heart —
+  upstream's *13-population*, so they are not counter-evidence.  Twelve glyphs
+  now sit on 14: the eleven Greek descenders plus `00B5`.
+* **12 → 14 is a +2 move, and README rule 4 does not describe it.**  Rule 4's
+  baseline-tracking is about the ascent band.  Below the baseline the rule has
+  to be "match upstream's 8x16 letterform descender line", which is a different
+  statement.  Worth adding to the README if this survives review.
 
-**Confirm this with fresh eyes.**  If it is wrong, eleven glyphs are wrong
-together, and batch 10g's `00B5` inherits it.
-
-## Three bowls that floated above the baseline at 7x14 now sit on it
+## Bowls that close ABOVE the baseline: ρ, ς and φ keep their own construction
 
 `ρ`, `ς` and `φ` all close their bowl on row 9 at 7x14 — **one row above the
-baseline** — with the stem starting at row 10.  `o`, `c`, `p`, `b`, `d`, `q` all
-close on row 10 there.  The likely cause is arithmetic: at 7x14 only two rows
-exist below the baseline, so a three-row stem had to start on it.
+baseline** — where `o c p b d q` close on it.  A first draft of this batch read
+that as forced arithmetic and moved all three onto the baseline.  **That was
+wrong and it has been reverted.**  ρ against upstream `p` is Hamming **11** at
+7x14: it is a different construction (a bowl that closes early, then a separate
+leg on column 1), not a compromised `p`.  Flattening it onto the baseline
+narrowed ρ-to-`p` from 11 to 5 — inventing a resemblance the face does not
+draw.
 
-At 8x16 there are three rows below the baseline, so the compromise is not
-forced.  `ρ` and `ς` now close on row 11 with `o`/`c`, and `φ`'s bowl is
-centred on its stem as before.  Cost: `ρ`'s and `ς`'s bowls gained **two** rows
-where everything else in the batch gained one.  It is a design change, not a
-port, and it is the direct consequence of the descender ruling above.
+All three now grow by exactly one row in each part, which is the conservative
+port: bowl rows 5–10, leg or tail rows 11–14.  Only the *descender depth* comes
+from `p`.
+
+## Derived distances, before and after
+
+Ten of the 30 are near-determined: they are some upstream or committed glyph
+plus one feature.  Those distances are the thing to preserve, and all of them
+now are — every `+1` below is a descender that gained a row, which is the
+arithmetic minimum:
+
+| pair | 7x14 | 8x16 | |
+|---|---:|---:|---|
+| υ / committed `222A` | 2 | 2 | υ = 222A minus its top row |
+| σ / committed `03BF` ο | 2 | 2 | ο with the top bar run out to column 7 |
+| Θ / upstream `8` | 2 | 2 | `8`'s outline, waist opened to a full bar |
+| ε / upstream `c` | 2 | 3 | `c` + one bar |
+| γ / committed `03BD` ν | 2 | 3 | ν + tail |
+| η / upstream `n` | 2 | 3 | `n` + right stem |
+| β / committed `0392` Β | 3 | 4 | Β, top-left opened, + tail |
+| Λ / committed `2227` ∧ | 1 | 2 | see the Λ ruling below |
+| ρ / upstream `p` | 11 | 10 | **not** a derivation — only the descender depth is shared |
+| ω / upstream `w` | 2 | **6** | the one that could not be held — see below |
 
 ## Distinctions the extra column changed
 
 | what | at 7x14 | at 8x16 | note |
 |---|---|---|---|
-| `U+03C7` χ vs upstream `x` | 6 px apart (χ has a 1-row waist and a doubled leg row; `x` has a 2-row waist) | **3 px apart** — χ's body is now byte-identical to upstream 8x16 `x`, differing only by the descender | 7x14's difference reads as a compromise (χ needed its leg at column 1 by row 11 to start the tail), not a deliberate distinction. `x` at 8x16 already has the 1-row waist χ wanted. **Separation went DOWN. Worth a second opinion.** |
-| `U+03C9` ω vs upstream `w` | 2 px apart | **6 px apart** | ω's rows 5–9 are byte-identical to `w` at *both* sizes; only the closing differs. At 7x14 ω closes in one row with 1 px feet; at 8x16 the three stems sit 3 columns apart instead of 2, so a 1 px foot can no longer bridge them and the close takes two rows. A §4.1 lift, but it was forced by geometry, not chosen. |
-| `U+03BE` ξ's two waves | upper wave 2 rows, lower wave **1** row — visibly lopsided | both waves 2 rows | A clean §4.1 lift: the extra row went exactly where 7x14 had run out. |
-| `U+0398` Θ / `U+03B8` θ bar | row 6 of the 3–10 body: 2 side rows above, 3 below | row 7 of the 3–11 body: **3 above, 3 below** | 8x16's 7 interior rows have a true centre; 7x14's 6 did not. |
+| `U+03C9` ω vs upstream `w` | 2 px | **6 px** | **The one distance that could not be preserved, and the reason is geometric.** ω's rows 5–9 are byte-identical to `w` at both sizes; only the closing differs. At 7x14 `w`'s three stems sit 2 columns apart, so a single 1 px foot bridges each pair diagonally and ω closes in one row. At 8x16 upstream's own `w` puts its stems 3 columns apart (1, 4, 7) and **a 1 px foot can no longer touch both sides** — holding d=2 leaves the outer strokes dangling. The close therefore takes two rows. Forced, not chosen. |
+| `U+03C7` χ vs upstream `x` | 9 px | **3 px** | χ's body is now byte-identical to upstream 8x16 `x`, differing only by the descender. 7x14's gap reads as a compromise (χ needed its leg on column 1 by row 11 to start the tail) and 8x16 `x` already has the tight waist χ wanted — but **the separation went DOWN and that deserves a second opinion.** |
+| `U+03BE` ξ's two waves | upper 2 rows, lower **1** — visibly lopsided | both 2 rows | A clean §4.1 lift: the extra row went exactly where 7x14 had run out. |
+
+## Vertical parity: the bands gained a centre the columns lost
+
+The cap band 3–11 is **9 rows — odd, true centre row 7**.  The x-height band
+5–11 is **7 rows — odd, true centre row 8**.  Both gain a centre that 7x14's
+even bands lacked, at the same time as the columns lose theirs (7 → 8).  The
+committed batch already proves the cap case: **Β and Ε both moved their middle
+bar from row 6 to row 7.**
+
+Placed on row 7 accordingly: Θ/θ's crossbar, Ξ's middle bar, Φ's bowl centre,
+β's waist, and **Ψ's arm junction** — the last also independently confirmed by
+upstream `Y`, which between sizes held its arms at 2 rows and grew its *stem*
+from 4 to 5.
+
+**ε and ψ are on row 8, not 7, because they live in the x-height band.**  That
+is the choice this section exists to flag: do not apply one centre number to
+both bands.  ε's bar on row 8 also matches upstream's own 8x16 `e`.
+
+**`U+039E` Ξ's middle bar is the parity casualty.**  At 7x14 it is 3 px wide
+centred on the true centre column 3.  At 8 columns nothing odd-width centres on
+3.5, so it is drawn 4 px (columns 2–5).  2 px would be 33% of the letter box
+against 7x14's 60%; 4 px is 67%.  Same class of problem as `2740` above.
 
 ## Θ and θ are still byte-identical
 
-The hard constraint from `5014099` is held: `0398` and `03B8` are the same
-bytes, as at 7x14.  The extra column would now permit them to differ (a
-lowercase θ could take a shorter bowl), but that would invent a distinction the
-7x14 face does not draw, so it was not acted on.  **Recorded as an open
-question, not a decision.**
+The hard constraint is held: `0398` and `03B8` are the same bytes, as at 7x14.
+The extra column would now permit them to differ; that would invent a
+distinction the 7x14 face does not draw, so it was not acted on.  **Recorded as
+an open question, not a decision.**
 
 ## Deviations from the batch brief, kept on purpose
 
 | glyph | what | the measurement |
 |---|---|---|
-| `U+03A6` Φ, `U+03A8` Ψ, `U+03C6` φ, `U+03C8` ψ | drawn in columns **1–7**, not the 1–6 letter box | Each has a centred vertical stem, which README rule 1 puts on column 4. A 1–6 box gives that stem counters of 2 and 1 — visibly lopsided inside one glyph. 1–7 gives 2 and 2. This is what upstream does for its own centre-stem forms (`m`, `w`, `x` are 1–7), and what the committed `03A4` Τ, `03A5` Υ, `03A7` Χ already do. |
-| `U+03C4` τ | bar on columns 1–6, stem on column **4** — 3 columns left of it, 2 right | Not centred, deliberately. 7x14 τ puts its foot's right end exactly under the bar's right end; stem 4 + foot 5–6 + bar 1–6 preserves that, stem 3 + foot 4–5 does not. Upstream's own `t` leans the other way by the same one column (stem 3 in a 1–6 bar), so a lean is house style; only the direction differs. |
-
+| `U+03A6` Φ, `U+03A8` Ψ, `U+03C6` φ, `U+03C8` ψ | drawn in columns **1–7**, not the 1–6 letter box | Each has a centred vertical stem, which README rule 1 puts on column 4. A 1–6 box gives that stem counters of 2 and 1 — lopsided inside one glyph; 1–7 gives 2 and 2. Upstream does this for its own centre-stem forms (`m w x` are 1–7) and the committed `03A4` Τ, `03A5` Υ, `03A7` Χ already do. |
+| `U+03C4` τ | bar on columns **1–6**, not 1–7, with the stem on column 4 | **The brief asked for 1–7, on the grounds that a 1–6 τ bar under the committed 1–7 Τ bar breaks the pair. Upstream draws exactly that pair itself:** its `T` bar is 1–7 and its `t` bar is 1–6. A lowercase bar narrower than its capital's is the house pattern, not a break. Stem on 4 (not upstream `t`'s 3) because at 7x14 τ's stem sits one column right of `t`'s, and because only stem 4 + foot 5–6 puts the foot's right end under the bar's right end, which is what 7x14 draws. |
+| `U+03B4` δ | bowl top on row **6**, where its `8` anchor would put it on row 7 | δ is `8` with its top-left opened (Hamming 5 at 7x14), and 8x16 `8` moved its waist from row 6 to row 7. But `8`'s waist moved because *two* bowls must share 9 rows; δ has one bowl and a flag, so it is not under that constraint. README rule 4 says the top holds and the bottom follows the baseline, which keeps δ's bowl at rows 6–11 — one row shorter than `o`, exactly as at 7x14. |
 ## RULED: `U+039B` Λ was re-cut to its anchor — the owner may want to overrule
 
 Λ was first drawn freehand with a **1-row 2 px apex over a 3-row taper**, on
