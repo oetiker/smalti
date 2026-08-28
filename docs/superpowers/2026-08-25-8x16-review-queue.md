@@ -359,67 +359,75 @@ shorter and must not draw it again.**
 
 # Batch `21xx` — arrows and `™`
 
-## `tools/gen-arrows.py`'s 8x16 parts do not follow the project's own rule — NOT FIXED, needs a ruling
+## `tools/gen-arrows.py`'s 8x16 parts did not follow the project's own rule — FIXED
 
-**This is the big one in this batch, and it is deliberately left alone.**
+The owner ruled: fix it. Done in the commit after the `21xx` batch. Recorded
+here because it changed ~30 already-committed generated arrows and the
+reasoning should be re-checkable.
 
-The 20 arrows in `21xx` are hand-drawn overrides — they are exactly the
-codepoints `gen-arrows.py`'s `put()` table does *not* cover. They were first
-built straight from its 8x16 part vocabulary, which looked like the safest
-possible choice. An audit measured that vocabulary against the 39 rightwards
-arrows this project has **already hand-drawn** at 8x16, and it disagrees:
+**The defects.** The 8x16 branch widened `SHAFT`, `LONG` and the flat bars of
+`DOUBLE`/`TRIPLE`/`MINI`/`HARP` by one column, but left every head part at its
+7x14 columns. The shaft then poked one pixel past the point on 16 arrows, and
+`DOUBLE`'s chevron went flat and lost its point outright. Separately, eleven
+arrows that spanned columns 0–6 at 7x14 stopped at column 6 at 8x16, leaving
+column 7 blank — the padding mistake README rule 2 names, which **0 of 237 hand
+ports in this tree** commit.
 
-**The rule the hand-drawn arrows follow.** When an arrow has a shaft, the shaft
-spans the cell and **the head moves with it**, keeping its shape and staying
-flush with the tip — `U+2794` and `U+27A1` both shift their whole head one
-column right. When the head *is* the glyph, the head grows deeper instead
-(`U+27A4`). **33 of 39 preserve the tip overhang** (rightmost row 7 minus
-rightmost row 6) exactly.
+Its comment defended both: the head is "a strict column subset of that shaft's
+row", and upstream's `^` is precedent for appending a blank column. The first is
+true about ink not being *lost* and says nothing about flushness. The second
+cites the single glyph README records as **"the one glyph that does not follow
+this rule"**.
 
-**What `gen-arrows.py` does at 8x16 instead.** It widens `SHAFT`, `LONG` and
-`DOUBLE`'s bars from columns 0–5 to 0–6, but leaves `HEAD`, `HEADOPN` and
-`DOUBLE`'s chevron at their 7x14 columns. The shaft then pokes one pixel past
-the point. `U+21D2` is the worst case — its right edge goes flat across rows
-6, 7, 8, so **the double arrow loses its point entirely**:
+**The rule that replaced it**, measured from the 39 rightwards arrows already
+hand-drawn at 8x16: when an arrow has a shaft, the shaft spans the cell and the
+head **moves with it**, staying flush with the tip — `U+2794` and `U+27A1` shift
+their whole head one column right, and 33 of 39 preserve the tip overhang
+exactly. When the head *is* the glyph, it grows deeper instead (`U+27A4`). Parts
+that attach at the **tail** (`TAILBAR`, `TAILCHV`, `HOOK`, `LOOP`, `CIRCLE`) do
+not move — the tail end is still column 0.
 
-        7x14 21D2          from the raw 8x16 parts
-     6  ######.            6  #######.
-     7  ......#  <- tip    7  ......#.  <- no tip
-     8  ######.            8  #######.
+**What changed:** 22 parts. Heads shifted (`HEAD`, `HEADOPN`, `HEADTWO`,
+`BARBUP`, `BARBDN`, the chevrons of `DOUBLE`/`TRIPLE`/`MINI_*`/`HARP_*`/
+`TRIP_A-C`); shapes widened (`WAVE`, `SQUIG`, `WHITE`, `SEMI_CW`, `CIRC_CW`,
+`NE`, `NE2`, `CORNER_NW`).
 
-Its comment reasons that the head is "a strict column subset of that shaft's
-row, so the shaft's own width — not theirs — decides where the merged row
-ends." That is true about ink not being *lost*, and it is a different property
-from the head being flush. It also cites upstream's `^` as precedent for
-appending a blank column — but `^` is the single glyph `glyphs/8x16/README.md`
-records as **"the one glyph that does not follow this rule"**, and rule 2 names
-appending a blank column as "a padding mistake". Measured: **0 of 237 ports in
-this tree are pure pads.**
+**The diagonals cost a row.** A 45° line needs one more row to cross one more
+column, and upstream spends rows the same way rather than break a slope — its
+`/` and `\` go 7x14 rows 2–11 cols 1–5 → 8x16 rows 2–13 cols 1–6. So `NE`,
+`NE2` and `CORNER_NW` now reach row 10 where 7x14 stopped at row 9. **This is
+the one change that breaks the otherwise-universal "8x16 arrows keep their 7x14
+row band" pattern**, and it is the thing in this fix most worth a second look.
+The alternative was shifting the diagonal right and leaving the bottom-left
+corner empty, which reads as the arrow not reaching its corner.
 
-**What was done.** The 21 glyphs in this batch are hand-drawn overrides, so
-they are drawn correctly *without* touching `gen-arrows.py`. All seven headed
-arrows preserve their tip overhang; there are no pads.
+**Deliberately NOT widened:** `ZIGZAG`, `TIPL`, `CORNER_D` (`U+21AF`, `21B0`,
+`21B2`, `21B4`). They were already inset at 7x14 (cols 1–4, 0–4, 0–5), so they
+never spanned the cell and there is no padding to undo.
 
-**What was NOT done, and is the question.** The generated layer still carries
-the defect. Measured over the `2190`–`21FF` block it generates:
+**Verification.**
 
-| | count |
+| check | result |
 |---|---|
-| generated 8x16 arrows whose tip overhang changed from 7x14 | **16** |
-| generated 8x16 arrows that are a pure pad of their 7x14 self (same window, same ink) | **15** |
+| rightwards generated arrows still flush at the tip | 17 of 17 |
+| true rule-2 pads remaining | 0 |
+| 7x14 unmoved — built both ways, all four BDFs hashed | byte-identical |
+| `make check` both sizes | green, 0 discrepancies, 0 rasterisation differences |
+| generated 8x16 arrow ink | ×1.057 (hand-drawn `27xx` arrows run ×1.079) |
+| hand-drawn `U+2192`/`U+2190` vs generated `U+21FE`/`U+21FD` | byte-identical |
 
-Named: `219B 21A0 21A3 21A6 21AA 21AC 21C0 21F4 21F6 21F8 21FB 21FE` all went
-`+1 → +2`; `21CE 21CF 21DB 21FF` moved otherwise; the pads are `2197 2198 219D
-21AD 21AF 21B0 21B2 21B4 21B7 21BB 21D7 21D8 21DD 21F0 21F1`.
+That last row is the useful one: the hand-drawn and generated populations now
+agree exactly where they draw the same shape, which was the inconsistency this
+whole thread started from.
 
-**The cost of fixing it** is a change to `tools/gen-arrows.py`'s 8x16 branch
-only, which moves ~31 arrows in the built 8x16 fonts and **no tracked drawing**
-(generated arrows live in `build/gen/`). 7x14 must be proven unmoved by
-building both ways and hashing the four BDFs. **The cost of not fixing it** is
-that the hand-drawn arrows in this batch are flush and their generated
-neighbours are not — an inconsistency that already exists between the 39
-hand-drawn `27xx` arrows and the 92 generated ones, so this batch does not
-create it, only declines to widen it.
+**Four mirror pairs are still not exact mirrors** — `219A`/`219B`, `21CD`/`21CF`,
+`21F7`/`21F8`, `21FA`/`21FB`. That is by design and predates this fix: the "not"
+stroke keeps its lean in both directions, so the part is double-flipped. Checked
+at 7x14, where it is equally true.
+
+**Two parts are dead** — `RETURN` and `VHEADOP` are defined at both sizes and
+never reach `put()`. `RETURN` is dead because `U+21B5` is a hand-drawn override.
+Pre-existing, harmless, left alone.
 
 ## `U+2122` ™ grew a row, on precedent rather than on reasoning
 

@@ -200,7 +200,8 @@ elif SIZE == '8x16':
     # is also why the wave/squiggle and triple-arrow compromises above do
     # not move -- nothing freed up the row space either compromise needs.
     #
-    # Columns follow two rules, matching glyphs/8x16/README.md:
+    # Columns follow three rules, matching glyphs/8x16/README.md and the 39
+    # rightwards arrows this project has hand-drawn at 8x16:
     #  - parts built around a single centred vertical stroke (the whole
     #    "vertical, facing up" group, which is literally Rule 1's stem)
     #    shift every column right by one, recentring col3 -> col4 without
@@ -209,29 +210,50 @@ elif SIZE == '8x16':
     #    that stands in for a shaft: DOUBLE/TRIPLE/MINI/HARP's flat bars,
     #    and the overline in OVERBAR) widens by one column on its business
     #    end, so "every shaft on the same row" from one glyph to the next
-    #    stays true.  Everything else in the horizontal/diagonal/rotational
-    #    groups is a one-off decorative shape, not part of that shared
-    #    vocabulary, so it is left at its 7x14 columns with one blank
-    #    column appended on the right -- the same choice upstream's own `^`
-    #    makes at this size (README, "the stem rule", 1 dissenter of 4).
-    #    Nothing here needed to widen those: every one of them already sits
-    #    at or left of column 6, so appending a blank column 7 loses no ink
-    #    and any that merge with a shaft (HEAD, HEADOPN, HEADTWO, BARBUP,
-    #    BARBDN) are already a strict column subset of that shaft's row, so
-    #    the shaft's own width -- not theirs -- decides where the merged
-    #    row ends.
+    #    stays true.
+    #  - EVERY PART THAT ATTACHES AT THAT BUSINESS END MOVES WITH IT: HEAD,
+    #    HEADOPN, HEADTWO, BARBUP, BARBDN, the chevrons of DOUBLE/TRIPLE and
+    #    of MINI/HARP/TRIP_A-C, and the heads inside WAVE, SQUIG and WHITE
+    #    all shift one column right so the head stays flush with the tip.
+    #    Parts that attach at the TAIL (TAILBAR, TAILCHV, HOOK, LOOP,
+    #    CIRCLE) do not move -- the tail end is still column 0.
+    #
+    # This third rule was missing until it was measured.  Leaving the heads
+    # at their 7x14 columns while the shaft widened did not LOSE ink -- a
+    # head is a column subset of the shaft's row -- but flushness is a
+    # different property from ink, and the shaft ended up poking one pixel
+    # past the point on 16 arrows, with DOUBLE's chevron going flat and
+    # losing its point outright.  Upstream's `^` was cited as precedent for
+    # simply appending a blank column; `^` is the one glyph README records
+    # as NOT following that rule, and rule 2 calls a stapled-on blank column
+    # "a padding mistake".  Measured: 0 of 237 hand ports in this tree pad,
+    # and 33 of 39 hand-drawn 27xx arrows preserve their tip overhang
+    # exactly (U+2794 and U+27A1 shift their whole head one column right;
+    # U+27A4, which is a head with NO shaft, grows deeper instead).
+    #
+    # For the same reason the eleven shapes that spanned columns 0-6 at 7x14
+    # -- NE, NE2, WAVE, SQUIG, WHITE, SEMI_CW, CIRC_CW, CORNER_NW -- are
+    # redrawn one column wider rather than padded.  The DIAGONALS cost a row
+    # to do it: a 45-degree line needs one more row to cross one more column,
+    # and upstream spends rows the same way rather than break a slope (its
+    # `/` and `\` go 7x14 rows 2-11 cols 1-5 -> 8x16 rows 2-13 cols 1-6).
+    # So NE, NE2 and CORNER_NW reach row 10 here where 7x14 stops at row 9.
+    #
+    # ZIGZAG, TIPL and CORNER_D are deliberately NOT widened: they were
+    # already inset at 7x14 (cols 1-4, 0-4 and 0-5), so they never spanned
+    # the cell and there is no padding to undo.
 
     # ---- horizontal parts, facing right ---------------------------------
     SHAFT   = F(r7='#######.')
     LONG    = F(r7='########')
-    HEAD    = F(r4='..#.....', r5='..##....', r6='..###...', r7='..####..',
-                r8='..###...', r9='..##....', r10='..#.....')
-    HEADOPN = F(r4='..#.....', r5='...#....', r6='....#...', r7='.....#..',
-                r8='....#...', r9='...#....', r10='..#.....')
-    HEADTWO = F(r5='.#.#....', r6='..#.#...', r7='...#.#..',
-                r8='..#.#...', r9='.#.#....')
-    BARBUP  = F(r4='..#.....', r5='..##....', r6='..###...')
-    BARBDN  = F(r8='..###...', r9='..##....', r10='..#.....')
+    HEAD    = F(r4='...#....', r5='...##...', r6='...###..', r7='...####.',
+                r8='...###..', r9='...##...', r10='...#....')
+    HEADOPN = F(r4='...#....', r5='....#...', r6='.....#..', r7='......#.',
+                r8='.....#..', r9='....#...', r10='...#....')
+    HEADTWO = F(r5='..#.#...', r6='...#.#..', r7='....#.#.',
+                r8='...#.#..', r9='..#.#...')
+    BARBUP  = F(r4='...#....', r5='...##...', r6='...###..')
+    BARBDN  = F(r8='...###..', r9='...##...', r10='...#....')
     TAILBAR = F(r4='#.......', r5='#.......', r6='#.......', r7='#.......',
                 r8='#.......', r9='#.......', r10='#.......')
     TAILCHV = F(r5='#.......', r6='.#......', r8='.#......', r9='#.......')
@@ -244,20 +266,20 @@ elif SIZE == '8x16':
                 r8='..#.....', r9='..#.....', r10='..#.....')
     DVSTROK = F(r4='.#.#....', r5='.#.#....', r6='.#.#....',
                 r8='.#.#....', r9='.#.#....', r10='.#.#....')
-    DOUBLE  = F(r4='....#...', r5='.....#..', r6='#######.', r7='......#.',
-                r8='#######.', r9='.....#..', r10='....#...')
-    TRIPLE  = F(r4='.....#..', r5='######..', r6='......#.', r7='######..',
-                r8='......#.', r9='######..', r10='.....#..')
-    WHITE   = F(r4='...#....', r5='...##...', r6='####.#..', r7='#.....#.',
-                r8='####.#..', r9='...##...', r10='...#....')
-    MINI_HI = F(r4='....#...', r5='#######.', r6='....#...')
-    MINI_LO = F(r8='....#...', r9='#######.', r10='....#...')
-    HARP_HI = F(r4='....#...', r5='#######.')
-    HARP_LO = F(r9='#######.', r10='....#...')
-    WAVE    = F(r5='....#...', r6='#.#..#..', r7='.#.####.', r8='.....#..',
-                r9='....#...')
-    SQUIG   = F(r5='....#...', r6='.#...#..', r7='#.#.###.', r8='...#.#..',
-                r9='....#...')
+    DOUBLE  = F(r4='.....#..', r5='......#.', r6='#######.', r7='.......#',
+                r8='#######.', r9='......#.', r10='.....#..')
+    TRIPLE  = F(r4='......#.', r5='######..', r6='.......#', r7='######..',
+                r8='.......#', r9='######..', r10='......#.')
+    WHITE   = F(r4='....#...', r5='....##..', r6='#####.#.', r7='#......#',
+                r8='#####.#.', r9='....##..', r10='....#...')
+    MINI_HI = F(r4='.....#..', r5='#######.', r6='.....#..')
+    MINI_LO = F(r8='.....#..', r9='#######.', r10='.....#..')
+    HARP_HI = F(r4='.....#..', r5='#######.')
+    HARP_LO = F(r9='#######.', r10='.....#..')
+    WAVE    = F(r5='.....#..', r6='#.#...#.', r7='.#.#####', r8='......#.',
+                r9='.....#..')
+    SQUIG   = F(r5='.....#..', r6='.#....#.', r7='#.#.####', r8='...#..#.',
+                r9='.....#..')
 
     # ---- vertical parts, facing up -- every column shifted +1, see above ---
     VSHAFT  = F(**{f'r{r}': '....#...' for r in range(5, 13)})
@@ -284,10 +306,10 @@ elif SIZE == '8x16':
                **{f'r{r}': '....#...' for r in range(5, 10)})
 
     # ---- diagonals, facing north-east -- unchanged columns, see above ------
-    NE = F(r3='....###.', r4='.....##.', r5='....#.#.', r6='...#....',
-           r7='..#.....', r8='.#......', r9='#.......')
-    NE2 = F(r3='...####.', r4='...#..#.', r5='..#.#.#.', r6='.#.#....',
-            r7='#.#.....', r8='.#......', r9='#.......')
+    NE = F(r3='.....###', r4='......##', r5='.....#.#', r6='....#...',
+           r7='...#....', r8='..#.....', r9='.#......', r10='#.......')
+    NE2 = F(r3='....####', r4='....#..#', r5='...#.#.#', r6='..#.#...',
+            r7='.#.#....', r8='#.#.....', r9='.#......', r10='#.......')
 
     # ---- rotational, hand-drawn -- unchanged columns, see above -------------
     TIPL = F(r5='.#......', r6='#####...', r7='.#..#...',
@@ -296,13 +318,13 @@ elif SIZE == '8x16':
                  r8='...###..', r9='....#...')
     RETURN = F(r4='.....#..', r5='.....#..', r6='.....#..', r7='.....#..',
                r8='..#..#..', r9='.#####..', r10='..#.....')
-    CIRC_CW = F(r3='....#...', r4='..#.###.', r5='.#...#..', r6='#.....#.',
-                r7='#.....#.', r8='#.....#.', r9='.#...#..', r10='..###...')
-    SEMI_CW = F(r4='..###...', r5='.#...#..', r6='#.....#.', r7='.....##.', r8='....#...')
+    CIRC_CW = F(r3='.....#..', r4='..#..###', r5='.#....#.', r6='#......#',
+                r7='#......#', r8='#......#', r9='.#....#.', r10='..####..')
+    SEMI_CW = F(r4='..####..', r5='.#....#.', r6='#......#', r7='......##', r8='.....#..')
     ZIGZAG = F(r3='.####...', r4='...#....', r5='..#.....', r6='.####...',
                r7='...#....', r8='..#.....', r9='.###....', r10='..#.....')
     CORNER_NW = F(r3='#####...', r4='#.......', r5='..###...', r6='..##....',
-                  r7='..#.#...', r8='.....#..', r9='......#.')
+                  r7='..#.#...', r8='.....#..', r9='......#.', r10='.......#')
 
     # ---- pieces reused only once below -- same rule as their parent group --
     UDBAR      = F(r11='..#####.')   # vertical group: shift +1, matches VBAR
@@ -311,9 +333,9 @@ elif SIZE == '8x16':
     NOTCH_STEM = F(r11='....#...')   # vertical group: shift +1
     NOTCH_DBL2 = F(r11='...#.#..', r12='...#.#..')  # vertical group: shift +1
     NOTCH_DBL1 = F(r11='...#.#..')   # vertical group: shift +1
-    TRIP_A = F(r3='....#...', r4='#######.', r5='....#...')  # bar widens
-    TRIP_B = F(r6='....#...', r7='#######.', r8='....#...')  # like SHAFT
-    TRIP_C = F(r9='....#...', r10='#######.', r11='....#...')
+    TRIP_A = F(r3='.....#..', r4='#######.', r5='.....#..')  # bar widens
+    TRIP_B = F(r6='.....#..', r7='#######.', r8='.....#..')  # like SHAFT
+    TRIP_C = F(r9='.....#..', r10='#######.', r11='.....#..')
 
 G = {}
 def put(cp, bm):
