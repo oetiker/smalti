@@ -212,3 +212,49 @@ was hand-drawn fresh, or copied from a symbol upstream did not redraw
 unchanged, must default to baseline-tracking -- the anchor has to be measured
 evidence from both upstream BDFs, never a guess from how the 7x14 version
 looked.
+
+### 5. The two mark families -- where a small mark's columns go
+
+Rule 4 answers which *row* a port lands on. For small marks the *column*
+needs its own answer, and the two families disagree, so measure which one a
+mark belongs to before placing it.
+
+**Low marks shift right one column and down one row, and keep their ink.**
+Measured over upstream's regular face, every mark that hangs off the
+baseline: `,` U+002C (cols 2-3 rows 9-13 -> cols 3-4 rows 10-14), `.` U+002E,
+`:` U+003A, `;` U+003B. Four of four, all ink-preserving.
+
+**Raised marks keep their column.** The complete top-anchored population of
+upstream's regular face -- every glyph present at both sizes whose 7x14 ink
+ends at row 6 or above -- is `U+0007`, `"` U+0022, `'` U+0027, `^` U+005E,
+`` ` `` U+0060, `~` U+007E, `°` U+00B0: **zero of seven shift right.** This
+project's own hand-drawn raised marks agree: `❛` U+275B, `❜` U+275C,
+`❝` U+275D, `❞` U+275E, `™` U+2122 -- zero of five. Twelve witnesses, no
+dissent. A raised mark spends the extra column on *width* if its shape has
+width to spend, and never on translating right; `'` U+0027 is the sharpest
+case, a lone one-column tick that stays on column 3 rather than move to
+column 4.
+
+Ink follows from shape, not from family: a thin plain tick keeps its ink
+(`"` 8->8, `'` 4->4, `^` 5->5), while a mark with an interior keeps growing
+(`U+0007` 8->12, `°` 8->12, `~` 7->9).
+
+> **`glyphs/8x16/regular/00B4.txt` is NOT porting evidence -- never cite it.**
+> It is the only 8x16 drawing with no 7x14 counterpart. Upstream's regular
+> 8x16 BDF lacks the acute accent while its bold has it, so `00B4` was drawn
+> (commit 7b2692b) as the *de-bolded* form of upstream's 8x16 **bold** acute.
+> Its columns therefore carry a bold-face gutter change, not a porting rule:
+> upstream's **bold** shifts all nine of its top-anchored marks +1, because
+> bold's 7x14 forms start at column 0 and its 8x16 forms at column 1. Reading
+> `00B4`'s +1 as a porting rule placed `‘ ’ ′` one column too far right in the
+> first pass at the `20xx` block; the regular-face measurement above overruled
+> it 12-0.
+
+**The row-7 maths axis covers centred mid-band marks too.** Rule 4's default
+("no confirmed upstream anchor -> baseline-tracking") applies to
+baseline-relative *forms*; a fixed-shape mark centred on the maths axis stays
+on it. Of the 37 committed glyphs whose 7x14 ink lies wholly in rows 4-9, 31
+keep their rows at 8x16. `•` U+2022 is placed on rows 6-8 for that reason,
+matching `▴` U+25B4 and `▾` U+25BE (rows 6-8 kept, one column wider, ink
+9 -> 12) rather than dropping to rows 7-9 and leaving the axis that `-`, `+`,
+`<`, `>` and both triangles sit on.
