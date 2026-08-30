@@ -294,6 +294,69 @@ def main():
         elif open(here, 'rb').read() != open(there, 'rb').read():
             bad(f'{here} differs from {there}')
 
+    # 6b -- THE CELL THE STYLESHEET BELIEVES IN.
+    #
+    # site/smalti.css is copied into every size's page unchanged, so every
+    # number in it that knows the cell has to come from size.css instead.  When
+    # it did not, the 8x16 page laid an eight-column editor into a seven-column
+    # grid and set every specimen line at 14px on a 16px cell -- both silent,
+    # both visible only to someone who opened the page and looked.  A page that
+    # renders wrong while every other check is green is exactly what this
+    # section exists to stop.
+    scss = os.path.join(site, 'size.css')
+    css2 = open(scss, encoding='utf-8').read() if os.path.exists(scss) else ''
+    if not css2:
+        bad('size.css is missing, so the page has no cell geometry at all and '
+            'falls back to whatever smalti.css happens to hardcode')
+    else:
+        for prop, want in (('--cell-cols', w), ('--cell-rows', h)):
+            if f'{prop}: {want};' not in css2:
+                bad(f'size.css does not declare {prop}: {want} for {size}')
+        if f'--u2: {h}px;' not in css2:
+            bad(f'size.css does not set --u2 to the cell height {h}px, so '
+                f'every pixel-font size on the page is not a whole multiple '
+                f'of the cell and the text renders blurred')
+
+    page_css = open(os.path.join(site, 'smalti.css'), encoding='utf-8').read()
+    if 'repeat(var(--cell-cols)' not in page_css:
+        bad('smalti.css does not take the editor grid column count from '
+            '--cell-cols, so the paint grid is only correct at one cell width')
+
+    # Every specimen line asks for a class by its zoom index; smalti.js builds
+    # it as 's' + z.  A class that does not exist is not an error in any
+    # browser -- the line just silently renders at the body size, which is how
+    # this shipped.
+    for spec in d['specimen']:
+        if f'.s{spec["z"]} ' not in page_css:
+            bad(f'the {spec["px"]}px specimen line uses class .s{spec["z"]}, '
+                f'which smalti.css does not define -- it would render at the '
+                f'body size instead')
+        if spec['px'] != spec['z'] * h:
+            bad(f'specimen line claims {spec["px"]}px at zoom {spec["z"]} on a '
+                f'{h}-row cell')
+
+    # The guide rows the editor draws.  The baseline is the one that moves
+    # between sizes, so an unchecked constant here is invisible until someone
+    # looks at the 8x16 editor.
+    g = d.get('guides') or {}
+    if not g:
+        bad('the data carries no guide rows, so the editor would draw its '
+            'baseline from a constant')
+    else:
+        if not 0 < g['cap'] < g['xheight'] < g['baseline'] < h:
+            bad(f'guide rows out of order or off the cell: {g} on {h} rows')
+        # Re-derived independently of build-site.py, from the strike this
+        # build actually produced: the baseline is the last row of the ascent.
+        bdf = os.path.join('build', f'Smalti{size}-Regular.bdf')
+        m = re.search(r'^FONT_ASCENT (\d+)', open(bdf, encoding='latin-1').read(),
+                      re.M) if os.path.exists(bdf) else None
+        if m is None:
+            bad(f'{bdf} has no FONT_ASCENT, so the baseline cannot be checked')
+        elif g['baseline'] != int(m.group(1)) - 1:
+            bad(f'the page draws its baseline on row {g["baseline"]}, but '
+                f'{bdf} says FONT_ASCENT {m.group(1)}, so it is row '
+                f'{int(m.group(1)) - 1}')
+
     # 7 -- the editor's ghost fonts.  The page tells a contributor either
     # "here is what this character looks like" or "there is no reference for
     # this one", and both claims have to be true of the files it ships: the

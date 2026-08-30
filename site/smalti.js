@@ -88,6 +88,14 @@ function artSvg(rows, px) {
 
 function boot(data) {
   D = data;
+  /* Assigned here and not at the top of the file: D is null until the data
+   * file has loaded, so a top-level D.guides would throw before anything was
+   * drawn.  Read from the build because the build measured them -- the
+   * baseline is row 10 at 7x14 and row 11 at 8x16. */
+  BASE = D.guides.baseline;
+  CAP = D.guides.cap;
+  XH = D.guides.xheight;
+  AXIS = D.guides.axis;
   var i;
   COVI = new Int32Array(D.cps.length);
   var k = 0;
@@ -131,7 +139,11 @@ function buildSpecimens() {
     name.innerHTML = esc(D.faceLabel[f]) + ' <span>' + esc(D.faceFile[f]) + '</span>';
     card.appendChild(name);
     D.specimen.forEach(function (s) {
-      var line = el('p', 'spec-line px s' + s.px + ' ' + faceClass(f));
+      /* s.z, not s.px: the class names the MULTIPLE.  Built from the pixel
+       * size it asked for .s16/.s32/.s48 on the 8x16 page and smalti.css
+       * defines .s1/.s2/.s3, so nothing matched and every specimen line fell
+       * back to the body size. */
+      var line = el('p', 'spec-line px s' + s.z + ' ' + faceClass(f));
       line.innerHTML = '<b>' + s.px + 'px</b>' + esc(s.text);
       card.appendChild(line);
     });
@@ -507,7 +519,13 @@ function drawEditor() {
   refresh();
 }
 
-var BASE = 10, CAP = 3, XH = 5, AXIS = 7;
+/* The editor's guide rows, from the build rather than from here.  These were
+ * `10, 3, 5, 7` -- 7x14 rows.  The cap line, the x-height line and the maths
+ * axis are the same row at 7x14 and 8x16, but THE BASELINE IS NOT: row 10 at
+ * 7x14 and row 11 at 8x16, because that is the only type line that moves
+ * between the two.  So the 8x16 editor drew its baseline one row high, through
+ * the feet of every letter. */
+var BASE, CAP, XH, AXIS;
 
 /* ---------------------------------------------------------- the overlay --
  *
