@@ -62,7 +62,7 @@ FANOUT := all check check-sources check-outlines check-version \
 # that survive "clean" let a rebuild compare against itself.  clean is in
 # FANOUT so every size is actually swept.
 PASSTHRU := venv headers index print-dest restore \
-            site check-site serve-site deb rpm packages check-packages watch
+            site check-site serve-site watch
 
 ifndef SIZE
 .PHONY: $(FANOUT) $(PASSTHRU)
@@ -73,6 +73,21 @@ $(FANOUT):
 	done
 
 $(PASSTHRU):
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) $@
+
+# Packaging spans every cell size -- one .deb and one .rpm hold all of them --
+# so it cannot be a plain PASSTHRU.  PASSTHRU recurses once under the FIRST
+# size, and the rules that build another size's .ttf exist only inside that
+# size's own recursion, so the 8x16 faces were embedded in the package without
+# ever being prerequisites of it: a clean `make packages` reached nfpm and died
+# with `Matching "./build/Smalti8x16-Regular.ttf": file does not exist`.
+#
+# Fanning out `all` first is what actually builds every size, and it is also
+# what keeps the staleness invariant true across sizes -- a stale face at ANY
+# size is rebuilt before nfpm runs.  Same shape as `compare` below.
+.PHONY: deb rpm packages check-packages
+deb rpm packages check-packages:
+	@$(MAKE) --no-print-directory all
 	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) $@
 
 # The 7x14-against-8x16 review chart (design doc section 6).  Spans both
@@ -121,6 +136,9 @@ GENTOOL := tools/glyphstore.py tools/accents.py tools/weight.py \
 
 FACES := Regular Bold Italic BoldItalic
 TTF   := $(FACES:%=build/$(FONT)-%.ttf)
+# Every size's .ttf, because one package holds them all.  $(TTF) is only this
+# recursion's size and is the wrong prerequisite list for a package.
+PKG_TTF := $(foreach s,$(SIZES),$(FACES:%=build/Smalti$(s)-%.ttf))
 WOFF2 := $(FACES:%=build/$(FONT)-%.woff2)
 BDF   := $(FACES:%=build/$(FONT)-%.bdf)
 
@@ -416,15 +434,17 @@ packages: $(DEB) $(RPM)
 deb: $(DEB)
 rpm: $(RPM)
 
-# The .ttf files are prerequisites, so a package can never be built from a
-# stale face.  nfpm is order-only: re-downloading it must not rebuild a
-# package that is otherwise current.
-$(DEB): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
+# EVERY size's .ttf files are prerequisites, so a package can never be built
+# from a stale face at any size -- see the PKG_TTF note above, and the
+# top-level packaging rule that fans `all` out before recursing here.  nfpm is
+# order-only: re-downloading it must not rebuild a package that is otherwise
+# current.
+$(DEB): $(PKG_TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
 	PKG_NAME=fonts-smalti PKG_ARCH=all PKG_VERSION=$(PKG_VERSION) \
 	PKG_FONTDIR=/usr/share/fonts/truetype/smalti PKG_MTIME=$(PKG_MTIME) \
 	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p deb -t $@
 
-$(RPM): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
+$(RPM): $(PKG_TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
 	PKG_NAME=smalti-fonts PKG_ARCH=noarch PKG_VERSION=$(PKG_VERSION) \
 	PKG_FONTDIR=/usr/share/fonts/smalti PKG_MTIME=$(PKG_MTIME) \
 	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p rpm -t $@

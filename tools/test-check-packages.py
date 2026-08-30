@@ -21,6 +21,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CHECKER = ROOT / "tools" / "check-packages.py"
 FACES = ["Regular", "Bold", "Italic", "BoldItalic"]
+SIZES = ["7x14", "8x16"]
+# Cases name a font by its FILENAME, not by a face, so a case can drop or
+# corrupt an 8x16 font.  A suite that could only ever injure a 7x14 face
+# would stay green while the whole 8x16 half of the package went
+# unchecked -- which is the fault this dimension exists to make reachable.
+FONTS = [f"Smalti{size}-{face}.ttf" for size in SIZES for face in FACES]
 
 
 def need(tool):
@@ -29,9 +35,9 @@ def need(tool):
                  f"(Debian/Ubuntu: sudo apt install rpm dpkg cpio)")
 
 
-def build(workdir, *, yaml_extra="", drop_face=None, version="0.1.0",
+def build(workdir, *, yaml_extra="", drop_font=None, version="0.1.0",
           fontdir="/usr/share/fonts/truetype/smalti", name="fonts-smalti",
-          packager="deb", corrupt_face=None):
+          packager="deb", corrupt_font=None):
     """Build one package into workdir and return its path.
 
     Everything a case wants to break is a parameter, so no case edits a
@@ -40,25 +46,22 @@ def build(workdir, *, yaml_extra="", drop_face=None, version="0.1.0",
     stage = workdir / "stage"
     stage.mkdir(parents=True, exist_ok=True)
     (stage / "build").mkdir(exist_ok=True)
-    for face in FACES:
-        if face == drop_face:
+    for font in FONTS:
+        if font == drop_font:
             continue
-        src = ROOT / "build" / f"Smalti7x14-{face}.ttf"
-        dst = stage / "build" / f"Smalti7x14-{face}.ttf"
-        data = src.read_bytes()
-        if face == corrupt_face:
+        data = (ROOT / "build" / font).read_bytes()
+        if font == corrupt_font:
             data = data + b"\x00"      # a byte the built face does not have
-        dst.write_bytes(data)
+        (stage / "build" / font).write_bytes(data)
     for doc in ("README.md", "LICENSE.tamzen"):
         shutil.copy2(ROOT / doc, stage / doc)
 
     contents = []
-    for face in FACES:
-        if face == drop_face:
+    for font in FONTS:
+        if font == drop_font:
             continue
-        contents.append(
-            f"  - src: build/Smalti7x14-{face}.ttf\n"
-            f"    dst: {fontdir}/Smalti7x14-{face}.ttf\n")
+        contents.append(f"  - src: build/{font}\n"
+                        f"    dst: {fontdir}/{font}\n")
     for doc in ("README.md", "LICENSE.tamzen"):
         contents.append(f"  - src: {doc}\n    dst: /usr/share/doc/{name}/{doc}\n")
 
@@ -105,8 +108,9 @@ def main():
         need(tool)
     if not (ROOT / "build" / "nfpm").exists():
         sys.exit("build/nfpm missing -- run `make build/nfpm` first")
-    if not all((ROOT / "build" / f"Smalti7x14-{f}.ttf").exists() for f in FACES):
-        sys.exit("the four .ttf faces are missing -- run `make` first")
+    missing = [f for f in FONTS if not (ROOT / "build" / f).exists()]
+    if missing:
+        sys.exit(f"missing built faces: {' '.join(missing)} -- run `make` first")
 
     with tempfile.TemporaryDirectory(dir=ROOT / "build") as tmp:
         tmp = Path(tmp)
@@ -123,11 +127,13 @@ def main():
 
         # 2 -- a face whose bytes are not the built face's bytes
         expect_fail("corrupt face", "does not match build/",
-                    deb=build(tmp / "c1", packager="deb", corrupt_face="Bold"))
+                    deb=build(tmp / "c1", packager="deb",
+                              corrupt_font="Smalti7x14-Bold.ttf"))
 
-        # 3 -- three faces instead of four
-        expect_fail("missing face", "expected 4 .ttf",
-                    deb=build(tmp / "c2", packager="deb", drop_face="Italic"))
+        # 3 -- seven fonts instead of eight
+        expect_fail("missing face", f"expected {len(FONTS)} .ttf",
+                    deb=build(tmp / "c2", packager="deb",
+                              drop_font="Smalti7x14-Italic.ttf"))
 
         # 4 -- right files, wrong directory
         expect_fail("wrong font directory", "unexpected path",
@@ -150,7 +156,21 @@ def main():
         expect_fail("rpm corrupt face", "does not match build/",
                     rpm=build(tmp / "c6", packager="rpm", name="smalti-fonts",
                               fontdir="/usr/share/fonts/smalti",
-                              corrupt_face="Regular"))
+                              corrupt_font="Smalti7x14-Regular.ttf"))
+
+        # 8 -- an 8x16 font is absent.  Without this the suite would only
+        # ever injure the 7x14 half and would stay green on a package that
+        # shipped no 8x16 font at all.
+        expect_fail("missing 8x16 font", "Smalti8x16-Regular.ttf is not in the package",
+                    deb=build(tmp / "c7", packager="deb",
+                              drop_font="Smalti8x16-Regular.ttf"))
+
+        # 9 -- an 8x16 font whose bytes are not the built face's bytes.  The
+        # count in case 8 can be satisfied by any eight files; only this case
+        # proves the 8x16 half is actually BYTE-compared against build/.
+        expect_fail("corrupt 8x16 font", "Smalti8x16-Italic.ttf does not match build/",
+                    deb=build(tmp / "c8", packager="deb",
+                              corrupt_font="Smalti8x16-Italic.ttf"))
 
     print("\nall cases red for their own reason")
 

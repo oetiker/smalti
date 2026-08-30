@@ -24,6 +24,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FACES = ["Regular", "Bold", "Italic", "BoldItalic"]
+SIZES = ["7x14", "8x16"]
+# The exact set of .ttf a package must hold, in one place: the count
+# assert below and the byte comparison must not be able to disagree
+# about how many faces there are, which is how the 8x16 half could
+# otherwise ship unchecked while the count still passed.
+FONTS = [f"Smalti{size}-{face}.ttf" for size in SIZES for face in FACES]
 DEB_FONTDIR = "/usr/share/fonts/truetype/smalti"
 RPM_FONTDIR = "/usr/share/fonts/smalti"
 DEB_NAME = "fonts-smalti"
@@ -62,12 +68,13 @@ def compare_tree(root, fontdir, pkgname, label):
         if f not in fonts:
             fail(f"{label}: unexpected path for {f.name}: /{f.relative_to(root)}")
 
-    if len(fonts) != 4:
-        fail(f"{label}: expected 4 .ttf under {fontdir}, found {len(fonts)}")
+    if len(fonts) != len(FONTS):
+        fail(f"{label}: expected {len(FONTS)} .ttf under {fontdir}, "
+             f"found {len(fonts)}")
 
-    for face in FACES:
-        built = ROOT / "build" / f"Smalti7x14-{face}.ttf"
-        inside = root / fontdir.lstrip("/") / f"Smalti7x14-{face}.ttf"
+    for name in FONTS:
+        built = ROOT / "build" / name
+        inside = root / fontdir.lstrip("/") / name
         if not inside.exists():
             fail(f"{label}: {inside.name} is not in the package")
             continue
@@ -173,8 +180,8 @@ def main():
     if not args.deb and not args.rpm:
         sys.exit("nothing to check: pass --deb and/or --rpm")
 
-    for face in FACES:
-        built = ROOT / "build" / f"Smalti7x14-{face}.ttf"
+    for name in FONTS:
+        built = ROOT / "build" / name
         if not built.exists():
             sys.exit(f"{built} is missing -- there is nothing to compare the "
                      f"package against.  Run `make` first.")

@@ -44,9 +44,10 @@ description: |
   number of pixels, so a rasteriser reproduces the drawing exactly at the
   drawn size and every whole multiple of it.
   .
-  It is a fork of Tamzen 7x14, which has 189 glyphs and nothing above U+00FF.
-  Smalti adds 815 more and draws two faces upstream never had, so each of its
-  four faces carries 1004 glyphs.
+  It is a fork of Tamzen, which draws 189 glyphs at each of its cell sizes and
+  nothing above U+00FF.  Smalti adds 817 more at each size and draws two faces
+  upstream never had, so it ships eight faces of 1006 glyphs: 7x14 and 8x16,
+  each in regular, bold, italic and bold-italic.
 
 recommends:
   - fontconfig
@@ -60,6 +61,14 @@ contents:
     dst: ${PKG_FONTDIR}/Smalti7x14-Italic.ttf
   - src: build/Smalti7x14-BoldItalic.ttf
     dst: ${PKG_FONTDIR}/Smalti7x14-BoldItalic.ttf
+  - src: build/Smalti8x16-Regular.ttf
+    dst: ${PKG_FONTDIR}/Smalti8x16-Regular.ttf
+  - src: build/Smalti8x16-Bold.ttf
+    dst: ${PKG_FONTDIR}/Smalti8x16-Bold.ttf
+  - src: build/Smalti8x16-Italic.ttf
+    dst: ${PKG_FONTDIR}/Smalti8x16-Italic.ttf
+  - src: build/Smalti8x16-BoldItalic.ttf
+    dst: ${PKG_FONTDIR}/Smalti8x16-BoldItalic.ttf
   - src: README.md
     dst: /usr/share/doc/${PKG_NAME}/README.md
   - src: LICENSE.tamzen
