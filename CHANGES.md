@@ -9,18 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New
 
+### Changed
+
+### Fixed
+
+## 0.2.0 - 2026-08-30
+### New
 - **A second cell size, 8x16, at full parity with 7x14.** Four faces, the same target set, nothing missing: `docs/coverage.md` now reports 1006 glyphs and **0 missing** in all eight faces. 332 glyphs are drawn by hand in `glyphs/8x16/regular/`, because a pixel drawing cannot be scaled — upstream Tamzen redrew its own letters wider rather than stretching them, and so did this. The two sizes are 1:2 in both axes, so the arithmetic that places a feature is uniform; the operation is still redrawing. `make check` runs per size and each size can go red on its own. Both sizes ship in one `.deb` and one `.rpm`, under the family names `Smalti 7x14` and `Smalti 8x16`, so installing the package installs both and a font matcher never has to choose between them.
 
 - **`.deb` and `.rpm` packages.** Every release now attaches one of each, so Smalti can be installed and removed by a package manager instead of by hand. Both are built by a pinned `nfpm` from one description, hold the four `.ttf` faces plus `README.md` and `LICENSE.tamzen` under `/usr/share/doc`, and carry no maintainer scripts — the distributions' own `fontconfig` triggers rebuild the cache. `make check-packages` opens them with `dpkg-deb` and `rpm` and proves the fonts inside are byte-identical to the ones `make check` validated. No apt or yum repository is hosted: that would need a signing key, which would be the first credential this project owns.
 
 ### Changed
-
 - **The specimen site is one page per size.** `make site` now writes `build/site/7x14/` and `build/site/8x16/`, each a complete page with its own fonts, its own glyph data and its own editor, and the masthead links across. The published root is a redirect to the first size that carries the fragment with it, so an existing bookmark of `/#browse` still lands on the glyph browser. The page had always been templated per size down to its title and its cell dimensions, so a single page holding both would have had to rewrite all of that on a click and keep two glyph sets in memory to do it. The one thing that genuinely was 7x14-only was the ppem ladder: the specimen sizes were written as the literal pixels 14, 28 and 42 instead of as multiples of the cell height, and the 8x16 page would have said 14 px while rendering 16. They are derived now, so the prose and the specimen beside it cannot disagree.
 
 - **Smalti's own workflows moved off the Node 20 actions.** GitHub had begun annotating every run with a deprecation notice and was already forcing those actions onto Node 24. `checkout` and `setup-python` go to `@v7`, `upload-artifact` to `@v7`, and the three Pages actions to `configure-pages@v6`, `upload-pages-artifact@v5` and `deploy-pages@v5`. Only the four workflows this project owns changed — the borrowed repo-infra jobs were already current, and inside `release-publish.yml` only the Smalti-specific `publish-fonts` job was touched.
 
 ### Fixed
-
 - **`Ŋ` U+014A shipped in 0.1.0 with its descender detached from the letter.** The right leg ended on column 5 and the hook below it sat on column 3 — a gap of two columns, which is not adjacent under 8-connectivity, let alone 4 — so the hook floated under the middle of the N. Its lowercase sibling `ŋ` had been correct all along, and the fix is that same descender, so the pair now shares one. Nothing caught it because nothing could: `make check` proves the traced outline reproduces the bitmap, and has no opinion about whether the bitmap is a letter. It was found by reading the 7x14 art while porting the pair to 8x16.
 
 ## 0.1.0 - 2026-08-23

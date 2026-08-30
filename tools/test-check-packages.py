@@ -29,13 +29,24 @@ SIZES = ["7x14", "8x16"]
 FONTS = [f"Smalti{size}-{face}.ttf" for size in SIZES for face in FACES]
 
 
+# THE VERSION IS READ, NOT WRITTEN HERE.  check-packages.py compares a
+# package against ROOT/VERSION, so a fixture stamped with a literal is only
+# ever correct while that literal happens to equal VERSION.  It was "0.1.0",
+# which was true on the day this suite was written and false on the first
+# release after it: the BASELINE case -- a deliberately correct pair -- was
+# rejected for a wrong version, and the release stopped.  A fault-injection
+# suite whose baseline breaks on a legitimate change is worse than no suite,
+# because the failure it reports is its own.
+VERSION = (ROOT / "VERSION").read_text().strip()
+
+
 def need(tool):
     if shutil.which(tool) is None:
         sys.exit(f"{tool} is required to run this suite -- install it "
                  f"(Debian/Ubuntu: sudo apt install rpm dpkg cpio)")
 
 
-def build(workdir, *, yaml_extra="", drop_font=None, version="0.1.0",
+def build(workdir, *, yaml_extra="", drop_font=None, version=VERSION,
           fontdir="/usr/share/fonts/truetype/smalti", name="fonts-smalti",
           packager="deb", corrupt_font=None):
     """Build one package into workdir and return its path.
@@ -107,7 +118,10 @@ def main():
     for tool in ("dpkg-deb", "rpm", "rpm2cpio", "cpio"):
         need(tool)
     if not (ROOT / "build" / "nfpm").exists():
-        sys.exit("build/nfpm missing -- run `make build/nfpm` first")
+        # `make build/nfpm` is a SIZE-scoped rule and does not exist at
+        # the top level, so naming it here sent a reader to a "No rule to
+        # make target" error.  `make packages` fetches it.
+        sys.exit("build/nfpm missing -- run `make packages` first")
     missing = [f for f in FONTS if not (ROOT / "build" / f).exists()]
     if missing:
         sys.exit(f"missing built faces: {' '.join(missing)} -- run `make` first")
