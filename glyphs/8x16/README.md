@@ -189,7 +189,7 @@ from an earlier report):
 | `<` | U+003C | apex row 7 | apex row 7 | unchanged -> **axis-locked** |
 | `>` | U+003E | apex row 7 | apex row 7 | unchanged -> **axis-locked** |
 | `=` | U+003D | rows 5, 8 | rows 6, 9 | +1 row, matches the baseline shift -> **baseline-tracking** |
-| `A` | U+0041 | top row 3, bottom row 9 | top row 3, bottom row 10 | bottom follows baseline (top coincides by chance -- the cap sits near the top of the ascent band on both sizes) -> **baseline-tracking** |
+| `A` | U+0041 | rows 3-10 | rows 3-11 | bottom follows the baseline; the top does not move because the CAP LINE is row 3 at both sizes, which is a measured fact and not a coincidence -> **baseline-tracking** |
 | `U` | U+0055 | tail touches the baseline, row 10 | tail touches the baseline, row 11 | tail is defined *by* the baseline, moves with it -> **baseline-tracking** |
 
 These are two disjoint populations, not one spectrum. `-`, `*`, `+`, `<` and
@@ -197,6 +197,82 @@ These are two disjoint populations, not one spectrum. `-`, `*`, `+`, `<` and
 each one bigger at 8x16 without sliding it down the cell. `=`, `A` and `U` are
 anchored to the letter baseline, and the baseline itself moved, so their ink
 moved with it.
+
+**Read the whole glyph, not just the feature you are placing.** `<`, `>` and
+`+` are in the axis-locked column above because their *apex* and *bar* stay on
+row 7 -- but each glyph as a whole grew, `<` and `>` from rows 4-10 to 3-11 and
+`+` from 5-9 to 4-10. Axis-locking is a claim about a FEATURE, never about a
+bounding box.
+
+#### The type lines, measured
+
+Every port is decided by these five rows, and four of the five are the same at
+both sizes. Re-derived from `upstream/7x14/Tamzen7x14r.bdf` and
+`upstream/8x16/Tamzen8x16r.bdf` with `gs.Bdf().cell_bitmaps()`:
+
+| line | measured on | 7x14 | 8x16 |
+|---|---|---|---|
+| ascender line | top row of `b d f h k l` | row 2 | row 2 |
+| cap line | top row of `A B E H` | row 3 | row 3 |
+| x-height line | top row of `a c e m n o r s u v w x z` | row 5 | row 5 |
+| baseline | bottom row of `A B E H n o x` | row 10 | **row 11** |
+| descender bottom | bottom row of `g j p q y` | rows 12-13 | **row 14** |
+
+**Only the baseline and the descender move.** Everything above the baseline is
+pinned where it already was, which is why a port that "gains a row at the top"
+is almost always wrong: at 7x14 nothing in the font crosses row 1, so moving a
+tall glyph up to it puts it above a line the font does not have. (At 7x14
+upstream's own `d` and `f` sit one row *below* the ascender line, on row 3; at
+8x16 all six ascenders reach row 2.)
+
+The descender is the one place where the two sizes genuinely differ in kind:
+at 7x14 upstream draws two depths, `g` and `j` at row 12 and `p q y` at row 13,
+while at 8x16 all five bottom out on **row 14**. Five of five.
+
+#### Two bands, two different centres
+
+The cap band is rows 3-11 and the x-height band is rows 5-11, so they centre on
+**row 7** and **row 8** respectively. These are different numbers and a mid-band
+feature must be told which band it belongs to before it is placed.
+
+**The flip trap.** At 7x14 a cap-band glyph can be reversed top-for-bottom by
+`row -> 13 - row`, because the band is 3-10 and `3 + 10 = 13 = H - 1`. At 8x16
+the band is 3-11 and `3 + 11 = 14`, while `H - 1 = 15`. A naive vertical flip
+therefore lands one row low. Flip within the band, never within the cell.
+
+#### The extra cap row is inserted ABOVE the mid feature
+
+The cap band grows by one row from 7x14 to 8x16 (3-10 becomes 3-11). Upstream
+puts that row above the waist, not below it, so a mid-height feature moves down
+one row while the number of rows below it stays the same:
+
+| glyph | 7x14 mid feature | 8x16 mid feature | rows above / below, 7x14 -> 8x16 |
+|---|---|---|---|
+| `H` U+0048 | row 6 | row 7 | 3/4 -> 4/4 |
+| `E` U+0045 | row 6 | row 7 | 3/4 -> 4/4 |
+| `Ð` U+00D0 | row 6 | row 7 | 3/4 -> 4/4 |
+| `£` U+00A3 | row 6 | row 7 | 3/4 -> 4/4 |
+| `¥` U+00A5 | bars 6 and 8 | bars 7 and 9 | both bars +1 |
+
+Four of four plus `¥`, no dissent. **This is what settles any attached
+mid-height feature**, and it is the reason `Ł`'s stroke moves 6-7 -> 7-8 while
+`Ŀ`'s free middle dot stays on 6-7 (see rule 5).
+
+#### Arrows keep their band; everything else moves
+
+Measured over every committed hand port, not inferred. Of the 145 ports whose
+7x14 ink band is exactly rows 4-10:
+
+* **37 kept rows 4-10, and 36 of them are arrows.** The one that is not is
+  `⏎` U+23CE RETURN SYMBOL, which is drawn *as* U+21B5 DOWNWARDS ARROW WITH
+  CORNER LEFTWARDS -- so it keeps the band for the same reason the other 36 do.
+* **108 moved, and not one of them is an arrow.** 104 grew downward to rows
+  4-11; the remaining 4 (`±`, `≈`, `≤`, `≥`) shifted whole, to rows 5-11.
+
+Zero arrows moved and zero non-arrows kept. **So: if the glyph is an arrow, the
+band is axis-locked; if it is not, it is baseline-tracking, and rule 4's default
+applies.** This rule was load-bearing long before it was written down, and it is
+the reason a new arrow does not gain a row while the operator beside it does.
 
 **The row-7 maths axis.** `-`, `+` (its bar), `<` and `>` (their apexes) all
 sit on **row 7** in both sizes -- name this axis explicitly, because any new
@@ -250,11 +326,77 @@ Ink follows from shape, not from family: a thin plain tick keeps its ink
 > first pass at the `20xx` block; the regular-face measurement above overruled
 > it 12-0.
 
+**A free mark and an attached feature are different populations, and
+connectivity tells them apart without any judgement.** `Ŀ` U+013F and `Ł`
+U+0141 are both "a mid-height mark on an `L`" and they behave oppositely:
+
+| glyph | mark | 7x14 rows | 8x16 rows |
+|---|---|---|---|
+| `Ŀ` U+013F | middle dot, standing free beside the stem | 6-7 | 6-7 |
+| `Ł` U+0141 | stroke, crossing the stem | 6-7 | **7-8** |
+
+The mechanical test is the **4-connectivity delta against the bare base**: add
+the mark to `L` and count connected components. A free mark leaves 2 components
+and keeps its rows; an attached one leaves 1 and moves with the cap band, per
+rule 4's "extra row above the mid feature". Run that test before reaching for a
+population.
+
+Note also what `Ł` does horizontally: its stroke protrudes LEFT, so at 8x16 the
+whole letter is drawn one column right (stem on column 2, not 1) to keep the
+protrusion out of column 0. **Where a mark sticks out to the left, shift the
+base right** -- that is upstream's own answer, not a preference here.
+
 **The row-7 maths axis covers centred mid-band marks too.** Rule 4's default
 ("no confirmed upstream anchor -> baseline-tracking") applies to
 baseline-relative *forms*; a fixed-shape mark centred on the maths axis stays
-on it. Of the 37 committed glyphs whose 7x14 ink lies wholly in rows 4-9, 31
-keep their rows at 8x16. `•` U+2022 is placed on rows 6-8 for that reason,
+on it. Of the 26 committed ports whose 7x14 ink lies wholly in rows 4-9, **16
+keep their rows** at 8x16 -- a majority, not a law, so measure the glyph rather
+than cite the statistic. (This sentence read "31 of 37" until the drawing was
+finished. That figure was taken with `tools/show-glyphs.py`, which has the
+BBX-17 bug; every number in this file is now re-derived with
+`gs.Bdf().cell_bitmaps()`, which is the only correct reader.) `•` U+2022 is placed on rows 6-8 for that reason,
 matching `▴` U+25B4 and `▾` U+25BE (rows 6-8 kept, one column wider, ink
 9 -> 12) rather than dropping to rows 7-9 and leaving the axis that `-`, `+`,
 `<`, `>` and both triangles sit on.
+
+### 6. Column 0 is the gutter, and no letter touches it
+
+Rule 2 states this for the letter box; here is the census that settles it, so
+nobody has to re-argue it per glyph.
+
+**Not one letter lights column 0 at 8x16.** Measured over every letter
+(Unicode general category `L*`) in `upstream/8x16/Tamzen8x16r.bdf`: **0 of
+114**. The same census at 7x14 finds **2 of 114** -- `Ð` U+00D0 and `æ`
+U+00E6 -- and upstream itself VACATES column 0 for both of them at 8x16 by
+shifting the glyph right rather than by shrinking it. This project's own
+hand-drawn 8x16 letters agree: **0 of 72**.
+
+So where a mark or a stroke would protrude past the left edge of the letter,
+the answer upstream reached for is to move the base right one column, not to
+put ink in the gutter. `Ł` U+0141 and `Ħ` U+0126 are the worked examples.
+
+**This does NOT apply to the cell-spanning population of rule 3.** Box drawing,
+rules and blocks must reach column 0 or they come apart at the cell boundary.
+Decide which population the glyph is in first; the plan's old mechanical test
+for that ("lights column 0 AND column 7") is a box-drawing heuristic and
+MISFIRES ON LETTERFORMS -- it was overturned by this census. Ask whether the
+glyph must butt against its neighbour, not where its ink happens to land.
+
+## How the numbers in this file were measured
+
+Every count, row and band above was re-derived from the repository at the point
+the 8x16 drawing was finished, with `gs.Bdf(path).cell_bitmaps()` for upstream
+bitmaps and `gs.read_glyph()` for committed drawings.
+
+**`tools/show-glyphs.py` has the BBX-17 bug and must never be used to measure
+anything** -- it is for eyeballing a glyph, nothing more. Two figures in this
+file were wrong for exactly that reason (rule 4's `A` row, and the "31 of 37"
+mid-band statistic), and both were repeated as evidence for months before
+anyone re-measured them.
+
+**When a rule is ported from 7x14, count the witnesses at 8x16, not at 7x14.**
+A construction confirmed at the source size can still be wrong: `U+00A8`
+DIAERESIS was almost shipped as the top two rows of `"`, which two independent
+7x14 witnesses supported, until a count at the target size found **13**
+witnesses for rows 2-3, **11** for rows 0-1 and **zero** for rows 1-2. Zero is
+a refutation. It is a cheap check and it is the sharpest one there is.
