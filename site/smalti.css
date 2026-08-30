@@ -115,6 +115,16 @@ em { font-style: italic; color: var(--ink); }
 .masthead nav a:hover, .masthead nav a:focus-visible { color: var(--gold); }
 .masthead nav a.out::after { content: " ↗"; }
 
+/* The other cell sizes.  Each is a sibling PAGE, not a control on this one,
+ * so it is drawn as a tile rather than as another section link: a reader who
+ * clicks it leaves the page, and the section links beside it do not. */
+.masthead nav a.size {
+  padding: 0 var(--u); border: 1px solid var(--grout);
+}
+.masthead nav a.size:hover, .masthead nav a.size:focus-visible {
+  border-color: var(--gold);
+}
+
 /* ----------------------------------------------------------------- hero -- */
 
 main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }

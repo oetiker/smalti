@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the specimen site into build/site/ -- see site/ for its sources.
 
-Usage: build-site.py [--out DIR] [--repo OWNER/NAME] [--branch NAME] [SIZE]
+Usage: build-site.py [--out DIR] [--repo OWNER/NAME] [--branch NAME] [SIZE ...]
 
 Three jobs, and every one of them reads the glyph store rather than a list
 somebody has to keep up to date:
@@ -9,7 +9,7 @@ somebody has to keep up to date:
   * the four .woff2 faces, copied from build/ -- a BROWSER CANNOT RENDER THE
     .otb FILES AT ALL.  They are bitmap-only and no browser draws an embedded
     strike, so the site loads the traced outlines.  Those are pixel-exact at
-    integer multiples of the cell height (14, 28, 42 px) and blurry between.
+    integer multiples of the cell height (1x, 2x, 3x) and blurry between.
   * data/glyphs.json -- every glyph's art, its provenance layer and the exact
     header line its .txt file carries, so the in-page editor can emit a file
     that is byte-identical to the committed one.
@@ -21,6 +21,14 @@ RAGGED COVERAGE IS THE POINT (design spec section 7).  The site therefore
 lists the codepoints the font does NOT have, next to the ones it does, in
 every block it touches -- and separates the ones left undrawn BY RULE from the
 ones nobody has got to yet.
+
+ONE PAGE PER SIZE, each under its own name -- build/site/7x14/, build/site/8x16/
+-- with a redirect at the root.  The page is templated per size all the way
+down to its title, its cell dimensions and its wordmark, so a single page
+carrying every size would have to rewrite all of that on a click and hold two
+glyph sets in memory to do it.  A sibling page carries it for free, and the
+in-page editor stays honest because a page only ever knows one size.  The
+masthead links the siblings.
 """
 import argparse
 import json
@@ -60,15 +68,19 @@ WORDMARK = 'smalti'
 
 # The specimen copy.  Every codepoint in it is checked against the resolved
 # face before the page is written, because a specimen that falls back to
-# another font is a specimen of that font.  Only 14, 28 and 42 px: the outline
-# reproduces the strike exactly at integer multiples of the cell height and
-# nowhere else.
+# another font is a specimen of that font.
+#
+# THE NUMBER IS A MULTIPLE OF THE CELL HEIGHT, NOT A PIXEL SIZE.  The outline
+# reproduces the strike exactly at integer multiples and nowhere else, so the
+# ladder is 14/28/42 at 7x14 and 16/32/48 at 8x16.  It was written as literal
+# pixels once, and that one hardcoded ladder is what blocked the second size.
+ZOOMS = (1, 2, 3)
 SPECIMEN = (
-    (42, 'Smalti — glass tesserae'),
-    (28, 'Ĳsselmeer · ΔΣΩ αβγπφψ · ¾ ≈ 0.75 · «wort» · ¶ §'),
-    (14, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789'),
-    (14, '→ ↔ ⇒ ↵ ∑ ∏ √ ∞ ≠ ≤ ≥ ± × ÷ ● ○ ◆ ★ ✓ ✗ ⠿ ⑂ ❯ ⏺ ‰ ™ ®'),
-    (14, 'oetiker@sol  ~/src/smalti  main  make check ✓'),
+    (3, 'Smalti — glass tesserae'),
+    (2, 'Ĳsselmeer · ΔΣΩ αβγπφψ · ¾ ≈ 0.75 · «wort» · ¶ §'),
+    (1, 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz 0123456789'),
+    (1, '→ ↔ ⇒ ↵ ∑ ∏ √ ∞ ≠ ≤ ≥ ± × ÷ ● ○ ◆ ★ ✓ ✗ ⠿ ⑂ ❯ ⏺ ‰ ™ ®'),
+    (1, 'oetiker@sol  ~/src/smalti  main  make check ✓'),
 )
 
 
@@ -246,7 +258,8 @@ def build_data(size, repo, branch, hinted):
     # produces, which a contributor would reasonably read as a design.
     hint = ''.join('1' if cp in hinted else '0' for cp in listed)
 
-    for px, text in SPECIMEN:
+    for mult, text in SPECIMEN:
+        px = mult * h
         for ch in text:
             if ord(ch) not in cov:
                 raise SystemExit(
@@ -290,7 +303,8 @@ def build_data(size, repo, branch, hinted):
         'state': state,
         'textok': textok,
         'hint': hint,
-        'specimen': [{'px': px, 'text': text} for px, text in SPECIMEN],
+        'specimen': [{'px': mult * h, 'text': text}
+                     for mult, text in SPECIMEN],
         'bits': bits, 'layers': layers,
         'blocks': blocks, 'totals': totals,
     }, resolved, covered
@@ -349,26 +363,42 @@ def default_repo():
     return ''
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument('size', nargs='?', default='7x14')
-    ap.add_argument('--out', default=os.path.join('build', 'site'))
-    ap.add_argument('--repo', default=None)
-    ap.add_argument('--branch', default='main')
-    a = ap.parse_args()
+def write_root(root, sizes):
+    """The site root: a redirect to the first size, and the Pages opt-out.
 
-    repo = a.repo if a.repo is not None else default_repo()
-    if not repo:
-        print('build-site: no GitHub repository known, so the "open a pull '
-              'request" links are disabled.  Pass --repo owner/name.',
-              file=sys.stderr)
+    The root is not a page of its own.  It forwards to the first size and
+    carries the fragment across, so a bookmark of `/#browse` still lands on
+    the glyph browser now that the page has moved to `/7x14/#browse`.  The
+    no-script body is the real list rather than an apology, because it is also
+    what a reader gets if the redirect is ever wrong.
+    """
+    links = '\n'.join(f'<li><a href="{s}/">Smalti {s}</a></li>' for s in sizes)
+    open(os.path.join(root, 'index.html'), 'w', encoding='utf-8').write(
+        '<!doctype html>\n'
+        '<html lang="en">\n<meta charset="utf-8">\n'
+        '<title>Smalti</title>\n'
+        f'<link rel="canonical" href="{sizes[0]}/">\n'
+        f'<meta http-equiv="refresh" content="0; url={sizes[0]}/">\n'
+        f'<script>location.replace("{sizes[0]}/" + location.hash);</script>\n'
+        '<h1>Smalti</h1>\n<ul>\n' + links + '\n</ul>\n')
 
-    plan = hint_plan()
+    # Pages serves the upload as a plain directory; without this Jekyll would
+    # eat any path starting with an underscore and add a build step nobody
+    # asked for.  At the ROOT, because Jekyll is applied to the whole upload.
+    open(os.path.join(root, '.nojekyll'), 'w', encoding='utf-8').close()
+
+
+def build_one(size, out, repo, branch, plan, sizes):
+    """Write one size's page into `out`.
+
+    `sizes` is every size this run covers, so the masthead can link to the
+    siblings; a run of one size gets no size links, which is what a repository
+    with one size should show.
+    """
     data, resolved, covered = build_data(
-        a.size, repo, a.branch, {cp for _fn, cps in plan for cp in cps})
+        size, repo, branch, {cp for _fn, cps in plan for cp in cps})
     w, h = data['cell']['w'], data['cell']['h']
 
-    out = a.out
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(os.path.join(out, 'fonts'), exist_ok=True)
     os.makedirs(os.path.join(out, 'data'), exist_ok=True)
@@ -437,33 +467,80 @@ def main():
     # asserting a number: the page tells a visitor that .notdef is glyph 0 and
     # deliberately unmapped, and that claim has to be true of this build.
     from fontTools.ttLib import TTFont
-    ttf = TTFont(os.path.join('build', f'Smalti{a.size}-Regular.ttf'),
+    ttf = TTFont(os.path.join('build', f'Smalti{size}-Regular.ttf'),
                  lazy=True)
     cmap = len(ttf.getBestCmap())
     ttf.close()
 
     hand = data['totals'][0]['hand']
+
+    # Links to the other sizes.  Plain size names, never a prettified
+    # multiplication sign: ui_chars() checks the TEMPLATE, so a character
+    # injected here would never be proved to be in the font.
+    nav = '\n    '.join(f'<a class="size" href="../{s}/">{s}</a>'
+                        for s in sizes if s != size)
+
     tmpl = open(os.path.join('site', 'index.html'), encoding='utf-8').read()
     page = (tmpl
             .replace('{{WORDMARK}}', wordmark_svg(resolved, w, h))
-            .replace('{{SIZE}}', a.size)
+            .replace('{{SIZE}}', size)
             .replace('{{GLYPHS}}', str(len(covered)))
             .replace('{{CMAP}}', str(cmap))
             .replace('{{FACES}}', str(len(data['faces'])))
             .replace('{{HAND}}', str(hand))
             .replace('{{CELL_W}}', str(w))
             .replace('{{CELL_H}}', str(h))
+            .replace('{{SIZENAV}}', nav)
+            # The page names its own ppem ladder in three places.  Derived,
+            # never typed: at 8x16 the prose said 14/28/42 while the font
+            # rendered 16/32/48, and prose that contradicts the specimen
+            # beside it is worse than no prose.
+            .replace('{{PX1}}', str(h))
+            .replace('{{PX2}}', str(2 * h))
+            .replace('{{PX3}}', str(3 * h))
+            # A deliberately BAD size, to show what falls between the rungs,
+            # and what one rung lands on at a 150% scale factor.
+            .replace('{{PX_BLUR}}', str(h + 3))
+            .replace('{{PX_DEV}}', str(h * 3 // 2))
             .replace('{{REPO}}', repo or ''))
     open(os.path.join(out, 'index.html'), 'w', encoding='utf-8').write(page)
-
-    # Pages serves this as a plain directory; without it Jekyll would eat any
-    # path starting with an underscore and add a build step nobody asked for.
-    open(os.path.join(out, '.nojekyll'), 'w', encoding='utf-8').close()
 
     listed = len(data['cps'])
     print(f'{out}: {len(covered)} glyphs x {len(data["faces"])} faces, '
           f'{listed} codepoints listed across {len(data["blocks"])} blocks, '
           f'{hand} drawn here')
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('size', nargs='*', default=['7x14'])
+    ap.add_argument('--out', default=os.path.join('build', 'site'))
+    ap.add_argument('--repo', default=None)
+    ap.add_argument('--branch', default='main')
+    a = ap.parse_args()
+
+    repo = a.repo if a.repo is not None else default_repo()
+    if not repo:
+        print('build-site: no GitHub repository known, so the "open a pull '
+              'request" links are disabled.  Pass --repo owner/name.',
+              file=sys.stderr)
+
+    sizes = a.size or ['7x14']
+    if len(set(sizes)) != len(sizes):
+        raise SystemExit(f'a size is named twice: {sizes}')
+
+    # Read once and handed to every size: the ghost fonts are vendored per
+    # repository, not per size, and re-reading their cmaps per size would be
+    # the same work done twice.
+    plan = hint_plan()
+
+    root = a.out
+    shutil.rmtree(root, ignore_errors=True)
+    for size in sizes:
+        build_one(size, os.path.join(root, size), repo, a.branch, plan, sizes)
+    write_root(root, sizes)
+    print(f'{root}: {len(sizes)} size(s) -- {", ".join(sizes)}; '
+          f'the root redirects to {sizes[0]}')
 
 
 main()

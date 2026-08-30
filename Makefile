@@ -1,4 +1,4 @@
-# Smalti 7x14 -- Tamzen 7x14 with 813 extra glyphs, in four faces.
+# Smalti -- Tamzen with 817 extra glyphs, in four faces at each of $(SIZES).
 #
 #   make            build all four faces into build/, .bdf and .ttf
 #   make outlines   the .ttf faces only
@@ -14,7 +14,8 @@
 #   make check-version   the version in VERSION, read back out of every face
 #   make headers    rewrite every drawing into its normal form
 #   make index      regenerate docs/coverage.md
-#   make site       build the specimen site into build/site/
+#   make site       build the specimen site into build/site/ -- one page per
+#                   size, under its own name, with a redirect at the root
 #   make check-site prove the site ships this repository's drawings
 #   make packages   build the .deb and the .rpm into build/
 #   make deb        build the .deb only
@@ -47,11 +48,14 @@ SIZES := 7x14 8x16
 FANOUT := all check check-sources check-outlines check-version \
           outlines woff2 install preview show clean
 
-# Targets that are not per-size. Some are genuinely size-independent (venv,
-# headers); others span sizes (site, index, packages) but are still
-# single-size today. Both kinds re-enter once, with the first size, so nothing
-# that worked before this change stops working. Tasks 11 and 12 promote the
-# cross-size ones to read every size.
+# Targets that are not per-size and are size-INDEPENDENT: venv, headers and
+# the rest do the same work whatever $(SIZE) says.  They re-enter once, with
+# the first size, purely so the recipe below them has a SIZE to read.
+#
+# The cross-size targets are NOT here.  packages, site, check-site and index
+# each read every size themselves and run once; they used to sit in PASSTHRU
+# and were silently single-size, which is how `make site` came to publish only
+# 7x14 while the repository built two sizes.
 #
 # clean is deliberately NOT here even though sweeping build/ is itself
 # size-independent work: its recipe opens with `rm -f $(BDF) $(TTF)
@@ -61,8 +65,7 @@ FANOUT := all check check-sources check-outlines check-version \
 # byte-reproducibility is checked by a clean-rebuild-and-compare: artifacts
 # that survive "clean" let a rebuild compare against itself.  clean is in
 # FANOUT so every size is actually swept.
-PASSTHRU := venv headers index print-dest restore \
-            site check-site serve-site watch
+PASSTHRU := venv headers print-dest restore watch
 
 ifndef SIZE
 .PHONY: $(FANOUT) $(PASSTHRU)
@@ -89,6 +92,32 @@ $(PASSTHRU):
 deb rpm packages check-packages:
 	@$(MAKE) --no-print-directory all
 	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) $@
+
+# The specimen site, the coverage index and the serve/preview helpers all
+# span every size and run ONCE.  Same shape as packages above: fan `woff2` out
+# first so every size's web fonts exist, then run the cross-size tool with the
+# whole of $(SIZES) on its command line.
+#
+# `index` needs no fonts at all -- glyph-index.py reads the drawings -- so it
+# does not fan anything out.
+.PHONY: site check-site serve-site index
+site:
+	@$(MAKE) --no-print-directory woff2
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) site
+
+check-site:
+	@$(MAKE) --no-print-directory woff2
+	@for s in $(SIZES); do \
+	    echo "==> check-site [$$s]"; \
+	    $(MAKE) --no-print-directory SIZE=$$s check-site || exit 1; \
+	done
+
+serve-site:
+	@$(MAKE) --no-print-directory woff2
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) serve-site
+
+index:
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) index
 
 # The 7x14-against-8x16 review chart (design doc section 6).  Spans both
 # sizes and runs once, so it lives here rather than in FANOUT or PASSTHRU.
@@ -367,17 +396,23 @@ SITE_ARGS   := --branch $(SITE_BRANCH) $(if $(SITE_REPO),--repo $(SITE_REPO),)
 
 SITESRC := site/index.html site/smalti.css site/smalti.js
 
+# Every size in one run, into $(SITE)/<size>/ with a redirect at the root.
+# The prerequisite is the FIRST size's faces only, because `site` above has
+# already fanned `woff2` out across every size before reaching this: making
+# every size's .woff2 a prerequisite here would need SIZE-scoped variables
+# from outside their own recursion, which is exactly the bug that shipped a
+# package listing 8x16 fonts it could not build.
 site: $(SITE)/index.html
 $(SITE)/index.html: $(WOFF2) $(TTF) $(SITESRC) tools/build-site.py \
                     tools/glyphstore.py | $(VENV)/.stamp
-	$(PY) tools/build-site.py $(SITE_ARGS) --out $(SITE) $(SIZE)
+	$(PY) tools/build-site.py $(SITE_ARGS) --out $(SITE) $(SIZES)
 
 # The site ships a copy of every drawing.  A stale copy would hand a
 # contributor a wrong file and turn their first pull request into a spurious
 # diff, so every glyph, in every face, is compared back against the store --
 # including the exact bytes the in-page editor would emit.
 check-site: site
-	$(PY) tools/check-site.py --site $(SITE) $(SIZE)
+	$(PY) tools/check-site.py --site $(SITE)/$(SIZE) $(SIZE)
 
 # fetch() refuses file:// URLs, so the site has to be served to be looked at.
 serve-site: site

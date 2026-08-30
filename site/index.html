@@ -20,6 +20,7 @@
     <a href="#specimen">specimen</a>
     <a href="#coverage">coverage</a>
     <a href="#browse">every&nbsp;glyph</a>
+    {{SIZENAV}}
     <a class="out" href="https://github.com/{{REPO}}">source</a>
   </nav>
 </header>
@@ -50,16 +51,17 @@
   <h2 class="head"><span class="eyebrow px">01</span> Specimen</h2>
   <p class="prose">
     Everything below is the real font, loaded as a web font and rendered as
-    text by your browser. It is set at 14, 28 and 42&nbsp;px — the cell height
-    and its multiples — because that is where the outlines land exactly on the
-    pixel grid and reproduce the bitmap with no antialiasing at all. At
-    17&nbsp;px it would blur, which is why no size in between is offered.
+    text by your browser. It is set at {{PX1}}, {{PX2}} and {{PX3}}&nbsp;px —
+    the cell height and its multiples — because that is where the outlines land
+    exactly on the pixel grid and reproduce the bitmap with no antialiasing at
+    all. At {{PX_BLUR}}&nbsp;px it would blur, which is why no size in between
+    is offered.
   </p>
   <div id="specimen-faces" class="specimens"></div>
   <p class="prose note">
     If these look soft, your display is running at a fractional scale factor:
-    14 CSS pixels then land on 21 device pixels and no outline can be exact at
-    a half-pixel. It is crisp at 100%, 200% and 300%.
+    {{PX1}} CSS pixels then land on {{PX_DEV}} device pixels and no outline can
+    be exact at a half-pixel. It is crisp at 100%, 200% and 300%.
   </p>
 </section>
 
@@ -120,9 +122,9 @@
     </label>
     <fieldset class="seg">
       <legend class="sr-only">Size</legend>
-      <label><input type="radio" name="zoom" value="1"><span>14px</span></label>
-      <label><input type="radio" name="zoom" value="2" checked><span>28px</span></label>
-      <label><input type="radio" name="zoom" value="3"><span>42px</span></label>
+      <label><input type="radio" name="zoom" value="1"><span>{{PX1}}px</span></label>
+      <label><input type="radio" name="zoom" value="2" checked><span>{{PX2}}px</span></label>
+      <label><input type="radio" name="zoom" value="3"><span>{{PX3}}px</span></label>
     </fieldset>
     <fieldset class="seg">
       <legend class="sr-only">Show</legend>

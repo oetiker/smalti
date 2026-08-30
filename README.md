@@ -2,14 +2,15 @@
 
 *Smalti* are the small glass tiles a mosaic is made from.  A pixel is one.
 
-Upstream Tamzen 7x14 has **189 glyphs and nothing above U+00FF**: no `§`, no
-`¶`, no dashes, no arrows, no triangles, no `…`.  Smalti adds 815 more and
-draws two faces upstream never had, so each of its **four faces carries 1004
-glyphs**:
+Upstream Tamzen has **189 glyphs and nothing above U+00FF** — the same 189 at
+every cell size: no `§`, no `¶`, no dashes, no arrows, no triangles, no `…`.
+Smalti adds 817 more, draws two faces upstream never had, and does all of it
+at **two cell sizes**, 7x14 and 8x16, so each of its **eight faces carries
+1006 glyphs**:
 
 | face | how it is made |
 |---|---|
-| Regular | upstream, plus the drawings in `glyphs/7x14/regular/` |
+| Regular | upstream, plus the drawings in `glyphs/<size>/regular/` |
 | Bold | upstream's own bold, plus emboldened drawings |
 | Oblique | the regular face sheared one column each way |
 | Bold oblique | sheared first, emboldened second |
@@ -48,7 +49,8 @@ cell size is a separate design with its own metrics, so if they all claimed
 the family name `Smalti` a font matcher would pick between them arbitrarily.
 That is the bug upstream has, and the reason Tamzen's own notes say to keep
 only one size installed.  With the size in the name, every size can be
-installed at once.
+installed at once — and `Smalti 7x14` and `Smalti 8x16` are both in the same
+`.deb` and the same `.rpm`, so installing one installs both.
 
 ## Build
 
@@ -138,7 +140,8 @@ A release flow that bumps a number nothing reads is worthless.
 
 ## Making it look right
 
-Smalti is drawn at 7x14 pixels.  A rasteriser reproduces those pixels exactly
+Smalti is drawn at 7x14 and at 8x16 pixels.  A rasteriser reproduces those
+pixels exactly
 only if you tell it the right size and the right kind of antialiasing.  Get
 either wrong and you get a font that is technically correct and visually
 mush.  There are two rules, and a third thing that is not a rule at all.
@@ -146,9 +149,11 @@ mush.  There are two rules, and a third thing that is not a rule at all.
 ### 1. Use an exact size, or a whole multiple of it
 
 The em is a whole number of pixels — `upem = cell height * 64`, so 7x14 gets
-`upem = 896` and one pixel is exactly 64 units.  At **14 px** every pixel
-edge lands on a device pixel boundary, so coverage is 0 or 255 everywhere.
-The mapping is linear, so **28 px** and **42 px** are exact too.
+`upem = 896` and 8x16 gets `upem = 1024`; one pixel is exactly 64 units at
+both.  **The exact size is the cell height.**  At **14 px** on 7x14 every
+pixel edge lands on a device pixel boundary, so coverage is 0 or 255
+everywhere.  The mapping is linear, so **28 px** and **42 px** are exact too
+— and **16, 32 and 48 px** are those same three rungs for 8x16.
 
 Anything in between is not.  At 20 px a one-pixel stem is 1.43 device pixels,
 and the 0.43 has to go somewhere: it becomes grey.
@@ -228,6 +233,10 @@ time the symptom was the font looking wrong rather than the build failing.
 
 ### wezterm, all together
 
+Both sizes install together, as the family names `Smalti 7x14` and
+`Smalti 8x16`.  What follows is written for 7x14; for 8x16 change the family
+name and pick a `font_size` that lands on 16 px, which is `12.0` at 96 dpi.
+
 ```lua
 config.font_dirs = { os.getenv 'HOME' .. '/.local/share/fonts/smalti-ttf' }
 config.font = wezterm.font_with_fallback {
@@ -265,8 +274,9 @@ The two rules are the same everywhere; only the spelling changes.
 * **foot** — `font=Smalti 7x14:size=10.5`, and `dpi-aware=no` if you want
   points read against 96 dpi rather than the real display dpi.
 * **A browser or an editor** — set the size in **`px`**, not `pt`, `em` or a
-  percentage, and use 14, 28 or 42.  The specimen site offers exactly those
-  three sizes and nothing in between, for this reason.
+  percentage, and use the cell height or a whole multiple of it: 14, 28 or 42
+  for 7x14, and 16, 32 or 48 for 8x16.  Each specimen page offers exactly its
+  own three sizes and nothing in between, for this reason.
 
 ### The font is installed and the terminal cannot see it
 
@@ -297,10 +307,11 @@ The outline is the **exact union of the lit pixels**, at integer coordinates.
 
 **The em is a whole number of pixels.**  `upem = cell_height * 64`, so one
 pixel is exactly 64 units and 7x14 gets `upem = 896`, advance 448, ascent
-704, descent 192.  At 14 ppem a pixel edge at unit *k*·64 lands on device
-pixel *k* with no rounding; the mapping is linear, so 28 px and 42 px are
-exact too.  `make check` rasterises all four faces at 14, 28 and 42 ppem and
-finds **no** pixel different from the bitmap and **no** antialiased pixel.
+704, descent 192; 8x16 gets `upem = 1024` and advance 512.  At 14 ppem a
+pixel edge at unit *k*·64 lands on device pixel *k* with no rounding; the
+mapping is linear, so 28 px and 42 px are exact too.  `make check` rasterises
+every face of every size at 1x, 2x and 3x its own cell height and finds
+**no** pixel different from the bitmap and **no** antialiased pixel.
 Sizes between multiples do blur — that is the one thing an outline gives up,
 and wezterm only ever asks for an exact ppem anyway.
 
@@ -861,8 +872,9 @@ else in the block is hand-drawn.  The whole block falls inside `embolden.py`'s
 keep-as-is range, so bold and regular are identical here -- widening a
 dingbat makes it lopsided, not bold.
 
-The three geometry bands are also recorded in `glyphs/7x14/README.md`, where
-someone drawing a new dingbat will actually look.
+The three geometry bands are also recorded in each size's own
+`glyphs/<size>/README.md`, where someone drawing a new dingbat will actually
+look.
 
 ## Known gaps
 
@@ -870,12 +882,13 @@ someone drawing a new dingbat will actually look.
 * **Miscellaneous Symbols** U+2600..U+26FF has only `★` and `☆`.
 * **Miscellaneous Technical** U+2300..U+23FF has only what the terminal-UI
   glyphs needed.
-* Only the **7x14** size is drawn.  Upstream ships 5x9, 6x12, 7x13, 8x15,
-  8x16 and 10x20 as well.  The layout is multi-size from day one and populated
-  with 7x14 only: adding `glyphs/6x12/regular/` costs nothing now and would be
-  a brutal retrofit once other people have forks and open pull requests.
-  Unlike Tamzen, several Smalti sizes *can* be installed side by side once
-  they exist, because the size is part of the family name.
+* **Six of upstream's eight sizes are still undrawn.**  Smalti draws 7x14 and
+  8x16; upstream ships 5x9, 6x12, 7x13, 8x15 and 10x20 as well.  The layout
+  was multi-size from day one, and the second size is what proved it: adding
+  `glyphs/6x12/regular/` costs nothing now and would have been a brutal
+  retrofit once other people had forks and open pull requests.  Unlike
+  Tamzen, Smalti's sizes *can* be installed side by side, because the size is
+  part of the family name.
 * **Nothing proves a `.woff2` decompresses to the same outlines as the `.ttf`
   it came from.**  Every other artefact is checked against the drawings; this
   one is taken on trust from `fontTools`.  The build workflow emits a standing
