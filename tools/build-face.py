@@ -82,13 +82,47 @@ def slant(head):
     return head
 
 
-def render(cp, bm, w, h, swidth):
+def font_yoff(head):
+    """The font's own descent, read from its FONTBOUNDINGBOX header line.
+
+    Every glyph BBX in this font shares the font's descent -- upstream's own
+    glyphs do (see glyphstore.Bdf), and generated/hand glyphs must match them
+    to sit on the same baseline.  7x14's descent is -3, 8x16's is -4; reading
+    it from the header rather than a literal is what makes render() correct at
+    both sizes without a second, size-keyed definition of the same number.
+    """
+    m = re.search(r'^FONTBOUNDINGBOX \d+ \d+ -?\d+ (-?\d+)$', head, re.M)
+    if not m:
+        sys.exit('build-face.py: no FONTBOUNDINGBOX in the header')
+    return int(m.group(1))
+
+
+def fix_bbx_height(pre, rows):
+    """Rewrite a donor's BBX height field to match the bitmap it precedes.
+
+    A slanted face borrows its per-glyph metadata -- BBX included -- from the
+    upright face it leans (see THE DONOR docstring above).  For most glyphs
+    that metadata already matches: the donor's BBX height and the resolved
+    bitmap's row count are both h.  But sixteen letters at 8x16 (O Q a b d g
+    h l m n p q r u w y) get upstream's cap-line overshoot, one row taller
+    than the cell -- and glyphstore.resolve() crops that overshoot row back
+    off for anything that is not the regular/bold layer verbatim (see
+    glyphstore.resolve(), "trim the overshoot row here").  The donor's BBX
+    still says 17 for those; the italic bitmap it is paired with here has 16
+    rows.  A BBX that disagrees with its own BITMAP block is invalid, so the
+    height is rewritten to the row count actually being written -- a no-op
+    for the glyphs where the two already agreed.
+    """
+    return re.sub(r'^(BBX \d+) \d+ ', rf'\g<1> {rows} ', pre, count=1, flags=re.M)
+
+
+def render(cp, bm, w, h, swidth, yoff):
     """A glyph block for art that has no upstream block to inherit from."""
     return (f'STARTCHAR U+{cp:04X}\n'
             f'ENCODING {cp}\n'
             f'SWIDTH {swidth}\n'
             f'DWIDTH {w} 0\n'
-            f'BBX {w} {h} 0 -3\n'
+            f'BBX {w} {h} 0 {yoff}\n'
             f'BITMAP\n' + '\n'.join(gs.hexrows(bm, w)) + '\nENDCHAR\n')
 
 
@@ -118,6 +152,7 @@ def main():
         meta, swidth = {}, base.swidth
         expect = None
 
+    yoff = font_yoff(head)
     resolved = gs.resolve(size, face)
     if not resolved:
         sys.exit(f'build-face.py: no glyphs resolved for {size}/{face}')
@@ -136,10 +171,11 @@ def main():
         if layer == 'upstream':
             blocks[cp] = base.blocks[cp]
         elif cp in meta:
-            blocks[cp] = ('STARTCHAR ' + meta[cp] + 'BITMAP\n'
+            pre = fix_bbx_height(meta[cp], len(bm))
+            blocks[cp] = ('STARTCHAR ' + pre + 'BITMAP\n'
                           + '\n'.join(gs.hexrows(bm, w)) + '\nENDCHAR\n')
         else:
-            blocks[cp] = render(cp, bm, w, h, swidth)
+            blocks[cp] = render(cp, bm, w, h, swidth, yoff)
 
     head = re.sub(r'^CHARS \d+$', f'CHARS {len(blocks)}', head, flags=re.M)
     out = [head + '\n']

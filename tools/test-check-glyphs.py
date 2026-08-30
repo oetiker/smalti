@@ -71,7 +71,23 @@ def run(d):
     return r.returncode, r.stdout + r.stderr
 
 
-def drawing(d, cp=0x00A7):
+def drawing(d, cp=None):
+    """Path to a hand-drawn regular glyph file, to mutate for a test case.
+
+    Not a hardcoded codepoint: 0x00A7 exists at 7x14 (this test's original
+    size) but the set of hand-drawn regular glyphs differs by size -- 8x16
+    currently draws only U+00B4.  Picking the lowest codepoint actually
+    present keeps this working at any size without a per-size lookup table,
+    the same fix this whole task made to render-check.py's --sizes default.
+    """
+    if cp is None:
+        regular_dir = os.path.join(d, 'glyphs', SIZE, 'regular')
+        cps = sorted(gs.cp_of(f) for f in os.listdir(regular_dir)
+                     if gs.cp_of(f) is not None)
+        if not cps:
+            sys.exit(f'test-check-glyphs.py: no hand-drawn glyphs at {SIZE} '
+                     f'to fault-inject against')
+        cp = cps[0]
     return os.path.join(d, 'glyphs', SIZE, 'regular', gs.filename(cp))
 
 

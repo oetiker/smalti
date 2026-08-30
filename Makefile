@@ -1,4 +1,4 @@
-# Smalti 7x14 -- Tamzen 7x14 with 813 extra glyphs, in four faces.
+# Smalti -- Tamzen with 817 extra glyphs, in four faces at each of $(SIZES).
 #
 #   make            build all four faces into build/, .bdf and .ttf
 #   make outlines   the .ttf faces only
@@ -14,7 +14,8 @@
 #   make check-version   the version in VERSION, read back out of every face
 #   make headers    rewrite every drawing into its normal form
 #   make index      regenerate docs/coverage.md
-#   make site       build the specimen site into build/site/
+#   make site       build the specimen site into build/site/ -- one page per
+#                   size, under its own name, with a redirect at the root
 #   make check-site prove the site ships this repository's drawings
 #   make packages   build the .deb and the .rpm into build/
 #   make deb        build the .deb only
@@ -36,7 +37,101 @@
 # and `cpio` (Debian/Ubuntu: dpkg, rpm, cpio) to open the built packages with
 # the package managers' own tools.
 
-SIZE  := 7x14
+# Every size this repository builds.  With no SIZE on the command line the
+# targets below re-enter make once per size; with SIZE set, this file is the
+# single-size build it has always been.
+SIZES := 7x14 8x16
+
+# Targets that mean "do this for every size".  Targets that span sizes --
+# packages, site, index, compare -- are NOT here; they run once and read all
+# sizes themselves.
+FANOUT := all check check-sources check-outlines check-version \
+          outlines woff2 install preview show clean
+
+# Targets that are not per-size and are size-INDEPENDENT: venv, headers and
+# the rest do the same work whatever $(SIZE) says.  They re-enter once, with
+# the first size, purely so the recipe below them has a SIZE to read.
+#
+# The cross-size targets are NOT here.  packages, site, check-site and index
+# each read every size themselves and run once; they used to sit in PASSTHRU
+# and were silently single-size, which is how `make site` came to publish only
+# 7x14 while the repository built two sizes.
+#
+# clean is deliberately NOT here even though sweeping build/ is itself
+# size-independent work: its recipe opens with `rm -f $(BDF) $(TTF)
+# $(WOFF2)`, which are SIZE-scoped variables, so as a passthru it only ever
+# cleaned the first size in $(SIZES) and left every other size's artifacts
+# sitting in build/.  That is dangerous here specifically because
+# byte-reproducibility is checked by a clean-rebuild-and-compare: artifacts
+# that survive "clean" let a rebuild compare against itself.  clean is in
+# FANOUT so every size is actually swept.
+PASSTHRU := venv headers print-dest print-sizes restore watch
+
+ifndef SIZE
+.PHONY: $(FANOUT) $(PASSTHRU)
+$(FANOUT):
+	@for s in $(SIZES); do \
+	    echo "==> $@ [$$s]"; \
+	    $(MAKE) --no-print-directory SIZE=$$s $@ || exit 1; \
+	done
+
+$(PASSTHRU):
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) $@
+
+# Packaging spans every cell size -- one .deb and one .rpm hold all of them --
+# so it cannot be a plain PASSTHRU.  PASSTHRU recurses once under the FIRST
+# size, and the rules that build another size's .ttf exist only inside that
+# size's own recursion, so the 8x16 faces were embedded in the package without
+# ever being prerequisites of it: a clean `make packages` reached nfpm and died
+# with `Matching "./build/Smalti8x16-Regular.ttf": file does not exist`.
+#
+# Fanning out `all` first is what actually builds every size, and it is also
+# what keeps the staleness invariant true across sizes -- a stale face at ANY
+# size is rebuilt before nfpm runs.  Same shape as `compare` below.
+.PHONY: deb rpm packages check-packages
+deb rpm packages check-packages:
+	@$(MAKE) --no-print-directory all
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) $@
+
+# The specimen site, the coverage index and the serve/preview helpers all
+# span every size and run ONCE.  Same shape as packages above: fan `woff2` out
+# first so every size's web fonts exist, then run the cross-size tool with the
+# whole of $(SIZES) on its command line.
+#
+# `index` needs no fonts at all -- glyph-index.py reads the drawings -- so it
+# does not fan anything out.
+.PHONY: site check-site serve-site index
+site:
+	@$(MAKE) --no-print-directory woff2
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) site
+
+check-site:
+	@$(MAKE) --no-print-directory woff2
+	@for s in $(SIZES); do \
+	    echo "==> check-site [$$s]"; \
+	    $(MAKE) --no-print-directory SIZE=$$s check-site || exit 1; \
+	done
+
+serve-site:
+	@$(MAKE) --no-print-directory woff2
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) serve-site
+
+index:
+	@$(MAKE) --no-print-directory SIZE=$(firstword $(SIZES)) index
+
+# The 7x14-against-8x16 review chart (design doc section 6).  Spans both
+# sizes and runs once, so it lives here rather than in FANOUT or PASSTHRU.
+#
+# Not a check.  `make check` proves things; `make compare` shows things.  It
+# is never a prerequisite of check and it gates nothing.
+.PHONY: compare
+compare:
+	@$(MAKE) --no-print-directory woff2
+	python3 tools/build-compare.py
+	@echo "open build/compare/index.html"
+else
+
+SIZE ?= 7x14
 FONT  := Smalti$(SIZE)
 
 # Anywhere fontconfig scans works.  The `-ttf` suffix is history -- it dates
@@ -70,12 +165,15 @@ GENTOOL := tools/glyphstore.py tools/accents.py tools/weight.py \
 
 FACES := Regular Bold Italic BoldItalic
 TTF   := $(FACES:%=build/$(FONT)-%.ttf)
+# Every size's .ttf, because one package holds them all.  $(TTF) is only this
+# recursion's size and is the wrong prerequisite list for a package.
+PKG_TTF := $(foreach s,$(SIZES),$(FACES:%=build/Smalti$(s)-%.ttf))
 WOFF2 := $(FACES:%=build/$(FONT)-%.woff2)
 BDF   := $(FACES:%=build/$(FONT)-%.bdf)
 
 .PHONY: all install preview show restore clean watch headers index \
         check check-sources check-outlines check-version venv outlines woff2 \
-        print-dest \
+        print-dest print-sizes \
         site check-site serve-site \
         deb rpm packages check-packages
 
@@ -89,7 +187,14 @@ all: $(BDF) outlines
 # STEPS are the rows where the lean drops a column: above the first the glyph
 # moves right, below the last it moves left.  More steps means more lean.
 #   make STEPS=4,7,10 install
-STEPS := 5,8
+#
+# Per-size, because the two step rows are a visual judgement call at each
+# cell height, not something derivable from CELL_W or CELL_H alone.  7x14 is
+# settled; 8x16 is NOT.  STEPS ?= keeps the `make STEPS=... install` override
+# on the command line working as before.
+STEPS_7x14 := 5,8
+STEPS_8x16 := 6,9  # owner's choice, 2026-08-25 -- see docs/superpowers/specs/2026-08-25-8x16-design.md §11
+STEPS      ?= $(STEPS_$(SIZE))
 
 # One ordered recipe, because the generators feed each other: the bold face is
 # emboldened from the RESOLVED regular face, the italic is sheared from it, and
@@ -151,6 +256,8 @@ check-version: all
 # $(PY), not python3: both of these now read the built .ttf with fontTools,
 # which lives in the venv.  Nothing else about them changed.
 check-sources: all
+	$(PY) tools/test-glyphstore.py
+	$(PY) tools/test-weight.py
 	$(PY) tools/test-check-glyphs.py $(SIZE)
 	$(PY) tools/check-glyphs.py $(SIZE)
 
@@ -198,6 +305,12 @@ watch:
 # workflow.  A second copy of DEST is a second thing to forget when it moves,
 # and it has moved once already.
 print-dest: ; @echo $(DEST)
+
+# And it asks which sizes exist, for the same reason.  The build workflow used
+# to assert "4 .ttf faces built"; adding 8x16 made that 8 and the assertion
+# went red on a correct build.  A count derived from $(SIZES) cannot go stale
+# when the seventh size lands.
+print-sizes: ; @echo $(SIZES)
 
 show: ; @tools/show-new.sh
 
@@ -289,17 +402,23 @@ SITE_ARGS   := --branch $(SITE_BRANCH) $(if $(SITE_REPO),--repo $(SITE_REPO),)
 
 SITESRC := site/index.html site/smalti.css site/smalti.js
 
+# Every size in one run, into $(SITE)/<size>/ with a redirect at the root.
+# The prerequisite is the FIRST size's faces only, because `site` above has
+# already fanned `woff2` out across every size before reaching this: making
+# every size's .woff2 a prerequisite here would need SIZE-scoped variables
+# from outside their own recursion, which is exactly the bug that shipped a
+# package listing 8x16 fonts it could not build.
 site: $(SITE)/index.html
 $(SITE)/index.html: $(WOFF2) $(TTF) $(SITESRC) tools/build-site.py \
                     tools/glyphstore.py | $(VENV)/.stamp
-	$(PY) tools/build-site.py $(SITE_ARGS) --out $(SITE) $(SIZE)
+	$(PY) tools/build-site.py $(SITE_ARGS) --out $(SITE) $(SIZES)
 
 # The site ships a copy of every drawing.  A stale copy would hand a
 # contributor a wrong file and turn their first pull request into a spurious
 # diff, so every glyph, in every face, is compared back against the store --
 # including the exact bytes the in-page editor would emit.
 check-site: site
-	$(PY) tools/check-site.py --site $(SITE) $(SIZE)
+	$(PY) tools/check-site.py --site $(SITE)/$(SIZE) $(SIZE)
 
 # fetch() refuses file:// URLs, so the site has to be served to be looked at.
 serve-site: site
@@ -356,15 +475,17 @@ packages: $(DEB) $(RPM)
 deb: $(DEB)
 rpm: $(RPM)
 
-# The .ttf files are prerequisites, so a package can never be built from a
-# stale face.  nfpm is order-only: re-downloading it must not rebuild a
-# package that is otherwise current.
-$(DEB): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
+# EVERY size's .ttf files are prerequisites, so a package can never be built
+# from a stale face at any size -- see the PKG_TTF note above, and the
+# top-level packaging rule that fans `all` out before recursing here.  nfpm is
+# order-only: re-downloading it must not rebuild a package that is otherwise
+# current.
+$(DEB): $(PKG_TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
 	PKG_NAME=fonts-smalti PKG_ARCH=all PKG_VERSION=$(PKG_VERSION) \
 	PKG_FONTDIR=/usr/share/fonts/truetype/smalti PKG_MTIME=$(PKG_MTIME) \
 	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p deb -t $@
 
-$(RPM): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
+$(RPM): $(PKG_TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
 	PKG_NAME=smalti-fonts PKG_ARCH=noarch PKG_VERSION=$(PKG_VERSION) \
 	PKG_FONTDIR=/usr/share/fonts/smalti PKG_MTIME=$(PKG_MTIME) \
 	envsubst < packaging/nfpm.yaml | $(NFPM) package -f /dev/stdin -p rpm -t $@
@@ -375,3 +496,5 @@ $(RPM): $(TTF) packaging/nfpm.yaml README.md LICENSE.tamzen VERSION | $(NFPM)
 check-packages: packages
 	$(PY) tools/test-check-packages.py
 	$(PY) tools/check-packages.py --deb $(DEB) --rpm $(RPM)
+
+endif

@@ -316,7 +316,7 @@ class Bdf:
         self.w, self.h = int(m.group(1)), int(m.group(2))
         self.swidth = re.search(r'^SWIDTH (\S+ \S+)$', text, re.M).group(1)
         self.head, _, rest = text.partition('\nSTARTCHAR ')
-        self.blocks, self.pre, self.bitmaps = {}, {}, {}
+        self.blocks, self.pre, self.bitmaps, self.heights = {}, {}, {}, {}
         for chunk in ('STARTCHAR ' + rest).split('STARTCHAR ')[1:]:
             body, _, _tail = chunk.partition('ENDCHAR')
             cp = int(re.search(r'^ENCODING (-?\d+)', body, re.M).group(1))
@@ -325,6 +325,41 @@ class Bdf:
             self.pre[cp] = head
             self.bitmaps[cp] = [int(x, 16) for x in bits.strip().split('\n')] \
                 if bits.strip() else []
+            # The glyph's OWN BBX height, which need not equal self.h: a few
+            # upstream letters draw one row taller than the cell (see
+            # resolve() below).  Kept per-glyph so a truncated or otherwise
+            # corrupt BITMAP block can be told apart from that deliberate
+            # overshoot.
+            self.heights[cp] = int(re.search(r'^BBX \d+ (\d+) ', head, re.M)
+                                    .group(1))
+
+    def cell_bitmaps(self, h=None):
+        """`bitmaps` trimmed to one uniform h-row grid, overshoot removed.
+
+        `self.bitmaps` is what the file literally holds, which is NOT always
+        h rows: upstream draws a handful of letters one row taller than the
+        cell (O Q a b d g h l m n p q r u w y at 8x16), always on top -- their
+        BBX y-offset matches FONTBOUNDINGBOX's, only the height differs.
+
+        Every consumer that works in the uniform grid -- resolve(), and
+        embolden.py reading the bold base -- must go through here.  Reading
+        the raw `.bitmaps` attribute instead silently yields a 17-row glyph,
+        and the two names are one character apart: `gs.bitmaps(size, face)`
+        is trimmed, `gs.Bdf(path).bitmaps` is not.  embolden.py had that
+        exact bug, dormant until the first Greek TWIN of an overshoot letter
+        (U+039F from `O`, U+03BF from `o`) was drawn and it wrote a 17-row
+        file that read_glyph() then rejected.
+        """
+        h = self.h if h is None else h
+        out = {}
+        for cp, bm in self.bitmaps.items():
+            declared = self.heights[cp]
+            if len(bm) != declared:
+                raise GlyphError(f'{self.path}: U+{cp:04X} declares BBX '
+                                 f'height {declared} but its BITMAP has '
+                                 f'{len(bm)} rows -- corrupt glyph block')
+            out[cp] = bm[declared - h:] if declared > h else bm
+        return out
 
 
 def upstream_bdf(size, face):
@@ -367,7 +402,11 @@ def resolve(size, face):
         out[cp] = ('gen', pack(rows, w))
     path = upstream_bdf(size, face)
     if path and os.path.exists(path):
-        for cp, bm in Bdf(path).bitmaps.items():
+        # cell_bitmaps() trims upstream's deliberate one-row cap overshoot
+        # so this layer lands in the same uniform h-row grid as gen and hand.
+        # This does not touch what ships: build-face.py copies upstream's own
+        # BBX block verbatim for any glyph this layer wins, overshoot included.
+        for cp, bm in Bdf(path).cell_bitmaps(h).items():
             out[cp] = ('upstream', bm)
     for cp, rows in read_dir(hand_dir(size, face), w, h).items():
         out[cp] = ('hand', pack(rows, w))

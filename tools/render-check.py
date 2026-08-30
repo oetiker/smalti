@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rasterise a traced .ttf and prove it is pixel-identical to the strike.
 
-Usage: render-check.py FACE.bdf FACE.ttf [--sizes 14,28,42]
+Usage: render-check.py FACE.bdf FACE.ttf [--sizes H,2H,3H]
 
 check-outlines.py proves the OUTLINE is the right shape.  This proves the
 claim that shape was chosen for: because upem is the cell height times 64,
@@ -9,6 +9,10 @@ at a ppem equal to the cell height -- and at every integer multiple of it --
 FreeType lands every pixel edge on a device pixel boundary, so the rendered
 coverage is 0 or 255 everywhere and matches the bitmap exactly.  No grey, no
 rounding, nothing to hint.
+
+With no --sizes, the cell height H is read from the BDF's own FONT_ASCENT +
+FONT_DESCENT and the check runs at H, 2H and 3H -- so it works unmodified at
+any cell size, not just the one it was first written against.
 
 Needs freetype-py; `make venv` installs it.
 """
@@ -47,17 +51,23 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("bdf")
     ap.add_argument("ttf")
-    ap.add_argument("--sizes", default="14,28,42")
+    ap.add_argument("--sizes", default=None,
+                     help="comma-separated ppem list; default H,2H,3H for "
+                          "this BDF's own cell height H")
     args = ap.parse_args()
 
     import freetype
     props, glyphs = trace_outline.parse_bdf(args.bdf)
     cell_w = int(props["QUAD_WIDTH"])
+    cell_h = int(props["FONT_ASCENT"]) + int(props["FONT_DESCENT"])
     face = freetype.Face(args.ttf)
 
+    sizes = args.sizes if args.sizes is not None else \
+        f"{cell_h},{2 * cell_h},{3 * cell_h}"
+
     bad = 0
-    for ppem in (int(s) for s in args.sizes.split(",")):
-        s = ppem // (int(props["FONT_ASCENT"]) + int(props["FONT_DESCENT"]))
+    for ppem in (int(s) for s in sizes.split(",")):
+        s = ppem // cell_h
         mism = greyed = advbad = 0
         for g in glyphs:
             if not g.codepoint:                 # skip U+0000 / unencoded
