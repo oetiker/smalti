@@ -65,7 +65,7 @@ FANOUT := all check check-sources check-outlines check-version \
 # byte-reproducibility is checked by a clean-rebuild-and-compare: artifacts
 # that survive "clean" let a rebuild compare against itself.  clean is in
 # FANOUT so every size is actually swept.
-PASSTHRU := venv headers print-dest restore watch
+PASSTHRU := venv headers print-dest print-sizes restore watch
 
 ifndef SIZE
 .PHONY: $(FANOUT) $(PASSTHRU)
@@ -173,7 +173,7 @@ BDF   := $(FACES:%=build/$(FONT)-%.bdf)
 
 .PHONY: all install preview show restore clean watch headers index \
         check check-sources check-outlines check-version venv outlines woff2 \
-        print-dest \
+        print-dest print-sizes \
         site check-site serve-site \
         deb rpm packages check-packages
 
@@ -305,6 +305,12 @@ watch:
 # workflow.  A second copy of DEST is a second thing to forget when it moves,
 # and it has moved once already.
 print-dest: ; @echo $(DEST)
+
+# And it asks which sizes exist, for the same reason.  The build workflow used
+# to assert "4 .ttf faces built"; adding 8x16 made that 8 and the assertion
+# went red on a correct build.  A count derived from $(SIZES) cannot go stale
+# when the seventh size lands.
+print-sizes: ; @echo $(SIZES)
 
 show: ; @tools/show-new.sh
 

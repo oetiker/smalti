@@ -78,9 +78,17 @@ jobs:
           # If either is ever removed, remove this too -- counting a file as
           # verified when nothing verified it is the failure this tally exists
           # to stop.
+          #
+          # FOUR FACES PER SIZE, and the size list is asked of make rather
+          # than written here -- the same rule the install step below follows
+          # for DEST.  This assertion said a flat "4" and went red on a
+          # correct build the day 8x16 landed.
+          sizes=$(make -s print-sizes)
+          want=$(( 4 * $(echo "$sizes" | wc -w) ))
           ttf=(build/*.ttf)
-          if [ ${#ttf[@]} -ne 4 ]; then
-            echo "::error::${#ttf[@]} .ttf faces built, expected 4"
+          if [ ${#ttf[@]} -ne "$want" ]; then
+            echo "::error::${#ttf[@]} .ttf faces built, expected $want" \
+                 "-- four faces for each of: $sizes"
             exit 1
           fi
           checked=${#ttf[@]}
@@ -109,9 +117,12 @@ jobs:
           make install
           dest=$(make -s print-dest)
           ls -l "$dest"
+          sizes=$(make -s print-sizes)
+          want=$(( 4 * $(echo "$sizes" | wc -w) ))
           n=$(find "$dest" -maxdepth 1 -name '*.ttf' | wc -l)
-          if [ "$n" -ne 4 ]; then
-            echo "::error::install put $n .ttf files in $dest, expected 4"
+          if [ "$n" -ne "$want" ]; then
+            echo "::error::install put $n .ttf files in $dest, expected $want" \
+                 "-- four faces for each of: $sizes"
             exit 1
           fi
 

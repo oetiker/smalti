@@ -209,9 +209,15 @@ jobs:
           shopt -s nullglob
           version='${{ needs.publish.outputs.version }}'
 
+          # Four faces per size, in two formats.  The size list is asked of
+          # make rather than written here, so a new cell size does not turn a
+          # correct release into a red one.
+          sizes=$(make -s print-sizes)
+          nsizes=$(echo "$sizes" | wc -w)
           fonts=(build/*.ttf build/*.woff2)
-          if [ ${#fonts[@]} -ne 8 ]; then
-            echo "::error::expected 4 .ttf and 4 .woff2, found ${#fonts[@]} files"
+          if [ ${#fonts[@]} -ne $(( 8 * nsizes )) ]; then
+            echo "::error::expected 4 .ttf and 4 .woff2 for each of" \
+                 "$sizes, found ${#fonts[@]} files"
             exit 1
           fi
 
