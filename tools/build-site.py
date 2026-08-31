@@ -75,6 +75,17 @@ WORDMARK = 'smalti'
 # ladder is 14/28/42 at 7x14 and 16/32/48 at 8x16.  It was written as literal
 # pixels once, and that one hardcoded ladder is what blocked the second size.
 ZOOMS = (1, 2, 3)
+
+# The editor's guide lines.  These three are rows of the DRAWING, not of the
+# font metrics, so they cannot be derived -- but they were measured across
+# upstream's own faces at both cell sizes and are the same row at each: the cap
+# line is the top row of A B E H, the x-height line the top row of
+# a c e m n o r s u v w x z, and the maths axis the row `-`, `+`, `<` and `>`
+# sit on.  The BASELINE is the one that moves (row 10 at 7x14, row 11 at 8x16),
+# so it is read out of the built font below instead of being written here --
+# it was `var BASE = 10` in site/smalti.js, and the 8x16 editor drew its
+# baseline through the middle of the letters.
+GUIDE_CAP, GUIDE_XHEIGHT, GUIDE_AXIS = 3, 5, 7
 SPECIMEN = (
     (3, 'Smalti — glass tesserae'),
     (2, 'Ĳsselmeer · ΔΣΩ αβγπφψ · ¾ ≈ 0.75 · «wort» · ¶ §'),
@@ -303,7 +314,11 @@ def build_data(size, repo, branch, hinted):
         'state': state,
         'textok': textok,
         'hint': hint,
-        'specimen': [{'px': mult * h, 'text': text}
+        # `z` is the MULTIPLE and `px` only the label.  site/smalti.js used
+        # to build the CSS class as 's' + px, which asked for .s16/.s32/.s48
+        # on the 8x16 page while smalti.css only ever defined .s14/.s28/.s42 --
+        # so every specimen line silently fell back to the body size.
+        'specimen': [{'z': mult, 'px': mult * h, 'text': text}
                      for mult, text in SPECIMEN],
         'bits': bits, 'layers': layers,
         'blocks': blocks, 'totals': totals,
@@ -399,6 +414,31 @@ def build_one(size, out, repo, branch, plan, sizes):
         size, repo, branch, {cp for _fn, cps in plan for cp in cps})
     w, h = data['cell']['w'], data['cell']['h']
 
+    # Read the cmap out of the font that was actually built rather than
+    # asserting a number: the page tells a visitor that .notdef is glyph 0 and
+    # deliberately unmapped, and that claim has to be true of this build.
+    from fontTools.ttLib import TTFont
+    ttf = TTFont(os.path.join('build', f'Smalti{size}-Regular.ttf'), lazy=True)
+    cmap = len(ttf.getBestCmap())
+    # And the BASELINE, in rows, from the same font.  One pixel is upem/cell_h
+    # units by construction and check-glyphs.py proves it, so the ascent is a
+    # whole number of pixels and the baseline is the row above it.  This was
+    # `var BASE = 10` in site/smalti.js -- a 7x14 row -- so the 8x16 editor
+    # drew its baseline through the middle of every letter.
+    upem = ttf['head'].unitsPerEm
+    px_units, rem = divmod(upem, h)
+    if rem:
+        raise SystemExit(f'{size}: upem {upem} is not a whole number of pixels '
+                         f'over {h} rows, so the baseline is not a row')
+    ascent_px, rem = divmod(ttf['hhea'].ascent, px_units)
+    if rem:
+        raise SystemExit(f'{size}: ascent {ttf["hhea"].ascent} is not a whole '
+                         f'number of {px_units}-unit pixels')
+    ttf.close()
+
+    data['guides'] = {'baseline': ascent_px - 1, 'cap': GUIDE_CAP,
+                      'xheight': GUIDE_XHEIGHT, 'axis': GUIDE_AXIS}
+
     shutil.rmtree(out, ignore_errors=True)
     os.makedirs(os.path.join(out, 'fonts'), exist_ok=True)
     os.makedirs(os.path.join(out, 'data'), exist_ok=True)
@@ -435,6 +475,43 @@ def build_one(size, out, repo, branch, plan, sizes):
     with open(os.path.join(out, 'fonts.css'), 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(css) + '\n')
 
+    # ------------------------------------------------------------ size.css --
+    #
+    # THE SIZE-DEPENDENT HALF OF THE STYLESHEET.  site/smalti.css is copied
+    # into every size's page UNCHANGED, so anything in it that knows the cell
+    # is right for one size and wrong for every other.  That is not
+    # hypothetical: it laid an 8-column editor grid into `repeat(7, ...)`, so
+    # the drawing wrapped and no glyph was legible, and it sized every scrap of
+    # pixel-font text at a literal 14px on a 16px cell, which is not a whole
+    # multiple and therefore blurs -- the one thing this whole site exists to
+    # avoid.  Generated for the same reason fonts.css is: what carries the size
+    # is generated, and smalti.css does not have to know it.
+    #
+    # THE LAYOUT MODULE IS THE CELL, which is what smalti.css's own opening
+    # comment always claimed.  One unit is the cell WIDTH.  Both drawn sizes
+    # are exactly 1:2, so --u2 is the cell HEIGHT, --u4 twice it and --u6 three
+    # times it at either size -- which is exactly the 1x/2x/3x ladder the
+    # outline is pixel-exact at.  A size that is not 1:2 breaks that identity
+    # silently, so it is refused here rather than shipped blurry.
+    if h != 2 * w:
+        raise SystemExit(
+            f'{size}: this stylesheet assumes a 1:2 cell, and {w}x{h} is not '
+            f'one.  --u2 would no longer be the cell height, so every pixel '
+            f'font size on the page would stop being a whole multiple of it. '
+            f'Give size.css its own --u2..--u6 derived from the height before '
+            f'adding this size.')
+    unit = [1, 2, 3, 4, 6, 8]
+    size_css = ['/* generated by tools/build-site.py -- do not edit */',
+                ':root {',
+                f'  --cell-cols: {w};',
+                f'  --cell-rows: {h};'] + \
+               [f'  --u{"" if n == 1 else n}: {n * w}px;' for n in unit] + \
+               ['  --pix: var(--u4);', '}',
+                '@media (max-width: 720px) {',
+                '  :root { --pix: var(--u3); }', '}']
+    with open(os.path.join(out, 'size.css'), 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(size_css) + '\n')
+
     # The ghost fonts.  One family name over several files, each with a
     # unicode-range covering exactly what it owns, so a browser fetches ONE of
     # them -- the Nerd Font alone is a megabyte and must not be pulled down to
@@ -462,15 +539,6 @@ def build_one(size, out, repo, branch, plan, sizes):
         if fn.endswith('.txt') or fn == HINT_MANIFEST:
             shutil.copyfile(os.path.join(HINT_DIR, fn),
                             os.path.join(out, 'hint', fn))
-
-    # Read the cmap out of the font that was actually built rather than
-    # asserting a number: the page tells a visitor that .notdef is glyph 0 and
-    # deliberately unmapped, and that claim has to be true of this build.
-    from fontTools.ttLib import TTFont
-    ttf = TTFont(os.path.join('build', f'Smalti{size}-Regular.ttf'),
-                 lazy=True)
-    cmap = len(ttf.getBestCmap())
-    ttf.close()
 
     hand = data['totals'][0]['hand']
 

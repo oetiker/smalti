@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- **The 8x16 specimen page shipped in 0.2.0 rendering at 7x14's geometry.** `site/smalti.css` and `site/smalti.js` are copied into every size's page unchanged, and both still had the 7x14 cell written into them: the editor's pixel grid was `repeat(7, ...)` while the editor emitted eight buttons per row, so every row wrapped and no glyph was legible; each specimen line asked for a CSS class named after its pixel size (`.s16`, `.s32`, `.s48`) where only `.s14`, `.s28` and `.s42` existed, so all three fell back to the body size; every scrap of pixel-font text was sized at a literal 14px on a 16px cell, which is not a whole multiple and therefore blurs; and the editor's baseline guide was the constant row 10, which is 7x14's baseline — 8x16's is row 11. The cell is now generated per size into `size.css` and the guide rows are read out of the built font, so the stylesheet no longer knows any cell at all. `make check-site` gained a leg that proves it.
 
 ## 0.2.0 - 2026-08-30
 ### New

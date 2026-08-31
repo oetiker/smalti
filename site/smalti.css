@@ -5,7 +5,8 @@
  * every surface here is a tile on a warm dark ground, every seam is a hairline
  * of grout, nothing is rounded and nothing casts a shadow -- glass is cut, not
  * moulded.  The layout module is the cell itself: all spacing is a multiple of
- * 7px or 14px, the width and height of one glyph.
+ * --u, one glyph WIDTH, which size.css sets per cell size.  --u2 is the glyph
+ * height at every size this ships, because every one of them is 1:2.
  *
  * Three hues carry information and are never used for decoration:
  *   gold      a drawing in glyphs/<size>/<face>/, owned by this project
@@ -34,12 +35,11 @@
   --verdigris: #3fa88c;
 
   /* One cell, and its multiples.  Nothing here is a round number by accident. */
-  --u: 7px;
-  --u2: 14px;
-  --u3: 21px;
-  --u4: 28px;
-  --u6: 42px;
-  --u8: 56px;
+  /* --u .. --u8, --pix, --cell-cols and --cell-rows are NOT here.  They are
+   * the cell, and this file is copied unchanged into every size's page, so a
+   * cell written here is right for one size and wrong for the rest.
+   * tools/build-site.py generates them into size.css, which is linked ahead
+   * of this file. */
 
   --pixel: SmaltiSite, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --prose: Charter, "Bitstream Charter", "Sitka Text", Cambria, "Iowan Old Style",
@@ -63,12 +63,15 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* Everything set in the font itself.  Sizes are only ever 14, 28 or 42: an
- * outline whose em is 896 units and whose cell is 14px lands exactly on the
- * pixel grid at those, and nowhere between them. */
+/* Everything set in the font itself.  Sizes are only ever the cell height and
+ * its 2x and 3x -- 14/28/42 at 7x14, 16/32/48 at 8x16: an outline whose em is
+ * a whole number of pixels lands exactly on the pixel grid at those, and
+ * nowhere between them.  Hence var(--u2) rather than a literal: a pixel font
+ * set at a size that is not a whole multiple of its cell is just a blurry
+ * font. */
 .px {
   font-family: var(--pixel);
-  font-size: 14px;
+  font-size: var(--u2);
   line-height: var(--u2);
   font-kerning: none;
   font-variant-ligatures: none;
@@ -77,7 +80,7 @@ body {
 
 a { color: var(--ink); text-decoration-color: var(--grout2); text-underline-offset: 3px; }
 a:hover { text-decoration-color: var(--gold); }
-code { font-family: var(--pixel); font-size: 14px; color: var(--gold); }
+code { font-family: var(--pixel); font-size: var(--u2); color: var(--gold); }
 strong { font-weight: 600; }
 em { font-style: italic; color: var(--ink); }
 
@@ -93,7 +96,7 @@ em { font-style: italic; color: var(--ink); }
 .skip {
   position: absolute; left: -9999px; top: 0; z-index: 40;
   background: var(--gold); color: var(--mortar); padding: var(--u) var(--u2);
-  font-family: var(--pixel); font-size: 14px;
+  font-family: var(--pixel); font-size: var(--u2);
 }
 .skip:focus { left: 0; }
 
@@ -168,7 +171,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
          margin: 0 0 var(--u4); padding: 0; background: var(--grout);
          border: 1px solid var(--grout); }
 .facts li { background: var(--mortar2); padding: var(--u2) var(--u3); color: var(--ink-dim); }
-.facts b { display: block; color: var(--ink); font-size: 28px; line-height: var(--u4); font-weight: 400; }
+.facts b { display: block; color: var(--ink); font-size: var(--u4); line-height: var(--u4); font-weight: 400; }
 
 .button {
   display: inline-block; text-decoration: none;
@@ -185,7 +188,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .head { font-family: var(--prose); font-weight: 400; font-size: 34px;
         line-height: 1.2; margin: 0 0 var(--u3); display: flex;
         align-items: baseline; gap: var(--u2); }
-.eyebrow { color: var(--gold); font-size: 14px; }
+.eyebrow { color: var(--gold); font-size: var(--u2); }
 .sub { font-weight: 400; font-size: 23px; margin: var(--u6) 0 var(--u2); }
 
 /* ------------------------------------------------------------- specimen -- */
@@ -198,11 +201,15 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .spec-line { margin: 0 0 var(--u2); white-space: pre; color: var(--ink); }
 .spec-line:last-child { margin-bottom: 0; }
 .spec-line b { color: var(--ink-dim); display: inline-block; width: 6ch;
-               font-weight: 400; font-size: 14px; line-height: inherit;
+               font-weight: 400; font-size: var(--u2); line-height: inherit;
                vertical-align: top; }
-.s14 { font-size: 14px; line-height: var(--u2); }
-.s28 { font-size: 28px; line-height: var(--u4); }
-.s42 { font-size: 42px; line-height: var(--u6); }
+/* The three exact sizes, indexed by MULTIPLE and not by pixel count.  These
+ * were .s14/.s28/.s42 and smalti.js built the class name as 's' + the pixel
+ * size, so the 8x16 page asked for .s16/.s32/.s48, matched nothing, and set
+ * all three specimen lines at the body size. */
+.s1 { font-size: var(--u2); line-height: var(--u2); }
+.s2 { font-size: var(--u4); line-height: var(--u4); }
+.s3 { font-size: var(--u6); line-height: var(--u6); }
 
 /* ------------------------------------------------------------- coverage -- */
 
@@ -240,7 +247,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .blk.zero { background: var(--mortar); color: var(--ink-dim); }
 .blk-name { color: var(--ink); overflow-wrap: anywhere; }
 .blk.zero .blk-name { color: var(--ink-dim); }
-.blk-name em { display: block; color: var(--ink-dim); font-style: normal; font-size: 14px; }
+.blk-name em { display: block; color: var(--ink-dim); font-style: normal; font-size: var(--u2); }
 .blk-n { text-align: right; color: var(--ink-dim); white-space: nowrap; }
 .blk-n b { color: var(--ink); font-weight: 400; }
 .blk.full .blk-n b { color: var(--gold); }
@@ -285,7 +292,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .blockhead { display: flex; align-items: baseline; gap: var(--u2);
              margin: var(--u4) 0 var(--u2); flex-wrap: wrap; }
 .blockhead h3 { font-family: var(--prose); font-size: 21px; font-weight: 400; margin: 0; }
-.blockhead span { color: var(--ink-dim); font-family: var(--pixel); font-size: 14px; }
+.blockhead span { color: var(--ink-dim); font-family: var(--pixel); font-size: var(--u2); }
 
 /* The seams are mortar and the grout is a ring around each tessera.  A
  * container painted grout would show as a slab wherever the last row of the
@@ -341,12 +348,12 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
           gap: var(--u2); border-bottom: 1px solid var(--grout);
           padding-bottom: var(--u2); }
 .ed-title { margin: 0; font-family: var(--prose); font-weight: 400; font-size: 23px; }
-.ed-title b { font-family: var(--pixel); font-size: 28px; color: var(--gold);
+.ed-title b { font-family: var(--pixel); font-size: var(--u4); color: var(--gold);
               font-weight: 400; margin-right: var(--u2); }
 .ed-sub { margin: 4px 0 0; color: var(--ink-dim); font-family: var(--pixel);
-          font-size: 14px; }
+          font-size: var(--u2); }
 .ed-close { background: none; border: 1px solid var(--grout2); color: var(--ink);
-            font-family: var(--pixel); font-size: 14px; padding: var(--u) var(--u2);
+            font-family: var(--pixel); font-size: var(--u2); padding: var(--u) var(--u2);
             cursor: pointer; }
 .ed-close:hover { border-color: var(--gold); color: var(--gold); }
 
@@ -355,13 +362,18 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .ed-body { display: flex; flex-wrap: wrap; gap: var(--u4); margin: var(--u3) 0;
            align-items: flex-start; }
 
-/* The paint grid carries the geometry the README describes: columns 0 and 6
- * are the side bearings, row 10 is the last row on the baseline, caps start at
- * row 3, x-height at row 5, and the maths axis is row 7. */
-.paint { display: grid; grid-template-columns: repeat(7, var(--u4));
+/* The paint grid carries the geometry each size's glyphs/<size>/README.md
+ * describes: the first and last columns are the side bearings, and the guide
+ * lines are drawn by smalti.js from the sizes the build measured.
+ *
+ * THE COLUMN COUNT IS THE CELL WIDTH.  It was `repeat(7, ...)` while the
+ * editor emitted one button per column of the real cell, so the 8x16 grid put
+ * eight buttons into seven columns and wrapped every row -- which is why no
+ * shape was visible in the 8x16 editor at all. */
+.paint { display: grid; grid-template-columns: repeat(var(--cell-cols), var(--pix));
          gap: 1px; background: var(--grout); border: 1px solid var(--grout2);
          width: max-content; position: relative; }
-.pix { width: var(--u4); height: var(--u4); background: var(--mortar2);
+.pix { width: var(--pix); height: var(--pix); background: var(--mortar2);
        border: 0; padding: 0; cursor: crosshair; position: relative; }
 .pix.side { background: #1a1712; }
 .pix.on { background: var(--ink); }
@@ -381,7 +393,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
               padding: var(--u2) var(--u3); margin-bottom: var(--u3); }
 .ed-preview canvas { image-rendering: pixelated; display: block; }
 .ed-geom { list-style: none; margin: 0 0 var(--u3); padding: 0;
-           font-family: var(--pixel); font-size: 14px; line-height: var(--u2);
+           font-family: var(--pixel); font-size: var(--u2); line-height: var(--u2);
            color: var(--ink-dim); }
 .ed-geom li { display: flex; align-items: center; gap: var(--u); }
 /* Each swatch is drawn the way its line is drawn, so the legend distinguishes
@@ -419,7 +431,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .ed-target input { width: 100%; box-sizing: border-box; margin-top: 2px;
                    background: var(--mortar); color: var(--ink);
                    border: 1px solid var(--grout2); padding: 4px 7px;
-                   font-family: var(--pixel); font-size: 14px; }
+                   font-family: var(--pixel); font-size: var(--u2); }
 .ed-target input:focus-visible { outline: 2px solid var(--gold);
                                  outline-offset: 1px; }
 .ed-target button { margin-top: var(--u2); background: none;
@@ -428,16 +440,16 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .ed-target button:hover { border-color: var(--gold); color: var(--gold); }
 .ed-alt { font-size: 14px; }
 
-.ed-path { font-family: var(--pixel); font-size: 14px; color: var(--ink-dim);
+.ed-path { font-family: var(--pixel); font-size: var(--u2); color: var(--ink-dim);
            margin: 0 0 var(--u); overflow-wrap: anywhere; }
 .ed-path b { color: var(--gold); font-weight: 400; }
 .ed-file { width: 100%; background: var(--mortar2); color: var(--ink);
            border: 1px solid var(--grout); font-family: var(--pixel);
-           font-size: 14px; line-height: var(--u2); padding: var(--u2);
+           font-size: var(--u2); line-height: var(--u2); padding: var(--u2);
            resize: vertical; white-space: pre; }
 .ed-acts { display: flex; flex-wrap: wrap; gap: var(--u2); margin-top: var(--u2); }
 .ed-acts button, .ed-acts a {
-  font-family: var(--pixel); font-size: 14px; line-height: var(--u2);
+  font-family: var(--pixel); font-size: var(--u2); line-height: var(--u2);
   padding: var(--u) var(--u2); border: 1px solid var(--grout2);
   background: none; color: var(--ink); cursor: pointer; text-decoration: none;
 }
@@ -447,7 +459,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .ed-acts .primary:hover { color: #17140d; }
 .ed-acts button[disabled] { opacity: .4; cursor: default; }
 .ed-help { color: var(--ink-dim); font-size: 15px; margin: var(--u2) 0 0; }
-.ed-help code { font-size: 14px; }
+.ed-help code { font-size: var(--u2); }
 
 .foot { border-top: 1px solid var(--grout); margin-top: var(--u8);
         padding: var(--u6) var(--u3); }
@@ -457,8 +469,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
   .blk { grid-template-columns: 1fr; gap: var(--u); }
   .blk-n { text-align: left; }
   .prov-row { grid-template-columns: 1fr; gap: var(--u); }
-  .paint { grid-template-columns: repeat(7, var(--u3)); }
-  .pix { width: var(--u3); height: var(--u3); }
+  /* --pix is narrowed in size.css, so the column count follows the cell. */
   .head { font-size: 27px; }
   .lede { font-size: 19px; }
 }
