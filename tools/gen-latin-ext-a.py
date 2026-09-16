@@ -51,7 +51,7 @@ _meta = gs.Bdf(BDF)
 W, CELLH = _meta.w, _meta.h
 
 g = accents.load(BDF)
-mark = accents.marks(g, CELLH)
+mark = accents.marks(g, CELLH, W)
 
 def rows_used(bm):
     return [i for i, v in enumerate(bm) if v]
@@ -162,6 +162,17 @@ H('ŉ', "\n.......\n.......\n.#.....\n.#.....\n#......\n..#.##.\n..##..#\n..#...
 #    nothing beats a wrong drawing (glyphstore.py).
 EXT_B = range(0x0180, 0x0250)
 
+# Rule 2 is stated as a collision because that is how these two announce
+# themselves at 7x14, where the caron overlaps the ascender outright.  At
+# 8x16 it does not: once the caron is centred on the letter (accents.py,
+# HAND_MARKS) it slips past 'k' and 'h' without touching a pixel and lands
+# BESIDE the ascender, which reads as a stray mark, not a caron on top.
+# Naming them keeps the two cells agreeing about the inventory, which the
+# target set requires.  A general "a mark above must CLEAR the letter" test
+# would cover this and more, but it also turns 'ĥ' into a comma form, which
+# is wrong for Esperanto -- so that is a separate decision, not this one.
+EXT_B_NO_ROOM = {0x01E9, 0x021F}                      # ǩ ȟ
+
 def stacked(ch):
     """True if `ch` decomposes onto a base that is itself accented."""
     dec = unicodedata.decomposition(ch).split()
@@ -179,6 +190,9 @@ for cp in [*range(0x0100, 0x0180), *EXT_B]:
         continue
     if ext_b and stacked(ch):
         skipped.append((cp, name, 'second mark on an accented base (rule 1)'))
+        continue
+    if cp in EXT_B_NO_ROOM:
+        skipped.append((cp, name, 'no room for the mark on top (rule 2)'))
         continue
     if cp in hand:
         blocks.append((cp, name, hand[cp]))
