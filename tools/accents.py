@@ -81,7 +81,56 @@ def pack(art_rows):
     return [sum(1 << (7 - i) for i, ch in enumerate(r) if ch == '#')
             for r in art_rows]
 
-def marks(g, h):
+# The six marks Tamzen does not draw anywhere, written out ONCE PER CELL
+# WIDTH as {codepoint: (top row, art rows)}.  A pixel drawing cannot be
+# scaled -- the same reason gen-braille.py, gen-arrows.py and
+# gen-circled-digits.py each carry a per-size drawing instead of stretching
+# one -- and here two separate things make a literal cell-specific.
+#
+# The visible one is that the letters differ.  7x14 draws its lowercase five
+# columns wide starting at column 0; 8x16 draws it six wide starting at
+# column 1.  A mark centred on one sits off centre on the other.
+#
+# The quiet one is that pack() puts literal column i at bit 7-i, and a cell
+# reads column x from bit w-1-x.  So literal column i lands at cell column
+# i-1 at width 7 and at cell column i at width 8: the same literal does not
+# even land in the same place.  The 7x14 art below therefore carries a
+# leading '.' that is off the left edge of its own cell.  That is how it has
+# always been drawn and it is kept verbatim, because 7x14 is settled and
+# shipped; the 8x16 art is written in its own frame instead, where literal
+# column and cell column agree.
+#
+# The 8x16 drawings follow upstream's own 8x16 marks rather than being
+# derived from 7x14: the caron is its circumflex turned over ('...##...' /
+# '..#..#..' becomes '..#..#..' / '...##...'), the double acute is its acute
+# twice over, and the dot above sits in column 4, which is where upstream's
+# own 'i' puts its dot.  Only the columns changed -- every mark keeps the
+# rows it already occupied, so nothing moves vertically.
+HAND_MARKS = {
+    7: {
+        0x304: (3, ['.#####.']),                      # macron
+        0x306: (2, ['.#...#.', '..###..']),           # breve
+        0x307: (3, ['...#...']),                      # dot above
+        0x30B: (2, ['..#.#..', '.#.#...']),           # double acute
+        0x30C: (2, ['.#...#.', '..#.#..']),           # caron
+    },
+    8: {
+        0x304: (3, ['.######.']),                     # macron
+        0x306: (2, ['.#....#.', '..####..']),         # breve
+        0x307: (3, ['....#...']),                     # dot above
+        0x30B: (2, ['...#.#..', '..#.#...']),         # double acute
+        0x30C: (2, ['..#..#..', '...##...']),         # caron
+    },
+}
+
+# The ogonek hangs off the letter's bottom RIGHT, so it is aligned to the
+# letter's right edge (column 4 at 7x14, column 6 at 8x16), not centred.
+OGONEK = {
+    7: ['...##..', '.....#.', '...##..'],
+    8: ['....##..', '......#.', '....##..'],
+}
+
+def marks(g, h, w):
     """{(mark_codepoint, is_upper): h-row bitmap}.
 
     h is the caller's cell height (14 at 7x14, 16 at 8x16) -- passed in
@@ -92,6 +141,10 @@ def marks(g, h):
     same yoffset as everything else, just one more row of ink above the cap
     line. Measuring h from such a glyph would silently make every hand-drawn
     mark composed against it come out that row too tall.
+
+    w is the cell WIDTH, and it is needed for the same kind of reason: the
+    marks Tamzen does not draw are written out per cell in HAND_MARKS, and
+    picking the wrong set puts every one of them in the wrong column.
     """
     def above(lifted, base):
         """Keep only what the subtraction left ABOVE the base letter's ink.
@@ -128,17 +181,14 @@ def marks(g, h):
     m[0x327, True]  = sub(g[0xC7], g[0x43])
 
     def hand(cc, lo_top, lo, up_top=None, up=None):
-        m[cc, False] = pack(['.......'] * lo_top + lo
-                            + ['.......'] * (h - lo_top - len(lo)))
+        m[cc, False] = pack(['.' * w] * lo_top + lo
+                            + ['.' * w] * (h - lo_top - len(lo)))
         up, up_top = up or lo, up_top if up_top is not None else lo_top - 2
-        m[cc, True] = pack(['.......'] * up_top + up
-                           + ['.......'] * (h - up_top - len(up)))
+        m[cc, True] = pack(['.' * w] * up_top + up
+                           + ['.' * w] * (h - up_top - len(up)))
 
-    hand(0x304, 3, ['.#####.'])                       # macron
-    hand(0x306, 2, ['.#...#.', '..###..'])            # breve
-    hand(0x307, 3, ['...#...'])                       # dot above
-    hand(0x30B, 2, ['..#.#..', '.#.#...'])            # double acute
-    hand(0x30C, 2, ['.#...#.', '..#.#..'])            # caron
+    for cc, (lo_top, lo) in HAND_MARKS[w].items():
+        hand(cc, lo_top, lo)
     m[0x328, False] = m[0x328, True] = pack(          # ogonek, below
-        ['.......'] * (h - 3) + ['...##..', '.....#.', '...##..'])
+        ['.' * w] * (h - 3) + OGONEK[w])
     return m

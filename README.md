@@ -729,7 +729,7 @@ subtracting the plain letter from the accented one recovers each mark exactly
 as Tamzen drew it.  Only macron, breve, dot above, double acute, caron and
 ogonek had to be added by hand.
 
-Three traps worth recording:
+Four traps worth recording:
 
 * **Do not subtract from capitals.**  At 7x14 Tamzen *squashes* the capital
   under its own accents -- `Á` is a shorter `A` -- so `Á AND NOT A` leaves
@@ -744,6 +744,12 @@ Three traps worth recording:
   what the subtraction leaves **above** the base letter's ink, which is where
   a mark above sits by definition.  `tools/test-accents.py` is the checker
   that can see this; `make check` counts glyphs and never looks at shape.
+* **A mark Tamzen does not draw is written out per cell, not once.**  The six
+  in `accents.HAND_MARKS` used to be a single set of 7-character literals, and
+  at 8x16 every one of them sat a column left of where it belonged, on 84
+  glyphs per face.  The letters differ between cells, and `pack()` lands the
+  same literal in a different cell column at a different width, so one set
+  cannot serve both.
 * **A mark above `i` or `j` replaces the dot** (`ī`, not an i with both).  That
   is the typographic rule and also the only way it fits.
 
