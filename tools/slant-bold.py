@@ -19,7 +19,7 @@ WHY THIS IS NOT JUST slant-bdf.py RUN ON THE BOLD FACE
 
     The consequence to know about: a bold-oblique letter is a widened shear of
     the REGULAR glyph, not a sheared copy of Tamzen's hand-tuned bold one.
-    Where the two disagree -- Latin Extended-A, which is composed against the
+    Where the two disagree -- Latin Extended, which is composed against the
     bold base font rather than emboldened -- the bold oblique follows the
     emboldening rule instead.
 

@@ -85,7 +85,8 @@ belongs to rather than pick its own:
 ## What is not drawn here
 
 The four generated blocks -- braille U+2800, arrows U+2190, the circled digits
-U+2776..U+2793 and Latin Extended-A U+0100..U+017F -- have no files in
+U+2776..U+2793 and Latin Extended (all of Extended-A, and the composable
+part of Extended-B) -- have no files in
 `glyphs/7x14/`.  They are computed into `build/gen/7x14/` on every build by
 `tools/gen-*.py`, which means those generators are still free to be improved.
 Draw one of them here only to overrule the computation for that one codepoint.

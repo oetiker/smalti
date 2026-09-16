@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Generate Latin Extended-A by composing Tamzen letters with Tamzen marks.
+"""Generate Latin Extended-A, and the composable part of Extended-B, by
+composing Tamzen letters with Tamzen marks.
 
 Usage: gen-latin-ext-a.py BASE.bdf OUTDIR
 
@@ -7,6 +8,10 @@ Latin Extended-A is almost entirely base letter + diacritic, so the marks are
 lifted out of the glyphs Tamzen already draws (a-grave minus a, and so on)
 rather than invented.  That keeps the weight and the pixel rhythm identical to
 the rest of the font.
+
+Extended-B is taken on the same terms but NOT wholesale, because most of it is
+not decomposable at all and the part that is contains letters this generator
+would get wrong.  See EXT_B_RULES below for the two it refuses and why.
 
 Capitals need the mark higher: Tamzen's own accented capitals squash the
 letter to make room, which cannot be reproduced for letters it never drew, so
@@ -136,12 +141,44 @@ H('Ĳ', "\n.......\n.......\n.......\n###...#\n.#....#\n.#....#\n.#....#\n.#....
 H('ĳ', "\n.......\n.......\n.#...#.\n.#...#.\n.......\n.#...#.\n.#...#.\n.#...#.\n.#...#.\n.#...#.\n.#...#.\n.....#.\n..###..\n.......")
 H('ŉ', "\n.......\n.......\n.#.....\n.#.....\n#......\n..#.##.\n..##..#\n..#...#\n..#...#\n..#...#\n..#...#\n.......\n.......\n.......")
 
+# Extended-B (U+0180..U+024F) is composed under two extra rules.  Extended-A
+# needs neither, so both are conditional on the block rather than applied to
+# everything -- they would change letters that are already right.
+#
+# EXT_B_RULES
+#
+# 1. No second mark on an already accented base.  Sixteen Extended-B letters
+#    decompose onto a base that is itself accented -- U+01DA 'ǚ' is 'ü' plus a
+#    caron, not 'u' plus two marks -- and compose() has one mark's worth of
+#    rules.  Four of the sixteen happen to miss ü's diaeresis and would be
+#    emitted looking plausible, which is worse than the twelve that collide.
+#    Owner's ruling, 2026-09-15: skip all sixteen.
+#
+# 2. A collision means skip, not a raised comma.  compose()'s fallback puts a
+#    comma beside a letter too tall to take a mark on top.  That is the Czech
+#    and Latvian convention and it is CORRECT for Extended-A's 'ď ģ ĺ ľ ť' --
+#    but the Extended-B letters that collide ('ǩ ȟ') belong to languages that
+#    draw the caron on top, so for them the fallback is a wrong drawing, and
+#    nothing beats a wrong drawing (glyphstore.py).
+EXT_B = range(0x0180, 0x0250)
+
+def stacked(ch):
+    """True if `ch` decomposes onto a base that is itself accented."""
+    dec = unicodedata.decomposition(ch).split()
+    if len(dec) != 2 or dec[0].startswith('<'):
+        return False
+    return bool(unicodedata.decomposition(chr(int(dec[0], 16))))
+
 blocks, notes, skipped = [], [], []
-for cp in range(0x0100, 0x0180):
+for cp in [*range(0x0100, 0x0180), *EXT_B]:
     ch = chr(cp)
+    ext_b = cp in EXT_B
     try:
         name = unicodedata.name(ch)
     except ValueError:
+        continue
+    if ext_b and stacked(ch):
+        skipped.append((cp, name, 'second mark on an accented base (rule 1)'))
         continue
     if cp in hand:
         blocks.append((cp, name, hand[cp]))
@@ -161,6 +198,9 @@ for cp in range(0x0100, 0x0180):
     if bm is None:
         skipped.append((cp, name, note))
         continue
+    if note and ext_b:
+        skipped.append((cp, name, f'{note} -- wrong form for this letter (rule 2)'))
+        continue
     if note:
         notes.append((cp, ch, note))
     blocks.append((cp, name, bm))
@@ -168,7 +208,9 @@ for cp in range(0x0100, 0x0180):
 for cp, name, bm in blocks:
     gs.write_glyph(os.path.join(OUT, gs.filename(cp)), cp, accents.art(bm, W))
 
-print(f'{OUT}: {len(blocks)} Latin Extended-A glyphs')
+n_b = sum(1 for cp, _, _ in blocks if cp in EXT_B)
+print(f'{OUT}: {len(blocks)} Latin Extended glyphs '
+      f'({len(blocks) - n_b} from Extended-A, {n_b} from Extended-B)')
 for cp, ch, note in notes:
     print(f'  note  U+{cp:04X} {ch}  {note}')
 for cp, name, why in skipped:

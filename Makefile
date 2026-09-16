@@ -200,8 +200,9 @@ STEPS      ?= $(STEPS_$(SIZE))
 # emboldened from the RESOLVED regular face, the italic is sheared from it, and
 # the bold-italic from the resolved italic and bold.  The order also settles
 # the one place two generators write the same file: gen-latin-ext-a runs after
-# embolden and wins for U+0100..U+017F, because composing against upstream's
-# own bold letters and bold accents beats widening the regular ones.
+# embolden and wins for the Latin Extended it composes, because composing
+# against upstream's own bold letters and bold accents beats widening the
+# regular ones.
 $(GEN): $(GENTOOL) $(HAND) $(UPSTREAM_R) $(UPSTREAM_B)
 	@rm -rf build/gen/$(SIZE)      # generated output only; nothing here is committed
 	@mkdir -p $(dir $@)
@@ -257,6 +258,7 @@ check-version: all
 # which lives in the venv.  Nothing else about them changed.
 check-sources: all
 	$(PY) tools/test-glyphstore.py
+	$(PY) tools/test-accents.py
 	$(PY) tools/test-weight.py
 	$(PY) tools/test-check-glyphs.py $(SIZE)
 	$(PY) tools/check-glyphs.py $(SIZE)

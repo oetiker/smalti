@@ -93,12 +93,37 @@ def marks(g, h):
     line. Measuring h from such a glyph would silently make every hand-drawn
     mark composed against it come out that row too tall.
     """
+    def above(lifted, base):
+        """Keep only what the subtraction left ABOVE the base letter's ink.
+
+        A mark above the letter sits above it by definition, so ink the
+        subtraction leaves level with the letter is not mark -- it is the two
+        donors disagreeing about the letterform.  They do disagree: upstream's
+        8x16 'a' carries a spur on its last row that its own 'a-acute' does
+        not, so 'a-acute minus a' keeps that pixel, and a mark holding a pixel
+        at the letter's own height then collides with every base it is
+        composed onto, sending compose() to its raised-comma fallback.
+
+        Subtraction alone was enough at 7x14, where the donors agree above
+        the x-height, so this clips nothing off any 7x14 LOWERCASE mark --
+        tools/test-accents.py asserts that, and those are the only marks
+        gen-latin-ext-a.py composes with.  It does clip 7x14's CAPITAL marks,
+        which upstream really does contaminate by squashing the capital under
+        its own accent; no output moves, because compose() has always started
+        from the lowercase mark and raised it.
+
+        Marks BELOW the letter (cedilla, ogonek) must not come through here.
+        """
+        top = next(i for i, v in enumerate(base) if v)
+        return [v if i < top else 0 for i, v in enumerate(lifted)]
+
     m = {}
     for cc, lo, up in ((0x300, 0xE0, 0xC0), (0x301, 0xE1, 0xC1),
                        (0x302, 0xE2, 0xC2), (0x303, 0xE3, 0xC3),
                        (0x308, 0xE4, 0xC4), (0x30A, 0xE5, 0xC5)):
-        m[cc, False] = sub(g[lo], g[0x61])
-        m[cc, True]  = sub(g[up], g[0x41])
+        m[cc, False] = above(sub(g[lo], g[0x61]), g[0x61])
+        m[cc, True]  = above(sub(g[up], g[0x41]), g[0x41])
+    # Cedilla hangs BELOW the letter, so it is lifted by subtraction alone.
     m[0x327, False] = sub(g[0xE7], g[0x63])
     m[0x327, True]  = sub(g[0xC7], g[0x43])
 
