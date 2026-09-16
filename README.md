@@ -4,9 +4,9 @@
 
 Upstream Tamzen has **189 glyphs and nothing above U+00FF** — the same 189 at
 every cell size: no `§`, no `¶`, no dashes, no arrows, no triangles, no `…`.
-Smalti adds 817 more, draws two faces upstream never had, and does all of it
+Smalti adds 850 more, draws two faces upstream never had, and does all of it
 at **two cell sizes**, 7x14 and 8x16, so each of its **eight faces carries
-1006 glyphs**:
+1039 glyphs**:
 
 | face | how it is made |
 |---|---|
@@ -590,8 +590,9 @@ and so may you:
 
 ## The character set
 
-The tables below cover the symbol set.  Latin Extended-A (128, generated) and
-Greek (49, hand-drawn) are not listed here; `docs/coverage.md` counts every
+The tables below cover the symbol set.  Latin Extended-A (128, generated),
+the composable part of Latin Extended-B (33, generated) and Greek (49,
+hand-drawn) are not listed here; `docs/coverage.md` counts every
 face, and `make show` prints the lot in the terminal's own font.
 
 **Latin-1 characters upstream never drew** (13)
@@ -714,9 +715,10 @@ the right weight beats a correct one borrowed from another font.
 `-` is 5 pixels (columns 1..5, Tamzen's own), `–` is 6 (columns 1..6), `—` is
 all 7.  Only `—` joins into an unbroken rule when repeated.
 
-## Latin Extended-A and Greek
+## Latin Extended and Greek
 
-Latin Extended-A is **generated on every build** by `tools/gen-latin-ext-a.py`,
+Latin Extended-A, and the composable part of Extended-B, are **generated on
+every build** by `tools/gen-latin-ext-a.py`,
 into `build/gen/7x14/regular/` and `build/gen/7x14/bold/`.  It is the one
 generator that produces the bold face as well, and for bold that beats
 emboldening.
@@ -727,18 +729,43 @@ subtracting the plain letter from the accented one recovers each mark exactly
 as Tamzen drew it.  Only macron, breve, dot above, double acute, caron and
 ogonek had to be added by hand.
 
-Two traps worth recording:
+Three traps worth recording:
 
-* **Do not subtract from capitals.**  Tamzen *squashes* the capital under its
-  own accents -- `Á` is a shorter `A` -- so `Á AND NOT A` leaves fragments of
-  the squashed letter behind.  The generator always takes the lowercase mark
-  and raises it over a full-height capital instead.
+* **Do not subtract from capitals.**  At 7x14 Tamzen *squashes* the capital
+  under its own accents -- `Á` is a shorter `A` -- so `Á AND NOT A` leaves
+  fragments of the squashed letter behind.  The generator always takes the
+  lowercase mark and raises it over a full-height capital instead.
+* **Subtraction only cancels when the two donors agree.**  At 8x16 they do
+  not: upstream's plain `a` carries a spur on its last row that its own `á`
+  does not, so `á AND NOT a` kept that stray pixel and handed back a "mark"
+  ten rows tall.  A mark holding ink at the letter's own height collides with
+  every base it is composed onto, and 33 glyphs per face shipped in 0.2.0 with
+  the mark pushed out to the last column.  `accents.marks()` now keeps only
+  what the subtraction leaves **above** the base letter's ink, which is where
+  a mark above sits by definition.  `tools/test-accents.py` is the checker
+  that can see this; `make check` counts glyphs and never looks at shape.
 * **A mark above `i` or `j` replaces the dot** (`ī`, not an i with both).  That
   is the typographic rule and also the only way it fits.
 
 Where a letter is too tall for a mark above it -- `ĺ` `ľ` `ť` `ģ` -- the
 generator falls back to a raised comma beside the letter, which is what real
 typography does anyway.  It prints every such case when it runs.
+
+**Extended-B is taken on rules, not on a list.**  Most of the block does not
+decompose at all, and the part that does contains letters this generator would
+get wrong, so `gen-latin-ext-a.py` refuses two kinds and takes the remaining
+33 (`EXT_B_RULES` in that file spells both out):
+
+* **No second mark on an already accented base.**  Sixteen letters stack one --
+  `ǚ` is `ü` plus a caron, not `u` plus two marks -- and `compose()` has one
+  mark's worth of rules.  Four of the sixteen happen to miss `ü`'s diaeresis
+  and would come out looking plausible, which is worse than the twelve that
+  visibly collide.
+* **In Extended-B a collision means skip, not a raised comma.**  The comma
+  form above is the correct Czech and Latvian shape for `ď ģ ĺ ľ ť`.  The
+  Extended-B letters that collide are `ǩ` and `ȟ`, whose languages draw the
+  caron on top, so for them the fallback would be a wrong drawing -- and
+  nothing beats a wrong drawing.
 
 Greek, U+0370..U+03FF, is hand-drawn, except the capitals whose letterform
 is identical to Latin (`Α` `Β` `Ε` `Ζ` `Η` `Ι` `Κ` `Μ` `Ν` `Ο` `Ρ` `Τ` `Υ` `Χ`)
@@ -747,7 +774,7 @@ which are copies of Tamzen's own bitmaps, so the two cannot drift apart.
 
 ## Bold
 
-All four faces carry all 1004 glyphs.  The bold face is upstream's own bold
+All four faces carry all 1039 glyphs.  The bold face is upstream's own bold
 wherever upstream drew one — 190 glyphs, hand-tuned, and nothing computed
 beats that.  The other 812 are derived from the **resolved** regular face on
 every build, so hand-drawing a regular glyph improves its bold without anyone
@@ -756,7 +783,7 @@ better result:
 
 | group | how the bold version is made |
 |---|---|
-| Latin Extended-A | composed again, against the **bold** base font -- Tamzen's bold letters and bold accents already exist, so nothing is invented |
+| Latin Extended | composed again, against the **bold** base font -- Tamzen's bold letters and bold accents already exist, so nothing is invented |
 | Greek capitals sharing a Latin form | copied straight from Tamzen's bold `A`, `B`, `E` ... so bold Alpha stays exactly bold A |
 | shapes, braille, dingbats, and six maximum-density glyphs | **left identical**.  Widening a filled circle does not make it bold, it makes it lopsided; braille and box drawing must keep their pitch to line up with neighbours; and `®` `™` `‰` `¼` `½` `¾` already fill 6 or 7 columns with 1-pixel detail, so any widening merges the interior |
 | everything else | each stroke widened by one pixel, the way Tamzen does it |
