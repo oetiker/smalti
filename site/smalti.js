@@ -16,9 +16,6 @@ var S = null;              // data/site.json: what every size shares
 var Z = {};                // size -> data/<size>.json, once loaded
 var SIZES = [];            // the checked sizes, in S.sizes order
 var PENDING = {};          // size -> Promise, so a size loads once
-/* Task 5 still reads the old single data file in the editor.  Kept declared
- * so such a leftover read throws a clear TypeError, not a ReferenceError. */
-var D = null;
 var NAME = [];             // per listed codepoint: its Unicode name
 var SHOWN = [];            // per listed codepoint: the character, or ''
 var COVI = null;           // listed index -> index into bits/layers, or -1
@@ -494,7 +491,8 @@ function sizeChoice() {
   return S.sizes.slice();
 }
 
-var ED = null;    // {i, face, rows, orig}
+var ED = null;    // {i, face, size, rows, orig}
+var WANT = null;  // the editor most recently asked for: {i, face, size}
 var LAST_FOCUS = null;
 
 /* Where a pull request goes.  The build knows one repository and one branch;
@@ -512,27 +510,45 @@ function target() {
 }
 
 function route() {
-  var m = /^#\/glyph\/([a-z-]+)\/([0-9A-F]+)$/.exec(location.hash);
+  var m = /^#\/glyph\/(\d+x\d+)\/([a-z-]+)\/([0-9A-F]+)$/.exec(location.hash);
   if (!m) { if (ED) closeEditor(true); return; }
-  var face = S.faces.indexOf(m[1]) >= 0 ? m[1] : 'regular';
-  var cp = parseInt(m[2], 16);
-  var i = S.cps.indexOf(cp);
+  var size = S.sizes.indexOf(m[1]) >= 0 ? m[1] : SIZES[0];
+  var face = S.faces.indexOf(m[2]) >= 0 ? m[2] : 'regular';
+  var i = S.cps.indexOf(parseInt(m[3], 16));
   if (i < 0) { closeEditor(true); return; }
-  if (ED && ED.i === i && ED.face === face) return;
-  openEditor(i, face, true);
+  if (ED && ED.i === i && ED.face === face && ED.size === size) return;
+  openEditor(i, face, size, true);
 }
 
-function openEditor(i, face, fromHash) {
+function openEditor(i, face, size, fromHash) {
   face = face || FACE;
+  size = size || SIZES[0];
   if (!fromHash) LAST_FOCUS = document.activeElement;
-  var k = COVI[i];
+  /* A link may name a size that is not checked.  Its data loads on demand;
+   * the size stays unchecked, because opening one glyph is not a vote to
+   * show the whole size.  Loaded data is never dropped (Z is not evicted),
+   * so unchecking a size later does not break an editor link to it.
+   *
+   * The load is asynchronous: a slow size can resolve after the user has
+   * already asked for something else.  Only the latest request may draw. */
+  var mine = WANT = { i: i, face: face, size: size };
+  loadSize(size).then(function () {
+    if (WANT === mine) showEditor(i, face, size);
+  });
+}
+
+function showEditor(i, face, size) {
+  var z = Z[size], k = COVI[i];
   ED = {
-    i: i, face: face,
-    rows: k >= 0 ? rowsOf(face, k) : blankRows(),
-    orig: k >= 0 ? rowsOf(face, k) : blankRows(),
-    exists: k >= 0 && D.layers[face][k] === 'h',
+    i: i, face: face, size: size,
+    rows: k >= 0 ? rowsOf(size, face, k) : blankRows(size),
+    orig: k >= 0 ? rowsOf(size, face, k) : blankRows(size),
+    exists: k >= 0 && z.layers[face][k] === 'h',
     ghost: pref(PREF.hint, '1') === '1'
   };
+  /* sizes.css reads this to give .paint the size's own column count and
+   * pixel size. */
+  $('#editor').setAttribute('data-size', size);
   drawEditor();
   $('#editor').hidden = false;
   $('#scrim').hidden = false;
@@ -542,7 +558,7 @@ function openEditor(i, face, fromHash) {
   $('main').inert = true;
   $('.masthead').inert = true;
   document.body.style.overflow = 'hidden';
-  var want = '#/glyph/' + face + '/' + hex(S.cps[i]);
+  var want = '#/glyph/' + size + '/' + face + '/' + hex(S.cps[i]);
   if (location.hash !== want) history.replaceState(null, '', want);
   var first = $('.pix', $('#editor'));
   if (first) first.focus();
@@ -556,6 +572,7 @@ function openEditor(i, face, fromHash) {
 
 function closeEditor(silent) {
   ED = null;
+  WANT = null;   // a size still loading must not reopen what was just closed
   $('#editor').hidden = true;
   $('#editor').innerHTML = '';
   $('#scrim').hidden = true;
@@ -569,16 +586,17 @@ function closeEditor(silent) {
 }
 
 function drawEditor() {
-  var host = $('#editor'), i = ED.i, cp = D.cps[i], k = COVI[i];
-  var layer = k >= 0 ? D.layers[ED.face][k] : null;
+  var host = $('#editor'), i = ED.i, cp = S.cps[i], k = COVI[i];
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
+  var layer = k >= 0 ? Z[ED.size].layers[ED.face][k] : null;
   host.innerHTML = '';
 
   var top = el('div', 'ed-top');
   var h = el('h2', 'ed-title');
   h.id = 'ed-title';
-  h.innerHTML = '<b>' + (D.textok[i] === '1' && SHOWN[i]
+  h.innerHTML = '<b>' + (S.textok.charAt(i) === '1' && SHOWN[i]
                           ? esc(SHOWN[i]) : '&nbsp;') + '</b>' + esc(NAME[i]);
-  var sub = el('p', 'ed-sub', 'U+' + hex(cp) + '  ·  ' +
+  var sub = el('p', 'ed-sub', 'U+' + hex(cp) + '  ·  ' + ED.size + '  ·  ' +
     (layer ? LAYER_NAME[layer] : 'not drawn yet'));
   var box = el('div');
   box.appendChild(h);
@@ -596,13 +614,13 @@ function drawEditor() {
   fs.className = 'px';
   fs.style.cssText = 'background:var(--mortar);color:var(--ink);' +
     'border:1px solid var(--grout2);padding:3px 7px;font-family:inherit;font-size:14px';
-  D.faces.forEach(function (f) {
-    var o = el('option', null, D.faceLabel[f]);
+  S.faces.forEach(function (f) {
+    var o = el('option', null, S.faceLabel[f]);
     o.value = f;
     fs.appendChild(o);
   });
   fs.value = ED.face;
-  fs.addEventListener('change', function () { openEditor(ED.i, fs.value); });
+  fs.addEventListener('change', function () { openEditor(ED.i, fs.value, ED.size); });
   faceRow.appendChild(fs);
   host.appendChild(faceRow);
 
@@ -614,20 +632,14 @@ function drawEditor() {
   var help = el('p', 'ed-help');
   help.innerHTML = 'Click or drag to paint. Arrow keys move, space toggles. ' +
     'Rows and columns follow the grid the rest of the font uses: columns 0 ' +
-    'and 6 are the side bearings, row 10 is the last row on the baseline, ' +
-    'capitals start at row 3, x-height at row 5, and the maths axis is row 7.';
+    'and ' + (C.w - 1) + ' are the side bearings, row ' + G.baseline +
+    ' is the last row on the baseline, capitals start at row ' + G.cap +
+    ', x-height at row ' + G.xheight + ', and the maths axis is row ' +
+    G.axis + '.';
   host.appendChild(help);
 
   refresh();
 }
-
-/* The editor's guide rows, from the build rather than from here.  These were
- * `10, 3, 5, 7` -- 7x14 rows.  The cap line, the x-height line and the maths
- * axis are the same row at 7x14 and 8x16, but THE BASELINE IS NOT: row 10 at
- * 7x14 and row 11 at 8x16, because that is the only type line that moves
- * between the two.  So the 8x16 editor drew its baseline one row high, through
- * the feet of every letter. */
-var BASE, CAP, XH, AXIS;
 
 /* ---------------------------------------------------------- the overlay --
  *
@@ -643,8 +655,9 @@ var BASE, CAP, XH, AXIS;
  * second copy of that arithmetic here would be a copy that can disagree. */
 
 function gridGeom(g) {
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var cells = g.querySelectorAll('.pix');
-  var w = D.cell.w;
+  var w = C.w;
   if (cells.length < w + 2) return null;
   var gr = g.getBoundingClientRect();
   var a = cells[0].getBoundingClientRect();
@@ -692,14 +705,15 @@ function ensureHintFont(ch, done) {
 
 function ghostChar() {
   var i = ED.i;
-  if (D.hint.charAt(i) !== '1') return null;
-  if (D.textok.charAt(i) !== '1') return null;
-  return String.fromCodePoint(D.cps[i]);
+  if (S.hint.charAt(i) !== '1') return null;
+  if (S.textok.charAt(i) !== '1') return null;
+  return String.fromCodePoint(S.cps[i]);
 }
 
 function drawOverlay() {
   var host = $('#editor');
   if (!host || !ED) return;
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var g = $('.paint', host);
   var c = $('.ed-overlay', host);
   if (!g || !c) return;
@@ -720,12 +734,12 @@ function drawOverlay() {
    * sits on it, so it is a line between rows and not a line through one. */
   var under = function (row) { return m.y0 + row * m.py + m.ch + gapY / 2; };
   var over = function (row) { return m.y0 + row * m.py - gapY / 2; };
-  var baseY = under(BASE);
+  var baseY = under(G.baseline);
 
   if (ED.ghost) {
     var ch = ghostChar();
     if (ch) {
-      var rows = BASE + 1 - CAP;            // cap height, in whole cells
+      var rows = G.baseline + 1 - G.cap;            // cap height, in whole cells
       var size = rows * m.py / capRatio(ctx);
       ctx.save();
       ctx.globalAlpha = 0.3;
@@ -733,7 +747,7 @@ function drawOverlay() {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       ctx.font = size + 'px SmaltiHint';
-      var mid = m.x0 + ((D.cell.w - 1) * m.px + m.cw) / 2;
+      var mid = m.x0 + ((C.w - 1) * m.px + m.cw) / 2;
       ctx.fillText(ch, mid, baseY);
       ctx.restore();
     }
@@ -744,9 +758,9 @@ function drawOverlay() {
    * something was marked and not which thing. */
   var lines = [
     [baseY, '#d9a72c', [], 2],              // baseline: solid, and thickest
-    [over(CAP), '#5b8bd6', [5, 3], 1],      // cap height: dashed
-    [over(XH), '#5b8bd6', [1, 3], 1],       // x-height: dotted
-    [m.y0 + AXIS * m.py + m.ch / 2, '#3fa88c', [6, 2, 1, 2], 1]  // maths axis
+    [over(G.cap), '#5b8bd6', [5, 3], 1],      // cap height: dashed
+    [over(G.xheight), '#5b8bd6', [1, 3], 1],       // x-height: dotted
+    [m.y0 + G.axis * m.py + m.ch / 2, '#3fa88c', [6, 2, 1, 2], 1]  // maths axis
   ];
   lines.forEach(function (l) {
     ctx.save();
@@ -764,12 +778,13 @@ function drawOverlay() {
 }
 
 function paintGrid() {
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var g = el('div', 'paint');
   g.setAttribute('role', 'group');
-  g.setAttribute('aria-label', D.cell.w + ' by ' + D.cell.h + ' pixel grid');
+  g.setAttribute('aria-label', C.w + ' by ' + C.h + ' pixel grid');
   var painting = null;
-  for (var y = 0; y < D.cell.h; y++) {
-    for (var x = 0; x < D.cell.w; x++) {
+  for (var y = 0; y < C.h; y++) {
+    for (var x = 0; x < C.w; x++) {
       var b = el('button', 'pix');
       b.type = 'button';
       b.dataset.x = x;
@@ -777,11 +792,11 @@ function paintGrid() {
       b.tabIndex = (x === 0 && y === 0) ? 0 : -1;
       b.setAttribute('role', 'checkbox');
       b.setAttribute('aria-label', 'column ' + x + ', row ' + y);
-      if (x === 0 || x === D.cell.w - 1) b.className += ' side';
-      if (y === BASE) b.className += ' base';
-      if (y === CAP) b.className += ' cap';
-      if (y === XH) b.className += ' xh';
-      if (y === AXIS) b.className += ' axis';
+      if (x === 0 || x === C.w - 1) b.className += ' side';
+      if (y === G.baseline) b.className += ' base';
+      if (y === G.cap) b.className += ' cap';
+      if (y === G.xheight) b.className += ' xh';
+      if (y === G.axis) b.className += ' axis';
       g.appendChild(b);
     }
   }
@@ -819,9 +834,10 @@ function paintGrid() {
 }
 
 function onGridKey(e) {
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var t = e.target.closest('.pix');
   if (!t) return;
-  var x = +t.dataset.x, y = +t.dataset.y, w = D.cell.w, h = D.cell.h;
+  var x = +t.dataset.x, y = +t.dataset.y, w = C.w, h = C.h;
   var dx = { ArrowLeft: -1, ArrowRight: 1 }[e.key] || 0;
   var dy = { ArrowUp: -1, ArrowDown: 1 }[e.key] || 0;
   if (dx || dy) {
@@ -845,20 +861,21 @@ function setPixel(x, y, v) {
 }
 
 function sidePanel() {
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var side = el('div', 'ed-side');
 
   var prev = el('div', 'ed-preview');
   [1, 2, 3].forEach(function (z) {
     var wrap = el('div');
     var c = el('canvas');
-    c.width = D.cell.w * z;
-    c.height = D.cell.h * z;
+    c.width = C.w * z;
+    c.height = C.h * z;
     c.className = 'prev' + z;
     c.setAttribute('aria-hidden', 'true');
     wrap.appendChild(c);
     var lab = el('div', 'px');
     lab.style.color = 'var(--ink-dim)';
-    lab.textContent = z + '× ' + (z * D.cell.h) + 'px';
+    lab.textContent = z + '× ' + (z * C.h) + 'px';
     wrap.appendChild(lab);
     prev.appendChild(wrap);
   });
@@ -868,10 +885,10 @@ function sidePanel() {
    * these used to share a row and a colour, so the legend could not tell you
    * which blue line was which -- and neither could the grid. */
   var geom = el('ul', 'ed-geom');
-  [['solid', 'baseline, under row ' + BASE],
-   ['dash', 'cap height, above row ' + CAP],
-   ['dot', 'x-height, above row ' + XH],
-   ['dashdot', 'maths axis, through row ' + AXIS]].forEach(function (p) {
+  [['solid', 'baseline, under row ' + G.baseline],
+   ['dash', 'cap height, above row ' + G.cap],
+   ['dot', 'x-height, above row ' + G.xheight],
+   ['dashdot', 'maths axis, through row ' + G.axis]].forEach(function (p) {
     var li = el('li');
     var i = el('i', p[0]);
     li.appendChild(i);
@@ -885,7 +902,7 @@ function sidePanel() {
   cb.type = 'checkbox';
   cb.id = 'ed-ghost';
   cb.checked = ED.ghost;
-  var can = D.hint.charAt(ED.i) === '1' && D.textok.charAt(ED.i) === '1';
+  var can = S.hint.charAt(ED.i) === '1' && S.textok.charAt(ED.i) === '1';
   cb.disabled = !can;
   cb.addEventListener('change', function () {
     ED.ghost = cb.checked;
@@ -907,7 +924,7 @@ function sidePanel() {
   var ta = el('textarea', 'ed-file');
   ta.id = 'ed-file';
   ta.readOnly = true;
-  ta.rows = D.cell.h + 2;
+  ta.rows = C.h + 2;
   ta.spellcheck = false;
   ta.setAttribute('aria-label', 'the text file for this glyph');
   side.appendChild(ta);
@@ -1024,6 +1041,7 @@ function copyFile(btn) {
 /* Redraw everything that depends on the pixels: the grid, the previews, the
  * file text and the GitHub link. */
 function refresh() {
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var host = $('#editor');
   var pix = host.querySelectorAll('.pix');
   for (var n = 0; n < pix.length; n++) {
@@ -1039,8 +1057,8 @@ function refresh() {
     g.fillStyle = '#1e1b15';
     g.fillRect(0, 0, c.width, c.height);
     g.fillStyle = '#efe7d3';
-    for (var y = 0; y < D.cell.h; y++) {
-      for (var x = 0; x < D.cell.w; x++) {
+    for (var y = 0; y < C.h; y++) {
+      for (var x = 0; x < C.w; x++) {
         if (ED.rows[y][x] === '#') g.fillRect(x * z, y * z, z, z);
       }
     }
@@ -1048,7 +1066,7 @@ function refresh() {
 
   var text = fileText(ED.i, ED.rows);
   $('#ed-file').value = text;
-  var rel = 'glyphs/' + D.size + '/' + ED.face + '/' + hex(D.cps[ED.i]) + '.txt';
+  var rel = 'glyphs/' + ED.size + '/' + ED.face + '/' + hex(S.cps[ED.i]) + '.txt';
   $('#ed-path').innerHTML = 'the file is <b>' + esc(rel) + '</b>';
   $('#ed-reset').disabled = text === fileText(ED.i, ED.orig);
 
