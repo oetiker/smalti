@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### New
+- **Box drawing and block elements, U+2500..U+259F, in all eight faces**: single, heavy and double lines with every corner and junction, rounded corners, dashed lines, diagonals, the eighth-blocks, the quadrants and the shades, 160 codepoints in all, so a terminal no longer takes `─ │ ┌ ╭ ═ █ ░` from a fallback font. The lines sit where `-` and `|` already sit, so `┼` lines up with `+` and a run of `─` continues `-`. Three things cannot be exact in the 7-column cell of 7x14: `▍` and `▌` are the same glyph there, and the shades `░ ▒ ▓` and the dashed lines `┈ ┉` show a seam at every cell boundary.
+- **The single guillemets `‹` and `›`** at both sizes, each one chevron of `«` and `»`, centred in the cell.
 
 ### Changed
 
