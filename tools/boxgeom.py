@@ -105,10 +105,15 @@ def parse(name):
 # ---------------------------------------------------------------------------
 GEOMETRY = {
     '7x14': dict(w=7, h=14, c0=3, r0=7,
-                 vheavy=(2, 3), hheavy=(6, 7), vdouble=(2, 4), hdouble=(6, 8)),
+                 vheavy=(2, 3), hheavy=(6, 7), vdouble=(2, 4), hdouble=(6, 8),
+                 chamfer=1),
     '8x16': dict(w=8, h=16, c0=4, r0=7,
-                 vheavy=(3, 4), hheavy=(7, 8), vdouble=(3, 5), hdouble=(6, 8)),
+                 vheavy=(3, 4), hheavy=(7, 8), vdouble=(3, 5), hdouble=(6, 8),
+                 chamfer=2),
 }
+# chamfer is how many pixels an arc pulls its turn back on each arm. Picked
+# by eye per size, not scaled: one pixel is the whole curve at 7x14, and is
+# small for the larger 8x16 cell (owner's choice, 2026-10-02).
 
 
 def art(px):
@@ -201,20 +206,29 @@ def render_box(spec, size):
 
 
 def _apply_dash(px, spec, size):
-    """Break a straight line by clearing interior gap lines.
+    """Break a straight line into n dashes, each followed by its gap.
 
-    DASHES MERGE ACROSS THE CELL BOUNDARY. A cell cannot both begin and end
-    with a gap and still look evenly dashed, so a repeated `┄` shows one
-    longer run at each seam. That is true of bitmap fonts generally at this
-    width; the gap positions are chosen by eye per size and the seam is
-    documented in README.md rather than hidden.
+    THE CELL STARTS WITH INK AND ENDS WITH A GAP, so a run of `╌` repeats as
+    `###.##.###.##.` instead of merging the last dash of one cell into the
+    first of the next. Gaps only inside the cell made every seam one
+    double-length dash, which read as long and short dashes taking turns
+    (owner's choice, 2026-10-02). The ink is shared out as evenly as the span
+    allows, longer dashes first.
+
+    The one exception is forced: n dashes and n gaps need 2n pixels, and a
+    quadruple dash in a 7-column cell has 7. There the gaps stay inside the
+    cell and the seam shows one double-length dash.
     """
     g = GEOMETRY[size]
     n = spec['dash']
     horizontal = 'left' in spec['arms']
     span = g['w'] if horizontal else g['h']
-    for i in range(n - 1):
-        k = (i + 1) * span // n
+    ink = span - n
+    if ink < n:
+        gaps = [(i + 1) * span // n for i in range(n - 1)]
+    else:
+        gaps = [-(-ink * (i + 1) // n) + i for i in range(n)]
+    for k in gaps:
         if horizontal:
             for r in range(g['h']):
                 px[r][k] = 0
@@ -225,19 +239,24 @@ def _apply_dash(px, spec, size):
 
 
 def _apply_arc(px, spec, size):
-    """Round a light corner by pulling the turn back one pixel on each arm.
+    """Round a light corner by pulling the turn back `chamfer` pixels on each
+    arm and joining the two runs with a diagonal.
 
-    At this size a one-pixel chamfer IS the whole of the curve. The two runs
-    then meet diagonally, which is already normal here -- `❯` is nothing but
+    At this size a chamfer of a pixel or two IS the whole of the curve. The
+    runs meet diagonally, which is already normal here -- `❯` is nothing but
     diagonal steps -- and trace-outline.py's corner-touch rule handles it.
     """
     g = GEOMETRY[size]
-    r0, c0 = g['r0'], g['c0']
+    r0, c0, n = g['r0'], g['c0'], g['chamfer']
     dr = 1 if 'down' in spec['arms'] else -1
     dc = 1 if 'right' in spec['arms'] else -1
-    px[r0][c0] = 0                 # drop the sharp turn itself
-    px[r0][c0 + dc] = 1            # the horizontal starts one column out
-    px[r0 + dr][c0] = 1            # the vertical starts one row out
+    for k in range(n):             # drop the turn and the arm ends near it
+        px[r0][c0 + k * dc] = 0
+        px[r0 + k * dr][c0] = 0
+    px[r0][c0 + n * dc] = 1        # the horizontal starts n columns out
+    px[r0 + n * dr][c0] = 1        # the vertical starts n rows out
+    for i in range(1, n):          # and the diagonal joins them
+        px[r0 + i * dr][c0 + (n - i) * dc] = 1
     return px
 
 

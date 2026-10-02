@@ -159,6 +159,12 @@ check('7x14 arc keeps its vertical to the bottom edge',
       g(0x256D, '7x14')[13], '...#...')
 check('7x14 arc up-and-left cuts the opposite corner',
       g(0x256F, '7x14')[6:8], ['...#...', '###....'])
+# 8x16 cuts two pixels, picked by eye: the runs meet through one diagonal
+# pixel. 7x14 stays at one.
+check('8x16 arc down-and-right cuts two pixels',
+      g(0x256D, '8x16')[7:10], ['......##', '.....#..', '....#...'])
+check('8x16 arc up-and-left cuts two pixels',
+      g(0x256F, '8x16')[5:8], ['....#...', '...#....', '###.....'])
 
 # ---- diagonals run corner to corner -------------------------------------
 check('7x14 upper-left to lower-right starts top left',
@@ -177,6 +183,33 @@ for cp, n in ((0x254C, 2), (0x2504, 3), (0x2508, 4)):
           sum(1 for r in rows if '#' in r), 1)
 check('a dashed vertical breaks into three',
       len([x for x in ''.join(r[3] for r in g(0x2506, '7x14')).split('.') if x]), 3)
+
+# ---- a dash cell starts with ink and ends with a gap, so a run repeats
+# evenly. Gaps only inside the cell made every seam one double-length dash.
+# The one exception is forced: four dashes and four gaps need 8 columns, and
+# 7x14 has 7, so its quadruple dashes keep the gaps inside.
+uneven = []
+for size in ('7x14', '8x16'):
+    geo = boxgeom.GEOMETRY[size]
+    for cp in boxgeom.BOX:
+        spec = boxgeom.parse(unicodedata.name(chr(cp)))
+        if not spec['dash']:
+            continue
+        rows = g(cp, size)
+        if 'left' in spec['arms']:
+            line = rows[geo['r0']]
+            span = geo['w']
+        else:
+            line = ''.join(r[geo['c0']] for r in rows)
+            span = geo['h']
+        if 2 * spec['dash'] > span:
+            continue
+        if not (line[0] == '#' and line[-1] == '.'):
+            uneven.append((size, hex(cp), line))
+check('a dash cell starts with ink and ends with a gap', uneven, [])
+check('7x14 double dash repeats evenly', g(0x254C, '7x14')[7], '###.##.')
+check('8x16 quadruple dash repeats evenly', g(0x2508, '8x16')[7], '#.#.#.#.')
+check('7x14 quadruple dash keeps its gaps inside', g(0x2508, '7x14')[7], '#.#.#.#')
 
 # ---- the halves tile the cell exactly: no overlap, no hole ---------------
 def b(cp, size):
