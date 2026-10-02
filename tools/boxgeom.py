@@ -83,3 +83,118 @@ def parse(name):
             for arm in ARMS[token]:
                 spec['arms'][arm] = WEIGHTS[stated]
     return spec
+
+
+# ---------------------------------------------------------------------------
+# GEOMETRY, DRAWN PER SIZE, NEVER SCALED -- gen-braille.py's rule.
+#
+# c0 / r0 are where upstream already puts `|` and `-` at each size, so a
+# generated `+`-shaped junction lines up with the real `+`. c0 is also rule 1
+# of glyphs/8x16/README.md, which names box-drawing verticals as the reason
+# that rule exists.
+#
+# HEAVY takes its second pixel on the side that centres the pair in the cell;
+# ties go up and left. Worked through, that one rule gives all four entries:
+# at 7x14 the cell centre is row 6.5, so heavy grows UP from row 7; at 8x16 it
+# is row 7.5, so heavy grows DOWN. At 8x16 the horizontal centre is column 3.5
+# so heavy grows LEFT from column 4; at 7x14 column 3 is already the exact
+# centre -- the tie -- so heavy grows left there too.
+#
+# DOUBLE is clean at both sizes: one blank line between two strokes,
+# symmetric about the axis, no rounding anywhere.
+# ---------------------------------------------------------------------------
+GEOMETRY = {
+    '7x14': dict(w=7, h=14, c0=3, r0=7,
+                 vheavy=(2, 3), hheavy=(6, 7), vdouble=(2, 4), hdouble=(6, 8)),
+    '8x16': dict(w=8, h=16, c0=4, r0=7,
+                 vheavy=(3, 4), hheavy=(7, 8), vdouble=(3, 5), hdouble=(6, 8)),
+}
+
+
+def art(px):
+    return [''.join('#' if v else '.' for v in row) for row in px]
+
+
+def _vpos(g, weight):
+    return {'light': (g['c0'],), 'heavy': g['vheavy'], 'double': g['vdouble']}[weight]
+
+
+def _hpos(g, weight):
+    return {'light': (g['r0'],), 'heavy': g['hheavy'], 'double': g['hdouble']}[weight]
+
+
+def render_box(spec, size):
+    """An arm is a rectangle from its cell edge to the junction. The only
+    question is where each arm stops, and there are exactly three answers.
+
+    1. A LIGHT OR HEAVY arm reaches the FAR edge of the perpendicular band.
+       Heavy is one thick line, not two strokes, which is what makes heavy
+       corners solid. Capping its two rows separately renders a stepped `┏`.
+
+    2. Except that it stops at the NEAR edge when a double runs past it --
+       perpendicular band double, both perpendicular arms present, and its own
+       axis not running through. This keeps the inside of a double open, so
+       `╤` hangs its stem below the lower line while `╪`, whose vertical does
+       run through, passes straight on.
+
+    3. A DOUBLE's two strokes cap individually: outer turns at outer, inner at
+       inner, where a stroke is "outer" when the perpendicular arm on its side
+       is absent. That is the whole of the double-corner behaviour. It gives
+       `╔` a clean corner with no stub, `╠` a continuous outer line with the
+       inner one broken across the junction, and it opens `╬` into four corner
+       pieces with a hole in the middle -- which is what `╬` is.
+
+    Getting rule 3's orientation backwards renders `╔` as a bottom-right
+    corner. test-box.py pins it.
+    """
+    g = GEOMETRY[size]
+    width, height = g['w'], g['h']
+    px = [[0] * width for _ in range(height)]
+    a = spec['arms']
+    up, dn, lf, rt = a.get('up'), a.get('down'), a.get('left'), a.get('right')
+
+    vcols = sorted(set(_vpos(g, up) if up else ())
+                   | set(_vpos(g, dn) if dn else ())) or [g['c0']]
+    hrows = sorted(set(_hpos(g, lf) if lf else ())
+                   | set(_hpos(g, rt) if rt else ())) or [g['r0']]
+    cL, cR = vcols[0], vcols[-1]
+    rT, rB = hrows[0], hrows[-1]
+
+    h_is_double = 'double' in (lf, rt)
+    v_is_double = 'double' in (up, dn)
+    h_runs = lf is not None and rt is not None
+    v_runs = up is not None and dn is not None
+
+    def vstroke(col, weight, arm):
+        if weight != 'double':
+            near = h_is_double and h_runs and not v_runs
+            if arm == 'up':
+                return range(0, (rT if near else rB) + 1)
+            return range(rB if near else rT, height)
+        outer = (lf is None) if col == cL else ((rt is None) if col == cR else False)
+        if arm == 'up':
+            return range(0, (rB if outer else rT) + 1)
+        return range(rT if outer else rB, height)
+
+    def hstroke(row, weight, arm):
+        if weight != 'double':
+            near = v_is_double and v_runs and not h_runs
+            if arm == 'left':
+                return range(0, (cL if near else cR) + 1)
+            return range(cR if near else cL, width)
+        outer = (up is None) if row == rT else ((dn is None) if row == rB else False)
+        if arm == 'left':
+            return range(0, (cR if outer else cL) + 1)
+        return range(cL if outer else cR, width)
+
+    for arm, weight in (('up', up), ('down', dn)):
+        if weight:
+            for col in _vpos(g, weight):
+                for r in vstroke(col, weight, arm):
+                    px[r][col] = 1
+    for arm, weight in (('left', lf), ('right', rt)):
+        if weight:
+            for row in _hpos(g, weight):
+                for c in hstroke(row, weight, arm):
+                    px[row][c] = 1
+    return px

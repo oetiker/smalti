@@ -89,4 +89,63 @@ check('a diagonal is set aside',
 check('nonsense is refused', boxgeom.parse('BOX DRAWINGS SIDEWAYS GRAPEFRUIT'),
       None)
 
+# ---- geometry: the axes are where upstream already puts - + and | --------
+def draw(cp, size):
+    return boxgeom.art(boxgeom.render_box(
+        boxgeom.parse(unicodedata.name(chr(cp))), size))
+
+
+check('7x14 light horizontal is row 7, full width',
+      [i for i, r in enumerate(draw(0x2500, '7x14')) if '#' in r], [7])
+check('7x14 light horizontal spans the whole cell',
+      draw(0x2500, '7x14')[7], '#######')
+check('8x16 light vertical is column 4',
+      {r.index('#') for r in draw(0x2502, '8x16')}, {4})
+check('7x14 light vertical is column 3',
+      {r.index('#') for r in draw(0x2502, '7x14')}, {3})
+
+# ---- a heavy corner is ONE thick line, so it comes out solid -------------
+# Capping the two rows of a heavy line separately rendered a stepped corner.
+check('7x14 heavy down-and-right has a solid corner',
+      draw(0x250F, '7x14')[6:8], ['..#####', '..#####'])
+
+# ---- a double corner: outer turns at outer, inner at inner ---------------
+# Getting this backwards renders the TOP-LEFT corner as a bottom-right one.
+check('7x14 double down-and-right turns at the top left',
+      draw(0x2554, '7x14')[6:9], ['..#####', '..#....', '..#.###'])
+
+# ---- a double running past a branch keeps its outer line whole ----------
+check('7x14 double vertical and right keeps the outer line continuous',
+      [r[2] for r in draw(0x2560, '7x14')], ['#'] * 14)
+check('7x14 double vertical and right breaks the inner line',
+      draw(0x2560, '7x14')[7], '..#....')
+
+# ---- the double cross opens into four corner pieces ---------------------
+check('7x14 double cross is open in the middle',
+      draw(0x256C, '7x14')[7], '.......')
+
+# ---- a light stem that runs through passes on; one that meets, stops -----
+check('7x14 single vertical crosses a double horizontal',
+      [r[3] for r in draw(0x256A, '7x14')], ['#'] * 14)
+check('7x14 a stem that only meets the double does not bridge its gap',
+      draw(0x2564, '7x14')[7], '.......')
+
+# ---- nothing comes apart at a cell boundary -----------------------------
+# An arm that stops one pixel short is not a compromise, it is a seam.
+for size in ('7x14', '8x16'):
+    short = []
+    for cp in boxgeom.BOX:
+        spec = boxgeom.parse(unicodedata.name(chr(cp)))
+        if spec['diag'] or spec['dash'] or spec['arc']:
+            continue
+        rows = boxgeom.art(boxgeom.render_box(spec, size))
+        edge = {'up': rows[0],
+                'down': rows[-1],
+                'left': ''.join(r[0] for r in rows),
+                'right': ''.join(r[-1] for r in rows)}
+        for arm in spec['arms']:
+            if '#' not in edge[arm]:
+                short.append((hex(cp), arm))
+    check(f'{size}: every arm reaches its own cell edge', short, [])
+
 sys.exit(1 if FAIL else 0)
