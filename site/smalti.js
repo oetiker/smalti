@@ -146,9 +146,32 @@ function loadSize(size) {
     PENDING[size] = fetch('data/' + size + '.json').then(function (r) {
       if (!r.ok) throw new Error(size + ': HTTP ' + r.status);
       return r.json();
-    }).then(function (z) { Z[size] = z; return z; });
+    }).then(function (z) {
+      Z[size] = z;
+      var old = $('#load-error');   // a retry that worked clears the notice
+      if (old) old.remove();
+      return z;
+    }, function (err) {
+      /* Forget the failure, or every later click on this size would get the
+       * same rejected promise until the page is reloaded. */
+      delete PENDING[size];
+      throw err;
+    });
   }
   return PENDING[size];
+}
+
+/* A size's data that fails to load after boot (offline, 404, bad JSON) must
+ * not fail silently: one notice above the grid, replaced by the next. */
+function showLoadError(size, err) {
+  var old = $('#load-error');
+  if (old) old.remove();
+  var p = el('p', 'empty prose',
+    'The ' + size + ' glyph data did not load (' + err.message + '). ' +
+    'Check your connection and try again.');
+  p.id = 'load-error';
+  p.setAttribute('role', 'alert');
+  $('#grid').parentNode.insertBefore(p, $('#grid'));
 }
 
 function setSizes(list) {
@@ -177,7 +200,13 @@ function buildSizeControl() {
     cb.addEventListener('change', function () {
       var next = SIZES.filter(function (x) { return x !== s; });
       if (cb.checked) next.push(s);
-      setSizes(next);
+      var prev = SIZES.slice();
+      /* The failed size must not stay checked over a grid that cannot show
+       * it: go back to the sizes that are loaded. */
+      setSizes(next).catch(function (err) {
+        showLoadError(s, err);
+        return setSizes(prev);
+      });
     });
     lab.appendChild(cb);
     lab.appendChild(el('span', null, s));
@@ -534,6 +563,9 @@ function openEditor(i, face, size, fromHash) {
   var mine = WANT = { i: i, face: face, size: size };
   loadSize(size).then(function () {
     if (WANT === mine) showEditor(i, face, size);
+  }, function (err) {
+    if (WANT === mine) WANT = null;
+    showLoadError(size, err);
   });
 }
 
