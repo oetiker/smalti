@@ -1,7 +1,7 @@
 /* Smalti specimen site.
  *
- * Everything on this page comes out of data/glyphs.json, which `make site`
- * writes straight from the glyph store.  Nothing about the font is restated
+ * Everything on this page comes out of data/site.json and data/<size>.json, which
+ * `make site` writes straight from the glyph store.  Nothing about the font is restated
  * here, because a restatement is a second source of truth and would go stale.
  *
  * The one rule worth knowing before changing anything: the text this page can
@@ -12,7 +12,13 @@
  */
 'use strict';
 
-var D = null;              // the whole data file
+var S = null;              // data/site.json: what every size shares
+var Z = {};                // size -> data/<size>.json, once loaded
+var SIZES = [];            // the checked sizes, in S.sizes order
+var PENDING = {};          // size -> Promise, so a size loads once
+/* Task 5 still reads the old single data file in the editor.  Kept declared
+ * so such a leftover read throws a clear TypeError, not a ReferenceError. */
+var D = null;
 var NAME = [];             // per listed codepoint: its Unicode name
 var SHOWN = [];            // per listed codepoint: the character, or ''
 var COVI = null;           // listed index -> index into bits/layers, or -1
@@ -46,8 +52,8 @@ function esc(s) {
 
 /* One glyph as h strings of w characters.  k indexes the covered glyphs, which
  * are the listed codepoints whose state is '#', in the same order. */
-function rowsOf(face, k) {
-  var w = D.cell.w, h = D.cell.h, s = D.bits[face], off = k * h * 2, out = [];
+function rowsOf(size, face, k) {
+  var z = Z[size], w = z.cell.w, h = z.cell.h, s = z.bits[face], off = k * h * 2, out = [];
   for (var y = 0; y < h; y++) {
     var v = parseInt(s.substr(off + y * 2, 2), 16), r = '';
     for (var x = 0; x < w; x++) r += (v >> (w - 1 - x)) & 1 ? '#' : '.';
@@ -56,9 +62,9 @@ function rowsOf(face, k) {
   return out;
 }
 
-function blankRows() {
-  var r = [], i;
-  for (i = 0; i < D.cell.h; i++) r.push('.'.repeat(D.cell.w));
+function blankRows(size) {
+  var c = Z[size].cell, r = [], i;
+  for (i = 0; i < c.h; i++) r.push('.'.repeat(c.w));
   return r;
 }
 
@@ -66,14 +72,14 @@ function blankRows() {
  * from the data file untouched: `make headers` decides its shape and this page
  * must not have an opinion about it. */
 function fileText(i, rows) {
-  return D.headers[i] + '\n' + rows.join('\n') + '\n';
+  return S.headers[i] + '\n' + rows.join('\n') + '\n';
 }
 
 /* A pixel drawing as inline SVG, for the sixteen codepoints a browser will not
  * render as text however good the font is: control codes and the soft hyphen
  * are not characters you can put in a span. */
-function artSvg(rows, px) {
-  var w = D.cell.w, h = D.cell.h, r = '', y, x;
+function artSvg(size, rows, px) {
+  var w = Z[size].cell.w, h = Z[size].cell.h, r = '', y, x;
   for (y = 0; y < h; y++) {
     for (x = 0; x < w; x++) {
       if (rows[y][x] === '#') r += '<rect x="' + x + '" y="' + y + '" width="1" height="1"/>';
@@ -86,42 +92,81 @@ function artSvg(rows, px) {
 
 /* --------------------------------------------------------------- startup -- */
 
-function boot(data) {
-  D = data;
-  /* Assigned here and not at the top of the file: D is null until the data
-   * file has loaded, so a top-level D.guides would throw before anything was
-   * drawn.  Read from the build because the build measured them -- the
-   * baseline is row 10 at 7x14 and row 11 at 8x16. */
-  BASE = D.guides.baseline;
-  CAP = D.guides.cap;
-  XH = D.guides.xheight;
-  AXIS = D.guides.axis;
-  var i;
-  COVI = new Int32Array(D.cps.length);
-  var k = 0;
-  for (i = 0; i < D.cps.length; i++) COVI[i] = D.state[i] === '#' ? k++ : -1;
-  for (i = 0; i < D.headers.length; i++) {
-    var m = HEAD_RE.exec(D.headers[i]);
+function boot(shared) {
+  S = shared;
+  var i, k = 0;
+  COVI = new Int32Array(S.cps.length);
+  for (i = 0; i < S.cps.length; i++) COVI[i] = S.state[i] === '#' ? k++ : -1;
+  for (i = 0; i < S.headers.length; i++) {
+    var m = HEAD_RE.exec(S.headers[i]);
     SHOWN.push(m ? m[2].trim() : '');
     NAME.push(m ? m[3] : '');
   }
-  buildSpecimens();
-  buildProvenance();
+  buildSizeControl();
   buildBlocks();
   buildControls();
-  renderGrid();
   window.addEventListener('hashchange', route);
-  route();
-  animateWordmark();
+  return setSizes(sizeChoice()).then(function () {
+    route();
+    animateWordmark();
+  });
+}
+
+/* Until the per-size sections land, only the grid is drawn. */
+function renderAll() { renderGrid(); }
+
+function loadSize(size) {
+  if (Z[size]) return Promise.resolve(Z[size]);
+  if (!PENDING[size]) {
+    PENDING[size] = fetch('data/' + size + '.json').then(function (r) {
+      if (!r.ok) throw new Error(size + ': HTTP ' + r.status);
+      return r.json();
+    }).then(function (z) { Z[size] = z; return z; });
+  }
+  return PENDING[size];
+}
+
+function setSizes(list) {
+  SIZES = S.sizes.filter(function (s) { return list.indexOf(s) >= 0; });
+  setPref(PREF.sizes, SIZES.join(','));
+  var u = new URL(location.href);
+  u.searchParams.set('sizes', SIZES.join(','));
+  history.replaceState(null, '', u.pathname + u.search + u.hash);
+  Array.prototype.forEach.call(document.querySelectorAll('[name=size]'), function (cb) {
+    cb.checked = SIZES.indexOf(cb.value) >= 0;
+    /* The last checked box cannot be unchecked: a page showing no size has
+     * nothing to show. */
+    cb.disabled = cb.checked && SIZES.length === 1;
+  });
+  return Promise.all(SIZES.map(loadSize)).then(renderAll);
+}
+
+function buildSizeControl() {
+  var host = $('#sizes');
+  S.sizes.forEach(function (s) {
+    var lab = el('label');
+    var cb = el('input');
+    cb.type = 'checkbox';
+    cb.name = 'size';
+    cb.value = s;
+    cb.addEventListener('change', function () {
+      var next = SIZES.filter(function (x) { return x !== s; });
+      if (cb.checked) next.push(s);
+      setSizes(next);
+    });
+    lab.appendChild(cb);
+    lab.appendChild(el('span', null, s));
+    host.appendChild(lab);
+  });
 }
 
 /* The tesserae are set left to right, the way a mosaicist lays them.  Done
  * here rather than in the SVG so a build stays free of per-tile inline style. */
 function animateWordmark() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  var tiles = document.querySelectorAll('.wordmark rect');
-  var box = $('.wordmark');
+  var box = $('.wordmark');   // the first one; Task 4 does one per size
   if (!box) return;
+  var tiles = box.querySelectorAll('rect');
   var cols = box.viewBox.baseVal.width || 1;
   for (var i = 0; i < tiles.length; i++) {
     var x = parseFloat(tiles[i].getAttribute('x'));
@@ -205,7 +250,7 @@ function buildBlocks() {
     '<span><i class="rule"></i>left undrawn by rule, East Asian Wide</span>';
 
   var host = $('#blocks'), wrap = el('div', 'blocks'), zero = [];
-  D.blocks.forEach(function (b) {
+  S.blocks.forEach(function (b) {
     if (b.covered || b.extra) wrap.appendChild(blockRow(b));
     else zero.push(b);
   });
@@ -247,17 +292,17 @@ function blockRow(b) {
   var strip = el('div', 'strip');
   if (b.to > b.from) {
     for (var i = b.from; i < b.to; i++) {
-      var st = D.state[i];
+      var st = S.state[i];
       if (st === 'w') {
         var t = el('i', 'rule');
-        t.title = 'U+' + hex(D.cps[i]) + ' ' + NAME[i] +
+        t.title = 'U+' + hex(S.cps[i]) + ' ' + NAME[i] +
                   ' — East Asian Wide, taken from the emoji font';
         strip.appendChild(t);
       } else {
         var btn = el('button', st === '#' ? 'on' : 'off');
         btn.type = 'button';
         btn.dataset.i = i;
-        btn.title = 'U+' + hex(D.cps[i]) + ' ' + NAME[i] +
+        btn.title = 'U+' + hex(S.cps[i]) + ' ' + NAME[i] +
                     (st === '#' ? '' : ' — not drawn yet');
         btn.setAttribute('aria-label', btn.title);
         btn.addEventListener('click', function (e) {
@@ -278,8 +323,8 @@ function blockRow(b) {
 
 function buildControls() {
   var sel = $('#face');
-  D.faces.forEach(function (f) {
-    var o = el('option', null, D.faceLabel[f]);
+  S.faces.forEach(function (f) {
+    var o = el('option', null, S.faceLabel[f]);
     o.value = f;
     sel.appendChild(o);
   });
@@ -303,23 +348,23 @@ function buildControls() {
 }
 
 function matches(i) {
-  var st = D.state[i];
-  if (FILT === 'hand' && !(st === '#' && D.layers[FACE][COVI[i]] === 'h')) return false;
+  var st = S.state[i];
+  if (FILT === 'hand' && !(st === '#' && Z[SIZES[0]].layers[FACE][COVI[i]] === 'h')) return false;
   if (FILT === 'gap' && st !== '.') return false;
   if (!QUERY) return true;
   if (NAME[i].toLowerCase().indexOf(QUERY) >= 0) return true;
-  if (hex(D.cps[i]).toLowerCase().indexOf(QUERY) >= 0) return true;
+  if (hex(S.cps[i]).toLowerCase().indexOf(QUERY) >= 0) return true;
   return SHOWN[i] !== '' && SHOWN[i] === QUERY;
 }
 
 function renderGrid() {
   var host = $('#grid');
-  var px = ZOOM * D.cell.h;
+  var px = ZOOM * Z[SIZES[0]].cell.h;   // one size until Task 4
   host.style.setProperty('--tsize', px + 'px');
   host.style.setProperty('--tile', (px + 2 * ZOOM + 12) + 'px');
   var html = '', shown = 0;
 
-  D.blocks.forEach(function (b) {
+  S.blocks.forEach(function (b) {
     if (b.to <= b.from) return;
     var tiles = '', n = 0;
     for (var i = b.from; i < b.to; i++) {
@@ -336,8 +381,8 @@ function renderGrid() {
 
   host.innerHTML = html || '<p class="empty prose">Nothing matches that. ' +
     'Try a Unicode name, a hex codepoint like 2192, or paste the character.</p>';
-  $('#count').textContent = shown + ' of ' + D.cps.length +
-    ' codepoints · ' + D.faceLabel[FACE] + ' · ' + px + 'px';
+  $('#count').textContent = shown + ' of ' + S.cps.length +
+    ' codepoints · ' + S.faceLabel[FACE] + ' · ' + px + 'px';
 }
 
 /* One listener for the whole grid rather than one per tile: the grid is
@@ -349,7 +394,7 @@ $('#grid').addEventListener('click', function (e) {
 });
 
 function tileHtml(i, px) {
-  var cp = D.cps[i], st = D.state[i];
+  var cp = S.cps[i], st = S.state[i];
   var label = 'U+' + hex(cp) + ' ' + NAME[i];
   if (st === 'w') {
     return '<span class="tile rule" title="' + esc(label) +
@@ -360,12 +405,12 @@ function tileHtml(i, px) {
            ' — not drawn yet, click to draw it" aria-label="' + esc(label) +
            ', not drawn yet">+</button>';
   }
-  var layer = D.layers[FACE][COVI[i]];
+  var layer = Z[SIZES[0]].layers[FACE][COVI[i]];
   var body;
-  if (D.textok[i] === '1') {
+  if (S.textok[i] === '1') {
     body = '<b>' + esc(String.fromCodePoint(cp)) + '</b>';
   } else {
-    body = artSvg(rowsOf(FACE, COVI[i]), px);
+    body = artSvg(SIZES[0], rowsOf(SIZES[0], FACE, COVI[i]), px);
   }
   return '<button class="tile ' + layer + ' ' + faceClass(FACE) +
          '" data-i="' + i + '" title="' + esc(label) + ' — ' +
@@ -375,14 +420,12 @@ function tileHtml(i, px) {
 
 /* ---------------------------------------------------------------- editor -- */
 
-var ED = null;    // {i, face, rows, orig}
-var LAST_FOCUS = null;
-
 /* Remembered across glyphs, because the interesting session is "I am drawing
  * a block", not "I am drawing a character".  Private browsing and a blocked
  * storage setting both throw on access rather than returning null, so every
  * read and write is wrapped: the editor has to work with no storage at all. */
-var PREF = { repo: 'smalti.repo', branch: 'smalti.branch', hint: 'smalti.hint' };
+var PREF = { repo: 'smalti.repo', branch: 'smalti.branch', hint: 'smalti.hint',
+             sizes: 'smalti.sizes' };
 
 function pref(key, fallback) {
   try {
@@ -395,6 +438,25 @@ function setPref(key, value) {
   try { localStorage.setItem(key, value); } catch (e) { /* nothing to do */ }
 }
 
+/* The sizes to show.  The URL wins, so a shared link shows the view it was
+ * copied from; then the visitor's last choice; then every size.  Anything
+ * that names no known size falls through to the next source rather than to
+ * an empty page. */
+function sizeChoice() {
+  var known = function (list) {
+    return S.sizes.filter(function (s) { return list.indexOf(s) >= 0; });
+  };
+  var q = new URLSearchParams(location.search).get('sizes');
+  var fromUrl = q ? known(q.split(',')) : [];
+  if (fromUrl.length) return fromUrl;
+  var fromPref = known(pref(PREF.sizes, '').split(','));
+  if (fromPref.length) return fromPref;
+  return S.sizes.slice();
+}
+
+var ED = null;    // {i, face, rows, orig}
+var LAST_FOCUS = null;
+
 /* Where a pull request goes.  The build knows one repository and one branch;
  * a contributor working through a block wants their edits to land together,
  * so both can be overridden here.  THE SITE CANNOT CREATE A BRANCH -- a
@@ -402,19 +464,19 @@ function setPref(key, value) {
  * hint text says so rather than letting a typo look like a broken link. */
 function target() {
   return {
-    repo: pref(PREF.repo, D.repo) || D.repo,
-    branch: pref(PREF.branch, D.branch) || D.branch,
-    custom: pref(PREF.repo, D.repo) !== D.repo ||
-            pref(PREF.branch, D.branch) !== D.branch
+    repo: pref(PREF.repo, S.repo) || S.repo,
+    branch: pref(PREF.branch, S.branch) || S.branch,
+    custom: pref(PREF.repo, S.repo) !== S.repo ||
+            pref(PREF.branch, S.branch) !== S.branch
   };
 }
 
 function route() {
   var m = /^#\/glyph\/([a-z-]+)\/([0-9A-F]+)$/.exec(location.hash);
   if (!m) { if (ED) closeEditor(true); return; }
-  var face = D.faces.indexOf(m[1]) >= 0 ? m[1] : 'regular';
+  var face = S.faces.indexOf(m[1]) >= 0 ? m[1] : 'regular';
   var cp = parseInt(m[2], 16);
-  var i = D.cps.indexOf(cp);
+  var i = S.cps.indexOf(cp);
   if (i < 0) { closeEditor(true); return; }
   if (ED && ED.i === i && ED.face === face) return;
   openEditor(i, face, true);
@@ -440,7 +502,7 @@ function openEditor(i, face, fromHash) {
   $('main').inert = true;
   $('.masthead').inert = true;
   document.body.style.overflow = 'hidden';
-  var want = '#/glyph/' + face + '/' + hex(D.cps[i]);
+  var want = '#/glyph/' + face + '/' + hex(S.cps[i]);
   if (location.hash !== want) history.replaceState(null, '', want);
   var first = $('.pix', $('#editor'));
   if (first) first.focus();
@@ -877,7 +939,7 @@ function targetPanel() {
     return p;
   };
   box.appendChild(mk('ed-repo', 'repository', t.repo, 'owner/name'));
-  box.appendChild(mk('ed-branch', 'branch', t.branch, D.branch || 'main'));
+  box.appendChild(mk('ed-branch', 'branch', t.branch, S.branch || 'main'));
 
   var note = el('p', 'ed-help',
     'The branch has to exist already — a GitHub link can open an editor on a '
@@ -890,10 +952,10 @@ function targetPanel() {
   reset.type = 'button';
   reset.id = 'ed-target-reset';
   reset.addEventListener('click', function () {
-    setPref(PREF.repo, D.repo || '');
-    setPref(PREF.branch, D.branch || '');
-    $('#ed-repo').value = D.repo || '';
-    $('#ed-branch').value = D.branch || '';
+    setPref(PREF.repo, S.repo || '');
+    setPref(PREF.branch, S.branch || '');
+    $('#ed-repo').value = S.repo || '';
+    $('#ed-branch').value = S.branch || '';
     refresh();
   });
   box.appendChild(reset);
@@ -1009,7 +1071,7 @@ document.addEventListener('click', function (e) {
   if (e.target.id === 'scrim') closeEditor();
 });
 
-fetch('data/glyphs.json')
+fetch('data/site.json')
   .then(function (r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
