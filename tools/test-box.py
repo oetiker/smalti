@@ -148,4 +148,34 @@ for size in ('7x14', '8x16'):
                 short.append((hex(cp), arm))
     check(f'{size}: every arm reaches its own cell edge', short, [])
 
+# ---- arcs: the corner turn is pulled back one pixel on each arm ----------
+def g(cp, size):
+    return boxgeom.art(boxgeom.glyph(cp, size))
+
+
+check('7x14 arc down-and-right cuts the corner',
+      g(0x256D, '7x14')[7:9], ['....###', '...#...'])
+check('7x14 arc keeps its vertical to the bottom edge',
+      g(0x256D, '7x14')[13], '...#...')
+check('7x14 arc up-and-left cuts the opposite corner',
+      g(0x256F, '7x14')[6:8], ['...#...', '###....'])
+
+# ---- diagonals run corner to corner -------------------------------------
+check('7x14 upper-left to lower-right starts top left',
+      g(0x2572, '7x14')[0], '#......')
+check('7x14 upper-left to lower-right ends bottom right',
+      g(0x2572, '7x14')[13], '......#')
+check('7x14 the cross is its own mirror',
+      [r[::-1] for r in g(0x2573, '7x14')], g(0x2573, '7x14'))
+
+# ---- dashes break the line and nothing else -----------------------------
+for cp, n in ((0x254C, 2), (0x2504, 3), (0x2508, 4)):
+    rows = g(cp, '7x14')
+    runs = [x for x in rows[7].split('.') if x]
+    check(f'U+{cp:04X} breaks into {n} dashes', len(runs), n)
+    check(f'U+{cp:04X} inks no row but the axis',
+          sum(1 for r in rows if '#' in r), 1)
+check('a dashed vertical breaks into three',
+      len([x for x in ''.join(r[3] for r in g(0x2506, '7x14')).split('.') if x]), 3)
+
 sys.exit(1 if FAIL else 0)

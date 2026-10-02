@@ -198,3 +198,75 @@ def render_box(spec, size):
                 for c in hstroke(row, weight, arm):
                     px[row][c] = 1
     return px
+
+
+def _apply_dash(px, spec, size):
+    """Break a straight line by clearing interior gap lines.
+
+    DASHES MERGE ACROSS THE CELL BOUNDARY. A cell cannot both begin and end
+    with a gap and still look evenly dashed, so a repeated `┄` shows one
+    longer run at each seam. That is true of bitmap fonts generally at this
+    width; the gap positions are chosen by eye per size and the seam is
+    documented in README.md rather than hidden.
+    """
+    g = GEOMETRY[size]
+    n = spec['dash']
+    horizontal = 'left' in spec['arms']
+    span = g['w'] if horizontal else g['h']
+    for i in range(n - 1):
+        k = (i + 1) * span // n
+        if horizontal:
+            for r in range(g['h']):
+                px[r][k] = 0
+        else:
+            for c in range(g['w']):
+                px[k][c] = 0
+    return px
+
+
+def _apply_arc(px, spec, size):
+    """Round a light corner by pulling the turn back one pixel on each arm.
+
+    At this size a one-pixel chamfer IS the whole of the curve. The two runs
+    then meet diagonally, which is already normal here -- `❯` is nothing but
+    diagonal steps -- and trace-outline.py's corner-touch rule handles it.
+    """
+    g = GEOMETRY[size]
+    r0, c0 = g['r0'], g['c0']
+    dr = 1 if 'down' in spec['arms'] else -1
+    dc = 1 if 'right' in spec['arms'] else -1
+    px[r0][c0] = 0                 # drop the sharp turn itself
+    px[r0][c0 + dc] = 1            # the horizontal starts one column out
+    px[r0 + dr][c0] = 1            # the vertical starts one row out
+    return px
+
+
+def _render_diag(name, size):
+    g = GEOMETRY[size]
+    width, height = g['w'], g['h']
+    px = [[0] * width for _ in range(height)]
+    up_right = 'UPPER RIGHT TO LOWER LEFT' in name
+    cross = 'CROSS' in name
+    for r in range(height):
+        c = round(r * (width - 1) / (height - 1))
+        if cross or not up_right:
+            px[r][c] = 1                      # upper left -> lower right
+        if cross or up_right:
+            px[r][width - 1 - c] = 1          # upper right -> lower left
+    return px
+
+
+def glyph(cp, size):
+    """The single entry point for a codepoint in BOX."""
+    name = unicodedata.name(chr(cp))
+    spec = parse(name)
+    if spec is None:
+        raise ValueError(f'U+{cp:04X} {name}: outside the box drawing grammar')
+    if spec['diag']:
+        return _render_diag(name, size)
+    px = render_box(spec, size)
+    if spec['dash']:
+        px = _apply_dash(px, spec, size)
+    if spec['arc']:
+        px = _apply_arc(px, spec, size)
+    return px
