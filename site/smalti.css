@@ -5,7 +5,7 @@
  * every surface here is a tile on a warm dark ground, every seam is a hairline
  * of grout, nothing is rounded and nothing casts a shadow -- glass is cut, not
  * moulded.  The layout module is the cell itself: all spacing is a multiple of
- * --u, one glyph WIDTH, which size.css sets per cell size.  --u2 is the glyph
+ * --u, one glyph WIDTH, which sizes.css sets per cell size.  --u2 is the glyph
  * height at every size this ships, because every one of them is 1:2.
  *
  * Three hues carry information and are never used for decoration:
@@ -35,13 +35,11 @@
   --verdigris: #3fa88c;
 
   /* One cell, and its multiples.  Nothing here is a round number by accident. */
-  /* --u .. --u8, --pix, --cell-cols and --cell-rows are NOT here.  They are
-   * the cell, and this file is copied unchanged into every size's page, so a
-   * cell written here is right for one size and wrong for the rest.
-   * tools/build-site.py generates them into size.css, which is linked ahead
-   * of this file. */
+  /* --u .. --u8, --pix, --cell-cols and --cell-rows come from sizes.css: the
+   * chrome's values on :root (8x16), and each size's again under [data-size],
+   * so an element carrying data-size gets its own cell geometry. */
 
-  --pixel: SmaltiSite, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --pixel: Smalti8x16, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --prose: Charter, "Bitstream Charter", "Sitka Text", Cambria, "Iowan Old Style",
            Palatino, Georgia, serif;
 
@@ -77,6 +75,17 @@ body {
   font-variant-ligatures: none;
   letter-spacing: 0;
 }
+
+/* An element that shows one size's glyphs carries data-size and that size's
+ * family; sizes.css gives it that size's --u2..--u6 under the same selector,
+ * so .s1/.s2/.s3 resolve to its own cell height and multiples. */
+[data-size="7x14"] { font-family: Smalti7x14, var(--pixel); }
+[data-size="8x16"] { font-family: Smalti8x16, var(--pixel); }
+
+.sizes { display: flex; gap: var(--u2); border: 0; margin: 0; padding: 0; }
+.sizes label { display: flex; align-items: center; gap: 4px; cursor: pointer;
+               color: var(--ink-dim); }
+.sizes input:checked + span { color: var(--gold); }
 
 a { color: var(--ink); text-decoration-color: var(--grout2); text-underline-offset: 3px; }
 a:hover { text-decoration-color: var(--gold); }
@@ -117,16 +126,6 @@ em { font-style: italic; color: var(--ink); }
 .masthead nav a { text-decoration: none; color: var(--ink-dim); }
 .masthead nav a:hover, .masthead nav a:focus-visible { color: var(--gold); }
 .masthead nav a.out::after { content: " ↗"; }
-
-/* The other cell sizes.  Each is a sibling PAGE, not a control on this one,
- * so it is drawn as a tile rather than as another section link: a reader who
- * clicks it leaves the page, and the section links beside it do not. */
-.masthead nav a.size {
-  padding: 0 var(--u); border: 1px solid var(--grout);
-}
-.masthead nav a.size:hover, .masthead nav a.size:focus-visible {
-  border-color: var(--gold);
-}
 
 /* ----------------------------------------------------------------- hero -- */
 
@@ -305,8 +304,8 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .tile {
   position: relative; background: var(--mortar2); border: 0; padding: 0;
   color: var(--ink); font-family: var(--pixel); line-height: 1;
-  aspect-ratio: 1; display: grid; place-items: center; cursor: pointer;
-  font-size: var(--tsize);
+  display: flex; align-items: flex-end; justify-content: center;
+  gap: 6px; padding: 6px 4px; cursor: pointer;
   box-shadow: inset 0 0 0 1px var(--grout);
 }
 .tile::after { content: ""; position: absolute; inset: auto 0 0 0; height: 2px; }
@@ -321,6 +320,15 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .tile:hover:not(.rule) { background: var(--mortar3); }
 .tile:hover:not(.rule) { outline: 1px solid var(--gold); outline-offset: -1px; }
 .tile b { font-weight: 400; }
+
+/* One half per shown size, bottom-aligned so both sit on the tile's
+ * baseline.  The font size is the size's own multiple, set inline by the
+ * script as --tsize on each half. */
+.tile .half { font-size: var(--tsize); line-height: 1; border: 0; padding: 0;
+              background: none; color: inherit; cursor: pointer; position: relative; }
+.tile .half.h { box-shadow: inset 0 -2px 0 var(--gold); }
+.tile .half:hover { outline: 1px solid var(--gold); outline-offset: 1px; }
+.spec-line .size { color: var(--ink-dim); display: inline-block; width: 6ch; }
 
 /* Used on the specimen lines and on the tiles alike.  `oblique` rather than
  * `italic` because that is what the face is -- the regular sheared one column
@@ -469,7 +477,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
   .blk { grid-template-columns: 1fr; gap: var(--u); }
   .blk-n { text-align: left; }
   .prov-row { grid-template-columns: 1fr; gap: var(--u); }
-  /* --pix is narrowed in size.css, so the column count follows the cell. */
+  /* --pix is narrowed in sizes.css, so the column count follows the cell. */
   .head { font-size: 27px; }
   .lede { font-size: 19px; }
 }

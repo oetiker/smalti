@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Smalti 7x14 — a pixel font you can draw in your browser</title>
-<meta name="description" content="Specimen and glyph editor for Smalti 7x14, a bitmap terminal font with 1201 glyphs in 4 faces. Click any glyph to change its pixels and open a pull request.">
+<title>Smalti, a pixel font you can draw in your browser</title>
+<meta name="description" content="Specimen and glyph editor for Smalti, a bitmap terminal font in two cell sizes. Click any glyph to change its pixels and open a pull request.">
 <meta name="color-scheme" content="dark">
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="sizes.css">
@@ -16,7 +16,8 @@
 <a class="skip" href="#browse">Skip to the glyphs</a>
 
 <header class="masthead">
-  <a class="mark px" href="#top">smalti<b>7x14</b></a>
+  <a class="mark px" href="#top">smalti</a>
+  <fieldset id="sizes" class="sizes px"><legend class="sr-only">Sizes shown</legend></fieldset>
   <nav class="px" aria-label="Sections">
     <a href="#specimen">specimen</a>
     <a href="#coverage">coverage</a>
@@ -28,21 +29,19 @@
 <main>
 
 <section id="top" class="hero">
-  <h1 class="sr-only">Smalti 7x14</h1>
+  <h1 class="sr-only">Smalti</h1>
   <div class="hero-mark">{{WORDMARKS}}</div>
   <p class="lede">
-    Smalti are the small glass tiles a mosaic is made from. A pixel is one.
-    This is a 7&times;14 bitmap terminal font, forked from
-    Tamzen, in which every glyph is an ASCII-art text file — 1201 of
-    them per face, 0 drawn by hand in this repository.
-    <strong>The drawings are the font.</strong> The font files are what the
-    build spits out afterwards.
+    This is a bitmap terminal font in two cell sizes, 7&times;14 and 8&times;16,
+    forked from Tamzen, in which every glyph is an ASCII-art text file, drawn
+    per size. <strong>The drawings are the font.</strong> The font files are
+    what the build spits out afterwards.
   </p>
   <ul class="facts px">
-    <li><b>1201</b> glyphs</li>
-    <li><b>4</b> faces</li>
-    <li><b>7&times;14</b> cell</li>
-    <li><b>0</b> drawn here</li>
+    <li><b id="fact-glyphs"></b> glyphs per face</li>
+    <li><b id="fact-faces"></b> faces</li>
+    <li><b id="fact-sizes"></b> cell sizes</li>
+    <li><b id="fact-hand"></b> drawn here</li>
   </ul>
   <p class="cta"><a class="button px" href="#browse">Pick a glyph and change it</a></p>
 </section>
@@ -51,17 +50,16 @@
   <h2 class="head"><span class="eyebrow px">01</span> Specimen</h2>
   <p class="prose">
     Everything below is the real font, loaded as a web font and rendered as
-    text by your browser. It is set at 14, 28 and 42&nbsp;px —
-    the cell height and its multiples — because that is where the outlines land
-    exactly on the pixel grid and reproduce the bitmap with no antialiasing at
-    all. At 17&nbsp;px it would blur, which is why no size in between
-    is offered.
+    text by your browser. Each size is set at its cell height and whole
+    multiples of it (<span id="px-ladder"></span>), because that is where the
+    outlines land exactly on the pixel grid and reproduce the bitmap with no
+    antialiasing at all. No size in between is offered.
   </p>
   <div id="specimen-faces" class="specimens"></div>
   <p class="prose note">
-    If these look soft, your display is running at a fractional scale factor:
-    14 CSS pixels then land on 21 device pixels and no outline can
-    be exact at a half-pixel. It is crisp at 100%, 200% and 300%.
+    If these look soft, your display is running at a fractional scale factor,
+    and no outline can be exact at a half pixel. It is crisp at 100%, 200% and
+    300%.
   </p>
 </section>
 
@@ -91,15 +89,15 @@
     drawn yet — click one and you can be the person who does. A crossed tile
     is a codepoint left undrawn <em>by rule</em>: it is East Asian Wide, so a
     terminal gives it two cells and takes it from the emoji font, and a
-    7&times;14 bitmap for it would be both unused and the
+    single-cell bitmap for it would be both unused and the
     wrong width.
   </p>
   <div class="legend px" id="cov-legend"></div>
   <div id="blocks"></div>
   <p class="prose note" id="untouched-note"></p>
   <p class="prose note">
-    Two counting notes, so the numbers can be checked. Each face holds
-    1201 glyphs but its <code>cmap</code> has 1201 entries:
+    Two counting notes, so the numbers can be checked. Each face's
+    <code>cmap</code> has one entry fewer than it has glyphs:
     <code>.notdef</code> is glyph&nbsp;0 and is deliberately not mapped, which
     is correct and not a gap. And a block's target excludes unassigned
     codepoints, surrogates, control codes and the private use area — what
@@ -111,8 +109,8 @@
 <section id="browse" class="band">
   <h2 class="head"><span class="eyebrow px">03</span> Every glyph</h2>
   <p class="prose">
-    Rendered as text, in the face and at the size you choose. Click any tile
-    to open its 7&times;14 grid and change the pixels.
+    Rendered as text, in the face, sizes and zoom you choose. Click either
+    half of a tile to open that size's pixel grid and change the pixels.
   </p>
 
   <div class="toolbar px" role="group" aria-label="Glyph browser controls">
@@ -122,9 +120,9 @@
     </label>
     <fieldset class="seg">
       <legend class="sr-only">Size</legend>
-      <label><input type="radio" name="zoom" value="1"><span>14px</span></label>
-      <label><input type="radio" name="zoom" value="2" checked><span>28px</span></label>
-      <label><input type="radio" name="zoom" value="3"><span>42px</span></label>
+      <label><input type="radio" name="zoom" value="1"><span>1x</span></label>
+      <label><input type="radio" name="zoom" value="2" checked><span>2x</span></label>
+      <label><input type="radio" name="zoom" value="3"><span>3x</span></label>
     </fieldset>
     <fieldset class="seg">
       <legend class="sr-only">Show</legend>

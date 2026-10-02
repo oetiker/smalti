@@ -154,6 +154,15 @@ def main():
         mine = json.load(fh)
     if size not in shared['sizes']:
         bad(f'site.json lists sizes {shared["sizes"]}, not {size}')
+    # smalti.css names each size's family literally; fonts.css and the page
+    # are generated, so a size added to the repository but not to the
+    # stylesheet would render its glyphs in the chrome font without a word.
+    with open(os.path.join(site, 'smalti.css'), encoding='utf-8') as fh:
+        css = fh.read()
+    if not re.search(r'\[data-size="%s"\]\s*\{\s*font-family:\s*Smalti%s\b'
+                     % (re.escape(size), re.escape(size)), css):
+        bad(f'smalti.css has no [data-size="{size}"] rule naming Smalti{size}, '
+            f'so glyphs marked data-size="{size}" fall back to the chrome font')
     # Every existing check reads `d`.  One merged dict keeps them unchanged:
     # the shared keys and this size's keys never collide by construction.
     d = dict(shared)
