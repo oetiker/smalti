@@ -14,8 +14,8 @@
 #   make check-version   the version in VERSION, read back out of every face
 #   make headers    rewrite every drawing into its normal form
 #   make index      regenerate docs/coverage.md
-#   make site       build the specimen site into build/site/ -- one page per
-#                   size, under its own name, with a redirect at the root
+#   make site       build the specimen site into build/site/ -- one page
+#                   showing every size side by side
 #   make check-site prove the site ships this repository's drawings
 #   make packages   build the .deb and the .rpm into build/
 #   make deb        build the .deb only

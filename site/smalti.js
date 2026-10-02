@@ -110,6 +110,10 @@ function boot(shared) {
 }
 
 function renderAll() {
+  /* Nothing below may run until every checked size is in Z: the controls are
+   * live before the first load lands, and a click in that window must not
+   * reach Z[size].cell of a size that has not arrived. */
+  if (!SIZES.length || !SIZES.every(function (s) { return Z[s]; })) return;
   buildHero();
   buildSpecimens();
   buildProvenance();
@@ -131,8 +135,9 @@ function buildHero() {
   /* Four faces at each size, shipped as one package: eight files. */
   $('#fact-faces').textContent = S.faces.length * S.sizes.length;
   $('#fact-sizes').textContent = S.sizes.length;
+  /* With two sizes the bare numbers would not say which is which. */
   $('#fact-hand').textContent = SIZES.map(function (s) {
-    return Z[s].totals[0].hand;
+    return Z[s].totals[0].hand + (SIZES.length > 1 ? ' (' + s + ')' : '');
   }).join(' / ');
   $('#px-ladder').textContent = SIZES.map(function (s) {
     var h = Z[s].cell.h;
@@ -162,7 +167,9 @@ function loadSize(size) {
 }
 
 /* A size's data that fails to load after boot (offline, 404, bad JSON) must
- * not fail silently: one notice above the grid, replaced by the next. */
+ * not fail silently: one notice in the sticky masthead, next to the size
+ * control the visitor just used (the grid is thousands of pixels down), and
+ * replaced by the next. */
 function showLoadError(size, err) {
   var old = $('#load-error');
   if (old) old.remove();
@@ -171,14 +178,18 @@ function showLoadError(size, err) {
     'Check your connection and try again.');
   p.id = 'load-error';
   p.setAttribute('role', 'alert');
-  $('#grid').parentNode.insertBefore(p, $('#grid'));
+  $('.masthead').appendChild(p);
 }
 
 function setSizes(list) {
   SIZES = S.sizes.filter(function (s) { return list.indexOf(s) >= 0; });
   setPref(PREF.sizes, SIZES.join(','));
+  /* The comma is written as itself, the spec's form `?sizes=7x14,8x16`;
+   * URLSearchParams would encode it as %2C.  Any other parameter stays. */
   var u = new URL(location.href);
-  u.searchParams.set('sizes', SIZES.join(','));
+  u.searchParams.delete('sizes');
+  var rest = u.searchParams.toString();
+  u.search = '?' + (rest ? rest + '&' : '') + 'sizes=' + SIZES.join(',');
   history.replaceState(null, '', u.pathname + u.search + u.hash);
   Array.prototype.forEach.call(document.querySelectorAll('[name=size]'), function (cb) {
     cb.checked = SIZES.indexOf(cb.value) >= 0;
@@ -540,7 +551,11 @@ function target() {
 
 function route() {
   var m = /^#\/glyph\/(\d+x\d+)\/([a-z-]+)\/([0-9A-F]+)$/.exec(location.hash);
-  if (!m) { if (ED) closeEditor(true); return; }
+  if (!m) {
+    WANT = null;   // a slow load must not open the editor after the visitor left
+    if (ED) closeEditor(true);
+    return;
+  }
   var size = S.sizes.indexOf(m[1]) >= 0 ? m[1] : SIZES[0];
   var face = S.faces.indexOf(m[2]) >= 0 ? m[2] : 'regular';
   var i = S.cps.indexOf(parseInt(m[3], 16));
@@ -578,9 +593,10 @@ function showEditor(i, face, size) {
     exists: k >= 0 && z.layers[face][k] === 'h',
     ghost: pref(PREF.hint, '1') === '1'
   };
-  /* sizes.css reads this to give .paint the size's own column count and
-   * pixel size. */
-  $('#editor').setAttribute('data-size', size);
+  /* data-size is deliberately NOT set on #editor: it would give the whole
+   * drawer this size's units and family, and its chrome (subtitle, path,
+   * buttons) belongs in Smalti8x16 at 16 px like the rest of the page.  Only
+   * the paint grid and the title glyph carry it. */
   drawEditor();
   $('#editor').hidden = false;
   $('#scrim').hidden = false;
@@ -626,7 +642,7 @@ function drawEditor() {
   var top = el('div', 'ed-top');
   var h = el('h2', 'ed-title');
   h.id = 'ed-title';
-  h.innerHTML = '<b>' + (S.textok.charAt(i) === '1' && SHOWN[i]
+  h.innerHTML = '<b data-size="' + ED.size + '">' + (S.textok.charAt(i) === '1' && SHOWN[i]
                           ? esc(SHOWN[i]) : '&nbsp;') + '</b>' + esc(NAME[i]);
   var sub = el('p', 'ed-sub', 'U+' + hex(cp) + '  ·  ' + ED.size + '  ·  ' +
     (layer ? LAYER_NAME[layer] : 'not drawn yet'));
@@ -643,16 +659,16 @@ function drawEditor() {
   faceRow.style.margin = '14px 0 0';
   faceRow.appendChild(document.createTextNode('face  '));
   var fs = el('select');
-  fs.className = 'px';
-  fs.style.cssText = 'background:var(--mortar);color:var(--ink);' +
-    'border:1px solid var(--grout2);padding:3px 7px;font-family:inherit;font-size:14px';
+  fs.className = 'ed-face';
   S.faces.forEach(function (f) {
     var o = el('option', null, S.faceLabel[f]);
     o.value = f;
     fs.appendChild(o);
   });
   fs.value = ED.face;
-  fs.addEventListener('change', function () { openEditor(ED.i, fs.value, ED.size); });
+  /* fromHash=true: the editor re-opens itself, so LAST_FOCUS must stay the
+   * tile that opened it, not this select, which the redraw removes. */
+  fs.addEventListener('change', function () { openEditor(ED.i, fs.value, ED.size, true); });
   faceRow.appendChild(fs);
   host.appendChild(faceRow);
 
@@ -687,7 +703,7 @@ function drawEditor() {
  * second copy of that arithmetic here would be a copy that can disagree. */
 
 function gridGeom(g) {
-  var G = Z[ED.size].guides, C = Z[ED.size].cell;
+  var C = Z[ED.size].cell;
   var cells = g.querySelectorAll('.pix');
   var w = C.w;
   if (cells.length < w + 2) return null;
@@ -812,6 +828,7 @@ function drawOverlay() {
 function paintGrid() {
   var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var g = el('div', 'paint');
+  g.setAttribute('data-size', ED.size);   // its own column count and pixel size
   g.setAttribute('role', 'group');
   g.setAttribute('aria-label', C.w + ' by ' + C.h + ' pixel grid');
   var painting = null;
@@ -866,7 +883,7 @@ function paintGrid() {
 }
 
 function onGridKey(e) {
-  var G = Z[ED.size].guides, C = Z[ED.size].cell;
+  var C = Z[ED.size].cell;
   var t = e.target.closest('.pix');
   if (!t) return;
   var x = +t.dataset.x, y = +t.dataset.y, w = C.w, h = C.h;
@@ -1073,7 +1090,7 @@ function copyFile(btn) {
 /* Redraw everything that depends on the pixels: the grid, the previews, the
  * file text and the GitHub link. */
 function refresh() {
-  var G = Z[ED.size].guides, C = Z[ED.size].cell;
+  var C = Z[ED.size].cell;
   var host = $('#editor');
   var pix = host.querySelectorAll('.pix');
   for (var n = 0; n < pix.length; n++) {

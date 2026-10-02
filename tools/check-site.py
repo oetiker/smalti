@@ -22,6 +22,8 @@ is re-derived from the glyph store and compared:
   7. the editor's ghost fonts: that every codepoint the page offers a
      reference glyph for is really in a shipped hint font, AND that every one
      it refuses is really absent from all of them
+  8. that the editor drawer itself is not given a data-size, which would set
+     its chrome in one size's family and units
 
 The decode here is written out again rather than imported from build-site.py
 on purpose: a check that shares its arithmetic with the thing it checks can
@@ -404,6 +406,22 @@ def main():
             if ord(ch) not in resolved['regular']:
                 bad(f'the zoom-{s["z"]} specimen uses U+{ord(ch):04X}, which the '
                     f'font does not have')
+
+    # 8 -- the editor drawer's chrome stays in the chrome font.  A data-size
+    # on #editor hands the whole drawer one size's family and units, which
+    # sets its text in Smalti8x16 at 14/28 px (blurred) for 7x14.  Only the
+    # paint grid and the title glyph may carry it.
+    with open(os.path.join(site, 'smalti.js'), encoding='utf-8') as fh:
+        js = fh.read()
+    on_editor = (r"""(\$\(\s*['"]#editor['"]\s*\)|getElementById\(\s*['"]editor['"]\s*\))"""
+                 r"""\s*\.(setAttribute\(\s*['"]data-size|dataset\.size)""")
+    if re.search(on_editor, js):
+        bad("smalti.js sets data-size on #editor: the whole drawer would take "
+            "one size's family and units; put it on the paint grid and the "
+            "title glyph only")
+    if re.search(r'id="editor"[^>]*data-size', page) or \
+            re.search(r'#editor\s*\[data-size', css):
+        bad('#editor carries data-size in index.html or smalti.css')
 
     for s in os.listdir(site):
         if re.fullmatch(r'\d+x\d+', s) and os.path.isdir(os.path.join(site, s)):

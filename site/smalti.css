@@ -121,7 +121,6 @@ em { font-style: italic; color: var(--ink); }
   border-bottom: 1px solid var(--grout);
 }
 .mark { text-decoration: none; letter-spacing: 0; color: var(--ink); }
-.mark b { color: var(--gold); font-weight: 400; margin-left: var(--u); }
 .masthead nav { display: flex; gap: var(--u3); flex-wrap: wrap; }
 .masthead nav a { text-decoration: none; color: var(--ink-dim); }
 .masthead nav a:hover, .masthead nav a:focus-visible { color: var(--gold); }
@@ -200,9 +199,6 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .spec-name span { color: var(--ink-dim); }
 .spec-line { margin: 0 0 var(--u2); white-space: pre; color: var(--ink); }
 .spec-line:last-child { margin-bottom: 0; }
-.spec-line b { color: var(--ink-dim); display: inline-block; width: 6ch;
-               font-weight: 400; font-size: var(--u2); line-height: inherit;
-               vertical-align: top; }
 /* The three exact sizes, indexed by MULTIPLE and not by pixel count.  These
  * were .s14/.s28/.s42 and smalti.js built the class name as 's' + the pixel
  * size, so the 8x16 page asked for .s16/.s32/.s48, matched nothing, and set
@@ -303,16 +299,13 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 /* One tile per glyph.  The glyph is always the same ink on the same ground so
  * the specimen stays honest; provenance is the hairline along the bottom. */
 .tile {
-  position: relative; background: var(--mortar2); border: 0; padding: 0;
+  position: relative; background: var(--mortar2); border: 0;
   color: var(--ink); font-family: var(--pixel); line-height: 1;
   display: flex; align-items: flex-end; justify-content: center;
   gap: 6px; padding: 6px 4px; cursor: pointer;
   box-shadow: inset 0 0 0 1px var(--grout);
 }
 .tile::after { content: ""; position: absolute; inset: auto 0 0 0; height: 2px; }
-.tile.h::after { background: var(--gold); }
-.tile.u::after { background: var(--cobalt); }
-.tile.g::after { background: var(--verdigris); }
 .tile.miss { color: var(--grout2); background: var(--mortar); }
 .tile.miss::after { background: repeating-linear-gradient(90deg,
     var(--grout2) 0 2px, transparent 2px 4px); }
@@ -320,7 +313,6 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .tile.rule::after { background: var(--grout); }
 .tile:hover:not(.rule) { background: var(--mortar3); }
 .tile:hover:not(.rule) { outline: 1px solid var(--gold); outline-offset: -1px; }
-.tile b { font-weight: 400; }
 
 /* One half per shown size, bottom-aligned so both sit on the tile's
  * baseline.  The font size is the size's own multiple, set inline by the
@@ -328,6 +320,8 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .tile .half { font-size: var(--tsize); line-height: 1; border: 0; padding: 0;
               background: none; color: inherit; cursor: pointer; position: relative; }
 .tile .half.h { box-shadow: inset 0 -2px 0 var(--gold); }
+.tile .half.u { box-shadow: inset 0 -2px 0 var(--cobalt); }
+.tile .half.g { box-shadow: inset 0 -2px 0 var(--verdigris); }
 .tile .half:hover { outline: 1px solid var(--gold); outline-offset: 1px; }
 .spec-line .size { color: var(--ink-dim); display: inline-block; width: 6ch;
                   font-size: var(--u2); line-height: inherit; vertical-align: top; }
@@ -341,6 +335,8 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .bold { font-weight: 700; }
 
 .empty { color: var(--ink-dim); padding: var(--u4) 0; }
+/* The load-error notice lives in the masthead, on a line of its own. */
+.masthead .empty { flex: 1 0 100%; margin: 0; padding: 0; color: var(--gold); }
 
 /* --------------------------------------------------------------- editor -- */
 
@@ -358,10 +354,15 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
           gap: var(--u2); border-bottom: 1px solid var(--grout);
           padding-bottom: var(--u2); }
 .ed-title { margin: 0; font-family: var(--prose); font-weight: 400; font-size: 23px; }
-.ed-title b { font-family: var(--pixel); font-size: var(--u4); color: var(--gold);
+/* The big glyph carries its own data-size, which supplies the family, and
+ * --u4 is then this size's whole multiple (2x its cell height). */
+.ed-title b { font-size: var(--u4); color: var(--gold);
               font-weight: 400; margin-right: var(--u2); }
 .ed-sub { margin: 4px 0 0; color: var(--ink-dim); font-family: var(--pixel);
           font-size: var(--u2); }
+.ed-face { background: var(--mortar); color: var(--ink);
+           border: 1px solid var(--grout2); padding: var(--u) var(--u2);
+           font-family: var(--pixel); font-size: var(--u2); }
 .ed-close { background: none; border: 1px solid var(--grout2); color: var(--ink);
             font-family: var(--pixel); font-size: var(--u2); padding: var(--u) var(--u2);
             cursor: pointer; }

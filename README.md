@@ -275,8 +275,8 @@ The two rules are the same everywhere; only the spelling changes.
   points read against 96 dpi rather than the real display dpi.
 * **A browser or an editor** — set the size in **`px`**, not `pt`, `em` or a
   percentage, and use the cell height or a whole multiple of it: 14, 28 or 42
-  for 7x14, and 16, 32 or 48 for 8x16.  The specimen page sets each size at exactly
-  its own three sizes and nothing in between, for this reason.
+  for 7x14, and 16, 32 or 48 for 8x16.  The specimen page sets each cell size at exactly
+  its own three pixel sizes and nothing in between, for this reason.
 
 ### The font is installed and the terminal cannot see it
 

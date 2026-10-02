@@ -6,7 +6,7 @@ Usage: build-site.py [--out DIR] [--repo OWNER/NAME] [--branch NAME] [SIZE ...]
 Three jobs, and every one of them reads the glyph store rather than a list
 somebody has to keep up to date:
 
-  * the four .woff2 faces, copied from build/ -- a BROWSER CANNOT RENDER THE
+  * the four .woff2 faces of each size, copied from build/ -- a BROWSER CANNOT RENDER THE
     .otb FILES AT ALL.  They are bitmap-only and no browser draws an embedded
     strike, so the site loads the traced outlines.  Those are pixel-exact at
     integer multiples of the cell height (1x, 2x, 3x) and blurry between.
@@ -330,7 +330,10 @@ def split_sizes(per_size):
     A future size that covers a different set is refused here rather than
     drawn with a strip that is true for one size only.
     """
-    sizes = list(per_size)
+    # Smaller cell first (spec 2.3, 2.5), whatever order the command line
+    # named them in: the page lays the sizes out in this order.
+    sizes = sorted(per_size, key=lambda s: (per_size[s]['cell']['h'],
+                                            per_size[s]['cell']['w']))
     first = per_size[sizes[0]]
     for s in sizes[1:]:
         for key in SHARED_KEYS:
@@ -476,7 +479,8 @@ CHROME_SIZE = '8x16'   # spec 2.7: the chrome is set in 8x16 at 1x
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('size', nargs='*', default=['7x14'])
+    ap.add_argument('size', nargs='*', default=None,
+                    help='sizes to build (default: every glyphs/<size> directory)')
     ap.add_argument('--out', default=os.path.join('build', 'site'))
     ap.add_argument('--repo', default=None)
     ap.add_argument('--branch', default='main')
@@ -488,7 +492,9 @@ def main():
               'request" links are disabled.  Pass --repo owner/name.',
               file=sys.stderr)
 
-    sizes = a.size or ['7x14']
+    sizes = a.size or sorted(
+        d for d in os.listdir(os.path.join(gs.ROOT, 'glyphs'))
+        if os.path.isdir(os.path.join(gs.ROOT, 'glyphs', d)))
     if len(set(sizes)) != len(sizes):
         raise SystemExit(f'a size is named twice: {sizes}')
     if CHROME_SIZE not in sizes:
