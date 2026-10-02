@@ -229,7 +229,9 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
           margin: var(--u3) 0; }
 .legend span { display: flex; align-items: center; gap: var(--u); }
 .legend i { width: 12px; height: 12px; display: block; border: 1px solid var(--grout2); }
-.legend i.on { background: var(--ink); border-color: var(--ink); }
+.legend i.h { background: var(--gold); border-color: var(--gold); }
+.legend i.u { background: var(--cobalt); border-color: var(--cobalt); }
+.legend i.g { background: var(--verdigris); border-color: var(--verdigris); }
 .legend i.off { background: transparent; }
 .legend i.rule { background: var(--mortar3); border-color: var(--grout2);
                  background-image: linear-gradient(135deg, transparent 44%,
@@ -252,10 +254,15 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
   width: 8px; height: 8px; display: block; padding: 0;
   border: 1px solid var(--grout); background: transparent;
 }
-.strip button.on { background: var(--ink); border-color: var(--ink); cursor: pointer; }
-.strip button.off { cursor: pointer; }
+.strips { display: grid; gap: var(--u); }
+.strip-line { display: grid; grid-template-columns: 6ch 1fr; gap: var(--u); align-items: start; }
+.strip-size { color: var(--ink-dim); font-size: var(--u2); }
+.strip button { cursor: pointer; }
+.strip button.h { background: var(--gold); border-color: var(--gold); }
+.strip button.u { background: var(--cobalt); border-color: var(--cobalt); }
+.strip button.g { background: var(--verdigris); border-color: var(--verdigris); }
 .strip button.off:hover { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 30%, transparent); }
-.strip button.on:hover { background: var(--gold); border-color: var(--gold); }
+.strip button:not(.off):hover { outline: 1px solid var(--ink); outline-offset: 0; }
 .strip i.rule { background: var(--mortar3); border-color: var(--grout2);
                 background-image: linear-gradient(135deg, transparent 40%,
                   var(--grout2) 40%, var(--grout2) 60%, transparent 60%); }

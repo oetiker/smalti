@@ -117,6 +117,7 @@ function renderAll() {
   buildHero();
   buildSpecimens();
   buildProvenance();
+  renderBlocks();
   renderGrid();
 }
 
@@ -310,33 +311,81 @@ function buildProvenance() {
 
 /* ---------------------------------------------------------------- blocks -- */
 
+var BLOCK_ZERO = [];       // blocks with nothing drawn, listed on request
+var BLOCK_MORE = null;     // the opened list of those, or null while closed
+
+/* Built once: the legend and the untouched-blocks note.  The rows themselves
+ * depend on the checked sizes and the face, so renderBlocks draws them. */
 function buildBlocks() {
   var legend = $('#cov-legend');
   legend.innerHTML =
-    '<span><i class="on"></i>a glyph this font has</span>' +
-    '<span><i class="off"></i>nobody has drawn it yet</span>' +
+    '<span><i class="h"></i>drawn here</span>' +
+    '<span><i class="u"></i>upstream</span>' +
+    '<span><i class="g"></i>generated</span>' +
+    '<span><i class="off"></i>not drawn yet</span>' +
     '<span><i class="rule"></i>left undrawn by rule, East Asian Wide</span>';
 
-  var host = $('#blocks'), wrap = el('div', 'blocks'), zero = [];
+  var host = $('#blocks');
+  host.appendChild(el('div', 'blocks'));
   S.blocks.forEach(function (b) {
-    if (b.covered || b.extra) wrap.appendChild(blockRow(b));
-    else zero.push(b);
+    if (!b.covered && !b.extra) BLOCK_ZERO.push(b);
   });
-  host.appendChild(wrap);
+  host.addEventListener('click', blockClick);
 
   var note = $('#untouched-note');
-  var total = zero.reduce(function (a, b) { return a + b.target; }, 0);
-  note.textContent = zero.length + ' more Unicode blocks in the Basic ' +
+  var total = BLOCK_ZERO.reduce(function (a, b) { return a + b.target; }, 0);
+  note.textContent = BLOCK_ZERO.length + ' more Unicode blocks in the Basic ' +
     'Multilingual Plane have nothing drawn at all — ' + total.toLocaleString() +
     ' codepoints, and every one of them is somebody’s first pull request. ';
   var more = el('button', 'blk-more', 'Show the untouched blocks');
   more.addEventListener('click', function () {
     more.remove();
-    var w2 = el('div', 'blocks');
-    zero.forEach(function (b) { w2.appendChild(blockRow(b)); });
-    note.parentNode.insertBefore(w2, note.nextSibling);
+    BLOCK_MORE = el('div', 'blocks');
+    BLOCK_MORE.addEventListener('click', blockClick);
+    note.parentNode.insertBefore(BLOCK_MORE, note.nextSibling);
+    renderBlocks();
   });
   note.appendChild(more);
+}
+
+/* One click listener per container; a cell names its codepoint and size. */
+function blockClick(e) {
+  var btn = e.target.closest('button[data-i]');
+  if (btn) openEditor(+btn.dataset.i, null, btn.dataset.size);
+}
+
+/* Draws the block rows for the checked sizes and the browser's face.  The
+ * list of untouched blocks, if the reader opened it, is redrawn in place. */
+function renderBlocks() {
+  var wrap = $('#blocks').firstChild;
+  wrap.textContent = '';
+  S.blocks.forEach(function (b) {
+    if (b.covered || b.extra) wrap.appendChild(blockRow(b));
+  });
+  if (BLOCK_MORE) {
+    BLOCK_MORE.textContent = '';
+    BLOCK_ZERO.forEach(function (b) { BLOCK_MORE.appendChild(blockRow(b)); });
+  }
+}
+
+/* The strip of one size: each cell is coloured by the layer its glyph comes
+ * from in that size, so the strips differ where the sizes do. */
+function stripHtml(b, size) {
+  var out = [], face = FACE, layers = Z[size].layers[face];
+  for (var i = b.from; i < b.to; i++) {
+    var st = S.state[i];
+    var label = 'U+' + hex(S.cps[i]) + ' ' + NAME[i] + ', ' + size;
+    if (st === 'w') {
+      out.push('<i class="rule" title="' + esc(label + ', East Asian Wide, taken from the emoji font') + '"></i>');
+    } else {
+      var cls = st === '#' ? layers[COVI[i]] : 'off';
+      var what = st === '#' ? LAYER_SHORT[cls] : 'not drawn yet';
+      out.push('<button type="button" class="' + cls + '" data-i="' + i +
+               '" data-size="' + size + '" title="' + esc(label + ', ' + what) +
+               '" aria-label="' + esc(label + ', ' + what) + '"></button>');
+    }
+  }
+  return out.join('');
 }
 
 function blockRow(b) {
@@ -357,33 +406,22 @@ function blockRow(b) {
                 b.byRule + ' by rule</em>' : '');
   row.appendChild(n);
 
-  var strip = el('div', 'strip');
+  var strips = el('div', 'strips');
   if (b.to > b.from) {
-    for (var i = b.from; i < b.to; i++) {
-      var st = S.state[i];
-      if (st === 'w') {
-        var t = el('i', 'rule');
-        t.title = 'U+' + hex(S.cps[i]) + ' ' + NAME[i] +
-                  ' — East Asian Wide, taken from the emoji font';
-        strip.appendChild(t);
-      } else {
-        var btn = el('button', st === '#' ? 'on' : 'off');
-        btn.type = 'button';
-        btn.dataset.i = i;
-        btn.title = 'U+' + hex(S.cps[i]) + ' ' + NAME[i] +
-                    (st === '#' ? '' : ' — not drawn yet');
-        btn.setAttribute('aria-label', btn.title);
-        btn.addEventListener('click', function (e) {
-          openEditor(+e.currentTarget.dataset.i, null, SIZES[0]);
-        });
-        strip.appendChild(btn);
-      }
-    }
+    SIZES.forEach(function (size) {
+      var line = el('div', 'strip-line');
+      line.appendChild(el('span', 'strip-size px', size));
+      var strip = el('div', 'strip');
+      strip.innerHTML = stripHtml(b, size);
+      line.appendChild(strip);
+      strips.appendChild(line);
+    });
   } else {
-    strip.appendChild(el('span', 'px', '—'));
-    strip.firstChild.style.color = 'var(--grout2)';
+    var dash = el('span', 'px', '—');
+    dash.style.color = 'var(--grout2)';
+    strips.appendChild(dash);
   }
-  row.appendChild(strip);
+  row.appendChild(strips);
   return row;
 }
 
@@ -397,7 +435,7 @@ function buildControls() {
     sel.appendChild(o);
   });
   sel.value = FACE;
-  sel.addEventListener('change', function () { FACE = sel.value; renderGrid(); });
+  sel.addEventListener('change', function () { FACE = sel.value; renderBlocks(); renderGrid(); });
 
   Array.prototype.forEach.call(document.querySelectorAll('[name=zoom]'), function (r) {
     r.addEventListener('change', function () { ZOOM = +r.value; renderGrid(); });

@@ -48,8 +48,13 @@ with the same coverage state. Only provenance differs (313 glyphs drawn here at
 ### 2.4 Coverage
 
 - The provenance table has one column group per checked size.
-- The block strips stay one strip per block. The build refuses sizes whose
-  codepoint lists differ (section 3.2), so one strip is true for every size.
+- Each covered block shows one strip per checked size, the smaller cell first,
+  each labelled with its size. A cell is coloured by the layer that size's
+  glyph comes from (drawn here, upstream, generated) in the face chosen in the
+  glyph browser; not drawn yet and left undrawn by rule keep their look. A
+  click opens the editor for that strip's size.
+- The user chose this on 2026-10-03: the build refuses sizes whose codepoint
+  lists differ (section 3.2), so coverage-only strips are identical across sizes.
 
 ### 2.5 Every glyph
 
