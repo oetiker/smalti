@@ -161,7 +161,7 @@ GEN     := build/gen/$(SIZE)/.stamp
 GENTOOL := tools/glyphstore.py tools/accents.py tools/weight.py \
            tools/gen-braille.py tools/gen-arrows.py tools/gen-circled-digits.py \
            tools/gen-latin-ext-a.py tools/embolden.py tools/slant-bdf.py \
-           tools/slant-bold.py
+           tools/slant-bold.py tools/gen-box.py tools/boxgeom.py
 
 FACES := Regular Bold Italic BoldItalic
 TTF   := $(FACES:%=build/$(FONT)-%.ttf)
@@ -209,6 +209,7 @@ $(GEN): $(GENTOOL) $(HAND) $(UPSTREAM_R) $(UPSTREAM_B)
 	python3 tools/gen-braille.py $(SIZE)
 	python3 tools/gen-arrows.py $(SIZE)
 	python3 tools/gen-circled-digits.py $(SIZE)
+	python3 tools/gen-box.py $(SIZE)
 	python3 tools/gen-latin-ext-a.py $(UPSTREAM_R) build/gen/$(SIZE)/regular
 	python3 tools/embolden.py $(SIZE)
 	python3 tools/gen-latin-ext-a.py $(UPSTREAM_B) build/gen/$(SIZE)/bold
@@ -260,6 +261,7 @@ check-sources: all
 	$(PY) tools/test-glyphstore.py
 	$(PY) tools/test-accents.py
 	$(PY) tools/test-weight.py
+	$(PY) tools/test-box.py
 	$(PY) tools/test-check-glyphs.py $(SIZE)
 	$(PY) tools/check-glyphs.py $(SIZE)
 
