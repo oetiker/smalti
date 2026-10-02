@@ -98,7 +98,8 @@ them:
 | double horizontal | rows 6 and 8 |
 | arc corner cut | 1 pixel |
 
-Every line runs to the cell edge.  The left half-block `▌` is columns 0..2
+Every solid line runs to the cell edge; a dashed line ends the cell with a
+gap.  The left half-block `▌` is columns 0..2
 and `▐` is columns 3..6, so the axis column belongs to the right half.
 
 ## What is not drawn here

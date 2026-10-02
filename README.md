@@ -895,7 +895,7 @@ The light lines sit where upstream already puts `-` and `|`, so `─` continues
 | arc corner cut | 1 pixel | 2 pixels |
 
 A heavy line takes its second pixel on the side that centres the pair in the
-cell, and a tie goes up or left.  Every line runs to the cell edge, so a run
+cell, and a tie goes up or left.  Every solid line runs to the cell edge, so a run
 of `─` or `│` has no break at the cell boundary.
 
 Dashed lines start each cell with ink and end it with a gap, so `┄┄┄┄` repeats
