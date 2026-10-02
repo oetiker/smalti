@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prove the built site tells the truth about the repository.
 
-Usage: check-site.py [--site DIR] [SIZE]
+Usage: check-site.py [--site DIR] --size SIZE
 
 The site ships a copy of every drawing so that a visitor can edit one without
 cloning anything.  A copy can go stale, and a stale copy here is worse than no
@@ -138,13 +138,27 @@ def check_hint(site, d):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('size', nargs='?', default='7x14')
     ap.add_argument('--site', default=os.path.join('build', 'site'))
+    ap.add_argument('--size', required=True)
     a = ap.parse_args()
     size, site = a.size, a.site
 
-    with open(os.path.join(site, 'data', 'glyphs.json'), encoding='utf-8') as fh:
-        d = json.load(fh)
+    with open(os.path.join(site, 'data', 'site.json'), encoding='utf-8') as fh:
+        shared = json.load(fh)
+    path = os.path.join(site, 'data', f'{size}.json')
+    if not os.path.exists(path):
+        bad(f'{path} is missing, so the page cannot show {size} at all')
+        print(f'check-site: {len(fails)} FAILURES')
+        sys.exit(1)
+    with open(path, encoding='utf-8') as fh:
+        mine = json.load(fh)
+    if size not in shared['sizes']:
+        bad(f'site.json lists sizes {shared["sizes"]}, not {size}')
+    # Every existing check reads `d`.  One merged dict keeps them unchanged:
+    # the shared keys and this size's keys never collide by construction.
+    d = dict(shared)
+    d.update(mine)
+    d['size'] = size
     w, h = d['cell']['w'], d['cell']['h']
     if (w, h) != gs.cell(size):
         bad(f'cell {w}x{h} in the data, {gs.cell(size)} in the repository')
@@ -282,6 +296,12 @@ def main():
     if not css:
         bad('fonts.css is missing, so the page has no @font-face rule at all '
             'and would render in a fallback font')
+    fam = f'Smalti{size}'
+    if d.get('family') != fam:
+        bad(f'{size}.json names family {d.get("family")!r}, expected {fam!r}')
+    n_fam = len(re.findall(r'font-family:\s*' + re.escape(fam) + r';', css))
+    if n_fam != len(gs.FACES):
+        bad(f'fonts.css declares {n_fam} faces of {fam}, expected {len(gs.FACES)}')
     for face, name in d['faceFile'].items():
         if css.count(f'fonts/{name}') != 1:
             bad(f'fonts.css does not reference fonts/{name} exactly once')
@@ -296,26 +316,30 @@ def main():
 
     # 6b -- THE CELL THE STYLESHEET BELIEVES IN.
     #
-    # site/smalti.css is copied into every size's page unchanged, so every
-    # number in it that knows the cell has to come from size.css instead.  When
-    # it did not, the 8x16 page laid an eight-column editor into a seven-column
-    # grid and set every specimen line at 14px on a 16px cell -- both silent,
-    # both visible only to someone who opened the page and looked.  A page that
-    # renders wrong while every other check is green is exactly what this
-    # section exists to stop.
-    scss = os.path.join(site, 'size.css')
+    # site/smalti.css is shared by both sizes, so every number in it that
+    # knows the cell has to come from sizes.css instead.  When it did not, the
+    # 8x16 page laid an eight-column editor into a seven-column grid and set
+    # every specimen line at 14px on a 16px cell -- both silent, both visible
+    # only to someone who opened the page and looked.  A page that renders
+    # wrong while every other check is green is exactly what this section
+    # exists to stop.
+    scss = os.path.join(site, 'sizes.css')
     css2 = open(scss, encoding='utf-8').read() if os.path.exists(scss) else ''
     if not css2:
-        bad('size.css is missing, so the page has no cell geometry at all and '
-            'falls back to whatever smalti.css happens to hardcode')
+        bad('sizes.css is missing, so the page has no cell geometry at all')
     else:
-        for prop, want in (('--cell-cols', w), ('--cell-rows', h)):
-            if f'{prop}: {want};' not in css2:
-                bad(f'size.css does not declare {prop}: {want} for {size}')
-        if f'--u2: {h}px;' not in css2:
-            bad(f'size.css does not set --u2 to the cell height {h}px, so '
-                f'every pixel-font size on the page is not a whole multiple '
-                f'of the cell and the text renders blurred')
+        block = re.search(r'\[data-size="' + re.escape(size) + r'"\]\s*\{([^}]*)\}', css2)
+        if not block:
+            bad(f'sizes.css has no [data-size="{size}"] block')
+        else:
+            body = block.group(1)
+            for prop, want in (('--cell-cols', w), ('--cell-rows', h),
+                               ('--u2', f'{h}px')):
+                if not re.search(re.escape(prop) + r':\s*' + re.escape(str(want)) + r'(px)?;', body):
+                    bad(f'sizes.css [data-size="{size}"] does not declare {prop}: {want}')
+        root = re.search(r':root\s*\{([^}]*)\}', css2)
+        if not root or not re.search(r'--u2:\s*16px;', root.group(1)):
+            bad('sizes.css :root does not carry 8x16\'s --u2: 16px for the chrome')
 
     page_css = open(os.path.join(site, 'smalti.css'), encoding='utf-8').read()
     if 'repeat(var(--cell-cols)' not in page_css:
@@ -328,12 +352,9 @@ def main():
     # this shipped.
     for spec in d['specimen']:
         if f'.s{spec["z"]} ' not in page_css:
-            bad(f'the {spec["px"]}px specimen line uses class .s{spec["z"]}, '
+            bad(f'the zoom-{spec["z"]} specimen line uses class .s{spec["z"]}, '
                 f'which smalti.css does not define -- it would render at the '
                 f'body size instead')
-        if spec['px'] != spec['z'] * h:
-            bad(f'specimen line claims {spec["px"]}px at zoom {spec["z"]} on a '
-                f'{h}-row cell')
 
     # The guide rows the editor draws.  The baseline is the one that moves
     # between sizes, so an unchecked constant here is invisible until someone
@@ -372,8 +393,12 @@ def main():
     for s in d['specimen']:
         for ch in s['text']:
             if ord(ch) not in resolved['regular']:
-                bad(f'the {s["px"]}px specimen uses U+{ord(ch):04X}, which the '
+                bad(f'the zoom-{s["z"]} specimen uses U+{ord(ch):04X}, which the '
                     f'font does not have')
+
+    for s in os.listdir(site):
+        if re.fullmatch(r'\d+x\d+', s) and os.path.isdir(os.path.join(site, s)):
+            bad(f'{site}/{s}/ exists: the per-size pages are gone, nothing may be built there')
 
     print(f'check-site: {len(listed)} codepoints listed, {len(covered)} glyphs '
           f'x {len(gs.FACES)} faces')

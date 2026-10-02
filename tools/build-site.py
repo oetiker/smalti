@@ -10,7 +10,7 @@ somebody has to keep up to date:
     .otb FILES AT ALL.  They are bitmap-only and no browser draws an embedded
     strike, so the site loads the traced outlines.  Those are pixel-exact at
     integer multiples of the cell height (1x, 2x, 3x) and blurry between.
-  * data/glyphs.json -- every glyph's art, its provenance layer and the exact
+  * data/<size>.json -- every glyph's art, its provenance layer and the exact
     header line its .txt file carries, so the in-page editor can emit a file
     that is byte-identical to the committed one.
   * the coverage model, computed from glyphstore.resolve() -- the same call
@@ -22,13 +22,12 @@ lists the codepoints the font does NOT have, next to the ones it does, in
 every block it touches -- and separates the ones left undrawn BY RULE from the
 ones nobody has got to yet.
 
-ONE PAGE PER SIZE, each under its own name -- build/site/7x14/, build/site/8x16/
--- with a redirect at the root.  The page is templated per size all the way
-down to its title, its cell dimensions and its wordmark, so a single page
-carrying every size would have to rewrite all of that on a click and hold two
-glyph sets in memory to do it.  A sibling page carries it for free, and the
-in-page editor stays honest because a page only ever knows one size.  The
-masthead links the siblings.
+ONE PAGE FOR EVERY SIZE.  Comparing 7x14 with 8x16 on two pages meant a jump
+that lost the scroll position, the face, the filter and the search.  The page
+shows the sizes side by side instead.  What the sizes share (codepoints,
+headers, coverage) is written once to data/site.json and refused when two
+sizes disagree; what differs (cell, drawings, provenance) goes to
+data/<size>.json, which the page fetches only for the sizes it shows.
 """
 import argparse
 import json
@@ -314,15 +313,42 @@ def build_data(size, repo, branch, hinted):
         'state': state,
         'textok': textok,
         'hint': hint,
-        # `z` is the MULTIPLE and `px` only the label.  site/smalti.js used
-        # to build the CSS class as 's' + px, which asked for .s16/.s32/.s48
-        # on the 8x16 page while smalti.css only ever defined .s14/.s28/.s42 --
-        # so every specimen line silently fell back to the body size.
-        'specimen': [{'z': mult, 'px': mult * h, 'text': text}
-                     for mult, text in SPECIMEN],
         'bits': bits, 'layers': layers,
         'blocks': blocks, 'totals': totals,
     }, resolved, covered
+
+
+SHARED_KEYS = ('faces', 'faceLabel', 'cps', 'headers', 'state', 'textok',
+               'hint', 'blocks', 'repo', 'branch')
+
+
+def split_sizes(per_size):
+    """One shared dict and one dict per size, from build_data()'s output.
+
+    The page shows the sizes side by side and draws ONE coverage strip per
+    block, so every key it treats as shared must be identical across sizes.
+    A future size that covers a different set is refused here rather than
+    drawn with a strip that is true for one size only.
+    """
+    sizes = list(per_size)
+    first = per_size[sizes[0]]
+    for s in sizes[1:]:
+        for key in SHARED_KEYS:
+            if per_size[s][key] != first[key]:
+                raise SystemExit(
+                    f'{s} and {sizes[0]} differ in {key!r} -- the one-page site '
+                    f'draws one coverage strip and one header per codepoint, so '
+                    f'every size must list the same codepoints the same way')
+    shared = {k: first[k] for k in SHARED_KEYS}
+    shared['sizes'] = sizes
+    shared['specimen'] = [{'z': z, 'text': t} for z, t in SPECIMEN]
+    own = {}
+    for s in sizes:
+        d = per_size[s]
+        own[s] = {'size': s, 'cell': d['cell'], 'family': f'Smalti{s}',
+                  'faceFile': d['faceFile'], 'bits': d['bits'],
+                  'layers': d['layers'], 'totals': d['totals']}
+    return shared, own
 
 
 # --------------------------------------------------------------- wordmark --
@@ -378,38 +404,8 @@ def default_repo():
     return ''
 
 
-def write_root(root, sizes):
-    """The site root: a redirect to the first size, and the Pages opt-out.
-
-    The root is not a page of its own.  It forwards to the first size and
-    carries the fragment across, so a bookmark of `/#browse` still lands on
-    the glyph browser now that the page has moved to `/7x14/#browse`.  The
-    no-script body is the real list rather than an apology, because it is also
-    what a reader gets if the redirect is ever wrong.
-    """
-    links = '\n'.join(f'<li><a href="{s}/">Smalti {s}</a></li>' for s in sizes)
-    open(os.path.join(root, 'index.html'), 'w', encoding='utf-8').write(
-        '<!doctype html>\n'
-        '<html lang="en">\n<meta charset="utf-8">\n'
-        '<title>Smalti</title>\n'
-        f'<link rel="canonical" href="{sizes[0]}/">\n'
-        f'<meta http-equiv="refresh" content="0; url={sizes[0]}/">\n'
-        f'<script>location.replace("{sizes[0]}/" + location.hash);</script>\n'
-        '<h1>Smalti</h1>\n<ul>\n' + links + '\n</ul>\n')
-
-    # Pages serves the upload as a plain directory; without this Jekyll would
-    # eat any path starting with an underscore and add a build step nobody
-    # asked for.  At the ROOT, because Jekyll is applied to the whole upload.
-    open(os.path.join(root, '.nojekyll'), 'w', encoding='utf-8').close()
-
-
-def build_one(size, out, repo, branch, plan, sizes):
-    """Write one size's page into `out`.
-
-    `sizes` is every size this run covers, so the masthead can link to the
-    siblings; a run of one size gets no size links, which is what a repository
-    with one size should show.
-    """
+def measure_size(size, repo, branch, plan):
+    """Everything one size contributes to the page.  Writes nothing."""
     data, resolved, covered = build_data(
         size, repo, branch, {cp for _fn, cps in plan for cp in cps})
     w, h = data['cell']['w'], data['cell']['h']
@@ -438,54 +434,16 @@ def build_one(size, out, repo, branch, plan, sizes):
 
     data['guides'] = {'baseline': ascent_px - 1, 'cap': GUIDE_CAP,
                       'xheight': GUIDE_XHEIGHT, 'axis': GUIDE_AXIS}
+    data['cmap'] = cmap
 
-    shutil.rmtree(out, ignore_errors=True)
-    os.makedirs(os.path.join(out, 'fonts'), exist_ok=True)
-    os.makedirs(os.path.join(out, 'data'), exist_ok=True)
-    os.makedirs(os.path.join(out, 'hint'), exist_ok=True)
-
-    for face, name in data['faceFile'].items():
-        src = os.path.join('build', name)
-        if not os.path.exists(src):
-            raise SystemExit(f'{src} is missing -- run `make woff2` first')
-        shutil.copyfile(src, os.path.join(out, 'fonts', name))
-
-    # sort_keys and a fixed separator so two builds of the same sources give
-    # the same bytes; C's release path cares and so does a Pages diff.
-    with open(os.path.join(out, 'data', 'glyphs.json'), 'w',
-              encoding='utf-8') as fh:
-        json.dump(data, fh, separators=(',', ':'), sort_keys=True)
-
-    for name in ASSETS:
-        shutil.copyfile(os.path.join('site', name), os.path.join(out, name))
-
-    # The @font-face rules are generated rather than written by hand, because
-    # the filenames carry the cell size and site/smalti.css must not have to
-    # know it.  `font-display: block` so the page never flashes a fallback
-    # font: a fallback here would misrepresent the thing being specimened.
-    css = ['/* generated by tools/build-site.py -- do not edit */']
-    for face in data['faces']:
-        css.append('@font-face {\n'
-                   '  font-family: SmaltiSite;\n'
-                   f'  src: url("fonts/{data["faceFile"][face]}") '
-                   'format("woff2");\n'
-                   f'  font-weight: {700 if face.startswith("bold") else 400};'
-                   f' font-style: {"oblique" if "italic" in face else "normal"};'
-                   ' font-display: block;\n}')
-    with open(os.path.join(out, 'fonts.css'), 'w', encoding='utf-8') as fh:
-        fh.write('\n'.join(css) + '\n')
-
-    # ------------------------------------------------------------ size.css --
-    #
-    # THE SIZE-DEPENDENT HALF OF THE STYLESHEET.  site/smalti.css is copied
-    # into every size's page UNCHANGED, so anything in it that knows the cell
-    # is right for one size and wrong for every other.  That is not
-    # hypothetical: it laid an 8-column editor grid into `repeat(7, ...)`, so
-    # the drawing wrapped and no glyph was legible, and it sized every scrap of
-    # pixel-font text at a literal 14px on a 16px cell, which is not a whole
-    # multiple and therefore blurs -- the one thing this whole site exists to
-    # avoid.  Generated for the same reason fonts.css is: what carries the size
-    # is generated, and smalti.css does not have to know it.
+    # THE CELL THE STYLESHEET BELIEVES IN.  site/smalti.css is shared by every
+    # size, so anything in it that knows the cell is right for one size and
+    # wrong for every other.  That is not hypothetical: it laid an 8-column
+    # editor grid into `repeat(7, ...)`, so the drawing wrapped and no glyph
+    # was legible, and it sized every scrap of pixel-font text at a literal
+    # 14px on a 16px cell, which is not a whole multiple and therefore blurs
+    # -- the one thing this whole site exists to avoid.  What carries the size
+    # is generated into sizes.css, and smalti.css does not have to know it.
     #
     # THE LAYOUT MODULE IS THE CELL, which is what smalti.css's own opening
     # comment always claimed.  One unit is the cell WIDTH.  Both drawn sizes
@@ -498,85 +456,22 @@ def build_one(size, out, repo, branch, plan, sizes):
             f'{size}: this stylesheet assumes a 1:2 cell, and {w}x{h} is not '
             f'one.  --u2 would no longer be the cell height, so every pixel '
             f'font size on the page would stop being a whole multiple of it. '
-            f'Give size.css its own --u2..--u6 derived from the height before '
+            f'Give sizes.css its own --u2..--u6 derived from the height before '
             f'adding this size.')
+    svg = wordmark_svg(resolved, w, h).replace(
+        '<svg class="wordmark"', f'<svg class="wordmark" data-size="{size}"', 1)
+    return data, svg
+
+
+def size_vars(w, h):
+    """The custom properties one cell size declares, as CSS lines."""
     unit = [1, 2, 3, 4, 6, 8]
-    size_css = ['/* generated by tools/build-site.py -- do not edit */',
-                ':root {',
-                f'  --cell-cols: {w};',
-                f'  --cell-rows: {h};'] + \
-               [f'  --u{"" if n == 1 else n}: {n * w}px;' for n in unit] + \
-               ['  --pix: var(--u4);', '}',
-                '@media (max-width: 720px) {',
-                '  :root { --pix: var(--u3); }', '}']
-    with open(os.path.join(out, 'size.css'), 'w', encoding='utf-8') as fh:
-        fh.write('\n'.join(size_css) + '\n')
+    return ([f'  --cell-cols: {w};', f'  --cell-rows: {h};'] +
+            [f'  --u{"" if n == 1 else n}: {n * w}px;' for n in unit] +
+            ['  --pix: var(--u4);'])
 
-    # The ghost fonts.  One family name over several files, each with a
-    # unicode-range covering exactly what it owns, so a browser fetches ONE of
-    # them -- the Nerd Font alone is a megabyte and must not be pulled down to
-    # draw a letter.  `font-display: block` because a ghost that arrives as a
-    # different font mid-draw would be worse than one that arrives late, and
-    # `swap` is what produces that.
-    hint_css = ['/* generated by tools/build-site.py -- do not edit */']
-    for fn, cps in plan:
-        shutil.copyfile(os.path.join(HINT_DIR, fn),
-                        os.path.join(out, 'hint', fn))
-        if not cps:
-            # Every codepoint it has is already owned by an earlier font.  Ship
-            # the file (the licence names it) but do not declare a face with an
-            # empty unicode-range, which no browser has a defined behaviour for.
-            continue
-        hint_css.append('@font-face {\n'
-                        '  font-family: SmaltiHint;\n'
-                        f'  src: url("hint/{fn}") format("woff2");\n'
-                        '  font-weight: 400; font-style: normal;'
-                        ' font-display: block;\n'
-                        f'  unicode-range: {css_ranges(cps)};\n}}')
-    with open(os.path.join(out, 'hint.css'), 'w', encoding='utf-8') as fh:
-        fh.write('\n'.join(hint_css) + '\n')
-    for fn in sorted(os.listdir(HINT_DIR)):
-        if fn.endswith('.txt') or fn == HINT_MANIFEST:
-            shutil.copyfile(os.path.join(HINT_DIR, fn),
-                            os.path.join(out, 'hint', fn))
 
-    hand = data['totals'][0]['hand']
-
-    # Links to the other sizes.  Plain size names, never a prettified
-    # multiplication sign: ui_chars() checks the TEMPLATE, so a character
-    # injected here would never be proved to be in the font.
-    nav = '\n    '.join(f'<a class="size" href="../{s}/">{s}</a>'
-                        for s in sizes if s != size)
-
-    tmpl = open(os.path.join('site', 'index.html'), encoding='utf-8').read()
-    page = (tmpl
-            .replace('{{WORDMARK}}', wordmark_svg(resolved, w, h))
-            .replace('{{SIZE}}', size)
-            .replace('{{GLYPHS}}', str(len(covered)))
-            .replace('{{CMAP}}', str(cmap))
-            .replace('{{FACES}}', str(len(data['faces'])))
-            .replace('{{HAND}}', str(hand))
-            .replace('{{CELL_W}}', str(w))
-            .replace('{{CELL_H}}', str(h))
-            .replace('{{SIZENAV}}', nav)
-            # The page names its own ppem ladder in three places.  Derived,
-            # never typed: at 8x16 the prose said 14/28/42 while the font
-            # rendered 16/32/48, and prose that contradicts the specimen
-            # beside it is worse than no prose.
-            .replace('{{PX1}}', str(h))
-            .replace('{{PX2}}', str(2 * h))
-            .replace('{{PX3}}', str(3 * h))
-            # A deliberately BAD size, to show what falls between the rungs,
-            # and what one rung lands on at a 150% scale factor.
-            .replace('{{PX_BLUR}}', str(h + 3))
-            .replace('{{PX_DEV}}', str(h * 3 // 2))
-            .replace('{{REPO}}', repo or ''))
-    open(os.path.join(out, 'index.html'), 'w', encoding='utf-8').write(page)
-
-    listed = len(data['cps'])
-    print(f'{out}: {len(covered)} glyphs x {len(data["faces"])} faces, '
-          f'{listed} codepoints listed across {len(data["blocks"])} blocks, '
-          f'{hand} drawn here')
+CHROME_SIZE = '8x16'   # spec 2.7: the chrome is set in 8x16 at 1x
 
 
 def main():
@@ -596,6 +491,9 @@ def main():
     sizes = a.size or ['7x14']
     if len(set(sizes)) != len(sizes):
         raise SystemExit(f'a size is named twice: {sizes}')
+    if CHROME_SIZE not in sizes:
+        raise SystemExit(f'the chrome is set in {CHROME_SIZE}, which this run '
+                         f'does not build (sizes: {sizes})')
 
     # Read once and handed to every size: the ghost fonts are vendored per
     # repository, not per size, and re-reading their cmaps per size would be
@@ -604,11 +502,112 @@ def main():
 
     root = a.out
     shutil.rmtree(root, ignore_errors=True)
+    for sub in ('fonts', 'data', 'hint'):
+        os.makedirs(os.path.join(root, sub), exist_ok=True)
+
+    per_size, svgs = {}, {}
     for size in sizes:
-        build_one(size, os.path.join(root, size), repo, a.branch, plan, sizes)
-    write_root(root, sizes)
-    print(f'{root}: {len(sizes)} size(s) -- {", ".join(sizes)}; '
-          f'the root redirects to {sizes[0]}')
+        per_size[size], svgs[size] = measure_size(size, repo, a.branch, plan)
+    shared, own = split_sizes(per_size)
+    for size in sizes:
+        own[size]['guides'] = per_size[size]['guides']
+        own[size]['cmap'] = per_size[size]['cmap']
+
+    # sort_keys and a fixed separator so two builds of the same sources give
+    # the same bytes; C's release path cares and so does a Pages diff.
+    def dump(obj, name):
+        with open(os.path.join(root, 'data', name), 'w',
+                  encoding='utf-8') as fh:
+            json.dump(obj, fh, separators=(',', ':'), sort_keys=True)
+    dump(shared, 'site.json')
+    for size in sizes:
+        dump(own[size], f'{size}.json')
+
+    for size in sizes:
+        for name in per_size[size]['faceFile'].values():
+            src = os.path.join('build', name)
+            if not os.path.exists(src):
+                raise SystemExit(f'{src} is missing -- run `make woff2` first')
+            shutil.copyfile(src, os.path.join(root, 'fonts', name))
+
+    # The @font-face rules are generated rather than written by hand, because
+    # the filenames carry the cell size and site/smalti.css must not have to
+    # know it.  One family per size, so the page can show both at once.
+    # `font-display: block` so the page never flashes a fallback font: a
+    # fallback here would misrepresent the thing being specimened.
+    css = ['/* generated by tools/build-site.py -- do not edit */']
+    for size in sizes:
+        for face in shared['faces']:
+            css.append('@font-face {\n'
+                       f'  font-family: Smalti{size};\n'
+                       f'  src: url("fonts/{per_size[size]["faceFile"][face]}") '
+                       'format("woff2");\n'
+                       f'  font-weight: {700 if face.startswith("bold") else 400};'
+                       f' font-style: {"oblique" if "italic" in face else "normal"};'
+                       ' font-display: block;\n}')
+    with open(os.path.join(root, 'fonts.css'), 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(css) + '\n')
+
+    # sizes.css: the chrome's geometry on :root (8x16, at 1x), then each
+    # size's own geometry under its [data-size] attribute.
+    cw, ch = per_size[CHROME_SIZE]['cell']['w'], per_size[CHROME_SIZE]['cell']['h']
+    scss = ['/* generated by tools/build-site.py -- do not edit */', ':root {'] + \
+           size_vars(cw, ch) + ['}']
+    for size in sizes:
+        w, h = per_size[size]['cell']['w'], per_size[size]['cell']['h']
+        scss += [f'[data-size="{size}"] {{'] + size_vars(w, h) + ['}']
+    scss += ['@media (max-width: 720px) {',
+             '  :root, [data-size] { --pix: var(--u3); }', '}']
+    with open(os.path.join(root, 'sizes.css'), 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(scss) + '\n')
+
+    for name in ASSETS:
+        shutil.copyfile(os.path.join('site', name), os.path.join(root, name))
+
+    # The ghost fonts.  One family name over several files, each with a
+    # unicode-range covering exactly what it owns, so a browser fetches ONE of
+    # them -- the Nerd Font alone is a megabyte and must not be pulled down to
+    # draw a letter.  `font-display: block` because a ghost that arrives as a
+    # different font mid-draw would be worse than one that arrives late, and
+    # `swap` is what produces that.
+    hint_css = ['/* generated by tools/build-site.py -- do not edit */']
+    for fn, cps in plan:
+        shutil.copyfile(os.path.join(HINT_DIR, fn),
+                        os.path.join(root, 'hint', fn))
+        if not cps:
+            # Every codepoint it has is already owned by an earlier font.  Ship
+            # the file (the licence names it) but do not declare a face with an
+            # empty unicode-range, which no browser has a defined behaviour for.
+            continue
+        hint_css.append('@font-face {\n'
+                        '  font-family: SmaltiHint;\n'
+                        f'  src: url("hint/{fn}") format("woff2");\n'
+                        '  font-weight: 400; font-style: normal;'
+                        ' font-display: block;\n'
+                        f'  unicode-range: {css_ranges(cps)};\n}}')
+    with open(os.path.join(root, 'hint.css'), 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(hint_css) + '\n')
+    for fn in sorted(os.listdir(HINT_DIR)):
+        if fn.endswith('.txt') or fn == HINT_MANIFEST:
+            shutil.copyfile(os.path.join(HINT_DIR, fn),
+                            os.path.join(root, 'hint', fn))
+
+    tmpl = open(os.path.join('site', 'index.html'), encoding='utf-8').read()
+    page = (tmpl
+            .replace('{{WORDMARKS}}', ''.join(svgs[s] for s in sizes))
+            .replace('{{REPO}}', repo or ''))
+    with open(os.path.join(root, 'index.html'), 'w', encoding='utf-8') as fh:
+        fh.write(page)
+
+    # Pages serves the upload as a plain directory; without this Jekyll would
+    # eat any path starting with an underscore and add a build step nobody
+    # asked for.  At the ROOT, because Jekyll is applied to the whole upload.
+    open(os.path.join(root, '.nojekyll'), 'w', encoding='utf-8').close()
+
+    print(f'{root}: one page, {len(sizes)} size(s) -- {", ".join(sizes)}; '
+          f'{len(own[sizes[0]]["layers"]["regular"])} '
+          f'glyphs x {len(shared["faces"])} faces, '
+          f'{len(shared["cps"])} codepoints listed')
 
 
 main()
