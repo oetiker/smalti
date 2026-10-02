@@ -112,8 +112,36 @@ function boot(shared) {
   });
 }
 
-/* Until the per-size sections land, only the grid is drawn. */
-function renderAll() { renderGrid(); }
+function renderAll() {
+  buildHero();
+  buildSpecimens();
+  buildProvenance();
+  renderGrid();
+}
+
+/* The size whose wordmark and glyph count the hero shows: the one with the
+ * tallest cell among those checked. */
+function largest(list) {
+  return list.reduce(function (a, b) { return Z[b].cell.h > Z[a].cell.h ? b : a; });
+}
+
+function buildHero() {
+  var big = largest(SIZES);
+  Array.prototype.forEach.call(document.querySelectorAll('.wordmark'), function (svg) {
+    svg.hidden = svg.getAttribute('data-size') !== big;
+  });
+  $('#fact-glyphs').textContent = Z[big].totals[0].total;
+  /* Four faces at each size, shipped as one package: eight files. */
+  $('#fact-faces').textContent = S.faces.length * S.sizes.length;
+  $('#fact-sizes').textContent = S.sizes.length;
+  $('#fact-hand').textContent = SIZES.map(function (s) {
+    return Z[s].totals[0].hand;
+  }).join(' / ');
+  $('#px-ladder').textContent = SIZES.map(function (s) {
+    var h = Z[s].cell.h;
+    return s + ' at ' + h + ', ' + 2 * h + ' and ' + 3 * h + ' px';
+  }).join('; ');
+}
 
 function loadSize(size) {
   if (Z[size]) return Promise.resolve(Z[size]);
@@ -164,11 +192,11 @@ function buildSizeControl() {
  * here rather than in the SVG so a build stays free of per-tile inline style. */
 function animateWordmark() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  var box = $('.wordmark');   // the first one; Task 4 does one per size
-  if (!box) return;
-  var tiles = box.querySelectorAll('rect');
-  var cols = box.viewBox.baseVal.width || 1;
+  var tiles = document.querySelectorAll('.wordmark rect');
   for (var i = 0; i < tiles.length; i++) {
+    /* Each wordmark has its own viewBox, so the delay is scaled by its own
+     * width and both finish together. */
+    var cols = tiles[i].ownerSVGElement.viewBox.baseVal.width || 1;
     var x = parseFloat(tiles[i].getAttribute('x'));
     tiles[i].style.setProperty('--i', Math.round(x / cols * 46));
   }
@@ -178,19 +206,19 @@ function animateWordmark() {
 
 function buildSpecimens() {
   var host = $('#specimen-faces');
-  D.faces.forEach(function (f) {
+  host.innerHTML = '';
+  S.faces.forEach(function (f) {
     var card = el('div', 'spec');
-    var name = el('p', 'spec-name px');
-    name.innerHTML = esc(D.faceLabel[f]) + ' <span>' + esc(D.faceFile[f]) + '</span>';
-    card.appendChild(name);
-    D.specimen.forEach(function (s) {
-      /* s.z, not s.px: the class names the MULTIPLE.  Built from the pixel
-       * size it asked for .s16/.s32/.s48 on the 8x16 page and smalti.css
-       * defines .s1/.s2/.s3, so nothing matched and every specimen line fell
-       * back to the body size. */
-      var line = el('p', 'spec-line px s' + s.z + ' ' + faceClass(f));
-      line.innerHTML = '<b>' + s.px + 'px</b>' + esc(s.text);
-      card.appendChild(line);
+    card.appendChild(el('p', 'spec-name px', S.faceLabel[f]));
+    S.specimen.forEach(function (s) {
+      /* s.z, not a pixel size: the class names the MULTIPLE (.s1/.s2/.s3);
+       * data-size picks the family, and --u2/--u4/--u6 pick the pixels. */
+      SIZES.forEach(function (size) {
+        var line = el('p', 'spec-line px s' + s.z + ' ' + faceClass(f));
+        line.setAttribute('data-size', size);
+        line.innerHTML = '<span class="size">' + size + '</span>' + esc(s.text);
+        card.appendChild(line);
+      });
     });
     host.appendChild(card);
   });
@@ -205,26 +233,29 @@ function faceClass(f) {
 
 function buildProvenance() {
   var host = $('#provenance');
+  host.innerHTML = '';
   var wrap = el('div', 'prov');
-  D.totals.forEach(function (t) {
-    var row = el('div', 'prov-row');
-    row.appendChild(el('div', 'prov-name px', t.label));
-    var bar = el('div', 'prov-bar');
-    [['h', t.hand], ['u', t.upstream], ['g', t.gen]].forEach(function (p) {
-      if (!p[1]) return;
-      var s = el('span', p[0]);
-      s.style.flex = p[1];
-      s.title = p[1] + ' ' + LAYER_SHORT[p[0]];
-      bar.appendChild(s);
+  S.faces.forEach(function (f, fi) {
+    SIZES.forEach(function (size) {
+      var t = Z[size].totals[fi];
+      var row = el('div', 'prov-row');
+      row.appendChild(el('div', 'prov-name px', t.label + ' ' + size));
+      var bar = el('div', 'prov-bar');
+      [['h', t.hand], ['u', t.upstream], ['g', t.gen]].forEach(function (p) {
+        if (!p[1]) return;
+        var s = el('span', p[0]);
+        s.style.flex = p[1];
+        s.title = p[1] + ' ' + LAYER_SHORT[p[0]];
+        bar.appendChild(s);
+      });
+      row.appendChild(bar);
+      /* The columns are a CSS rule, not an inline style: an inline width here
+       * would outrank the narrow-screen media query and squeeze the bar to
+       * nothing on a phone. */
+      row.appendChild(el('div', 'prov-n px',
+        t.hand + ' / ' + t.upstream + ' / ' + t.gen + '  = ' + t.total));
+      wrap.appendChild(row);
     });
-    /* The columns are a CSS rule, not an inline style: an inline width here
-     * would outrank the narrow-screen media query and squeeze the bar to
-     * nothing on a phone. */
-    var n = el('div', 'prov-n px',
-               t.hand + ' / ' + t.upstream + ' / ' + t.gen + '  = ' + t.total);
-    row.appendChild(bar);
-    row.appendChild(n);
-    wrap.appendChild(row);
   });
   host.appendChild(wrap);
   var key = el('ul', 'prov-key px');
@@ -306,7 +337,7 @@ function blockRow(b) {
                     (st === '#' ? '' : ' — not drawn yet');
         btn.setAttribute('aria-label', btn.title);
         btn.addEventListener('click', function (e) {
-          openEditor(+e.currentTarget.dataset.i);
+          openEditor(+e.currentTarget.dataset.i, null, SIZES[0]);
         });
         strip.appendChild(btn);
       }
@@ -349,7 +380,12 @@ function buildControls() {
 
 function matches(i) {
   var st = S.state[i];
-  if (FILT === 'hand' && !(st === '#' && Z[SIZES[0]].layers[FACE][COVI[i]] === 'h')) return false;
+  if (FILT === 'hand') {
+    if (st !== '#') return false;
+    /* Drawn here at any checked size is drawn here. */
+    var any = SIZES.some(function (s) { return Z[s].layers[FACE][COVI[i]] === 'h'; });
+    if (!any) return false;
+  }
   if (FILT === 'gap' && st !== '.') return false;
   if (!QUERY) return true;
   if (NAME[i].toLowerCase().indexOf(QUERY) >= 0) return true;
@@ -358,10 +394,13 @@ function matches(i) {
 }
 
 function renderGrid() {
+  /* The controls are live before the checked sizes have loaded; a change in
+   * that window has nothing to draw yet, and renderAll draws when they land. */
+  if (!SIZES.length || !SIZES.every(function (s) { return Z[s]; })) return;
   var host = $('#grid');
-  var px = ZOOM * Z[SIZES[0]].cell.h;   // one size until Task 4
-  host.style.setProperty('--tsize', px + 'px');
-  host.style.setProperty('--tile', (px + 2 * ZOOM + 12) + 'px');
+  host.style.setProperty('--tile', (SIZES.reduce(function (a, s) {
+    return a + ZOOM * Z[s].cell.w;
+  }, 0) + 6 * SIZES.length + 20) + 'px');
   var html = '', shown = 0;
 
   S.blocks.forEach(function (b) {
@@ -370,7 +409,7 @@ function renderGrid() {
     for (var i = b.from; i < b.to; i++) {
       if (!matches(i)) continue;
       n++;
-      tiles += tileHtml(i, px);
+      tiles += tileHtml(i);
     }
     if (!n) return;
     shown += n;
@@ -382,40 +421,41 @@ function renderGrid() {
   host.innerHTML = html || '<p class="empty prose">Nothing matches that. ' +
     'Try a Unicode name, a hex codepoint like 2192, or paste the character.</p>';
   $('#count').textContent = shown + ' of ' + S.cps.length +
-    ' codepoints · ' + S.faceLabel[FACE] + ' · ' + px + 'px';
+    ' codepoints · ' + S.faceLabel[FACE] + ' · ' + ZOOM + 'x';
 }
 
 /* One listener for the whole grid rather than one per tile: the grid is
- * rebuilt on every change of face, size or filter, and 2263 listeners would
- * be rebuilt with it. */
+ * rebuilt on every change of face, size or filter, and thousands of
+ * listeners would be rebuilt with it. */
 $('#grid').addEventListener('click', function (e) {
-  var t = e.target.closest('.tile[data-i]');
-  if (t) openEditor(+t.dataset.i);
+  var t = e.target.closest('.half[data-i]');
+  if (t) openEditor(+t.dataset.i, null, t.dataset.size);
 });
 
-function tileHtml(i, px) {
+function tileHtml(i) {
   var cp = S.cps[i], st = S.state[i];
   var label = 'U+' + hex(cp) + ' ' + NAME[i];
   if (st === 'w') {
     return '<span class="tile rule" title="' + esc(label) +
            ' — East Asian Wide, taken from the emoji font">&#183;</span>';
   }
-  if (st === '.') {
-    return '<button class="tile miss" data-i="' + i + '" title="' + esc(label) +
-           ' — not drawn yet, click to draw it" aria-label="' + esc(label) +
-           ', not drawn yet">+</button>';
-  }
-  var layer = Z[SIZES[0]].layers[FACE][COVI[i]];
-  var body;
-  if (S.textok[i] === '1') {
-    body = '<b>' + esc(String.fromCodePoint(cp)) + '</b>';
-  } else {
-    body = artSvg(SIZES[0], rowsOf(SIZES[0], FACE, COVI[i]), px);
-  }
-  return '<button class="tile ' + layer + ' ' + faceClass(FACE) +
-         '" data-i="' + i + '" title="' + esc(label) + ' — ' +
-         LAYER_SHORT[layer] + '" aria-label="' + esc(label) + '">' + body +
-         '</button>';
+  var halves = SIZES.map(function (size) {
+    var px = ZOOM * Z[size].cell.h;
+    var open = ' data-i="' + i + '" data-size="' + size + '" style="--tsize:' + px + 'px"';
+    if (st === '.') {
+      return '<button class="half miss"' + open + ' title="' + esc(label) + ' ' + size +
+             ' — not drawn yet, click to draw it" aria-label="' + esc(label) + ', ' +
+             size + ', not drawn yet">+</button>';
+    }
+    var layer = Z[size].layers[FACE][COVI[i]];
+    var body = S.textok[i] === '1'
+      ? esc(String.fromCodePoint(cp))
+      : artSvg(size, rowsOf(size, FACE, COVI[i]), px);
+    return '<button class="half ' + layer + ' ' + faceClass(FACE) + '"' + open +
+           ' title="' + esc(label) + ' ' + size + ' — ' + LAYER_SHORT[layer] +
+           '" aria-label="' + esc(label) + ', ' + size + '">' + body + '</button>';
+  }).join('');
+  return '<div class="tile' + (st === '.' ? ' miss' : '') + '">' + halves + '</div>';
 }
 
 /* ---------------------------------------------------------------- editor -- */

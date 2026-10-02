@@ -141,6 +141,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
  * 0.88 of a unit with the rest as grout, a lighter facet across the top edge,
  * and a lightness that varies tile to tile: real smalti are never uniform. */
 .wordmark { display: block; width: 100%; height: auto; }
+.wordmark[hidden] { display: none; }
 .wordmark .t { fill: var(--gold); }
 .wordmark .t0 { fill: #e3b545; }
 .wordmark .t1 { fill: #cf9a24; }
@@ -215,7 +216,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .prov { display: grid; gap: 1px; background: var(--grout);
         border: 1px solid var(--grout); margin: var(--u3) 0; }
 .prov-row { background: var(--mortar2); padding: var(--u2) var(--u3);
-            display: grid; grid-template-columns: 13ch 1fr 22ch; gap: var(--u3);
+            display: grid; grid-template-columns: 18ch 1fr 22ch; gap: var(--u3);
             align-items: center; }
 .prov-name { color: var(--ink); }
 .prov-n { color: var(--ink-dim); }
@@ -328,7 +329,8 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
               background: none; color: inherit; cursor: pointer; position: relative; }
 .tile .half.h { box-shadow: inset 0 -2px 0 var(--gold); }
 .tile .half:hover { outline: 1px solid var(--gold); outline-offset: 1px; }
-.spec-line .size { color: var(--ink-dim); display: inline-block; width: 6ch; }
+.spec-line .size { color: var(--ink-dim); display: inline-block; width: 6ch;
+                  font-size: var(--u2); line-height: inherit; vertical-align: top; }
 
 /* Used on the specimen lines and on the tiles alike.  `oblique` rather than
  * `italic` because that is what the face is -- the regular sheared one column
