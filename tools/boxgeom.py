@@ -270,3 +270,96 @@ def glyph(cp, size):
     if spec['arc']:
         px = _apply_arc(px, spec, size)
     return px
+
+
+# ---------------------------------------------------------------------------
+# BLOCK ELEMENTS, U+2580..U+259F
+#
+# TWO THINGS CANNOT BE EXACT AT 7x14, AND BOTH ARE RECORDED IN README.md.
+#
+# 1. The left eighth-blocks must collapse one pair. Seven steps need seven
+#    distinct widths below "full" and a 7-column cell has six. That is
+#    pigeonhole; no rounding rule escapes it. cols_for rounds half DOWN,
+#    giving 1,2,3,3,4,5,6 -- so `▍` and `▌` are the same glyph. Rounding down
+#    is what makes 4/8 agree with the half-block split, which puts the axis
+#    column in the RIGHT half, matching the way the axis row falls in the
+#    lower half. `▌`+`▐` therefore tile the cell exactly.
+#
+# 2. The shades cannot tile at width 7: their dither period is even and 7 is
+#    odd, so the pattern phase-shifts at every cell boundary and a seam shows.
+#    At 8x16 both are exact.
+# ---------------------------------------------------------------------------
+EIGHTHS = {'ONE EIGHTH': 1, 'ONE QUARTER': 2, 'THREE EIGHTHS': 3, 'HALF': 4,
+           'FIVE EIGHTHS': 5, 'THREE QUARTERS': 6, 'SEVEN EIGHTHS': 7}
+
+
+def rows_for(n, size):
+    """Rows of ink for an n/8 vertical fraction. Round half UP: 14 rows give
+    2,4,5,7,9,11,12 -- seven distinct steps -- and 16 rows are exact."""
+    return (n * GEOMETRY[size]['h'] + 4) // 8
+
+
+def cols_for(n, size):
+    """Columns of ink for an n/8 horizontal fraction. Round half DOWN, so 4/8
+    agrees with the half-block split. See the note above for the collapse."""
+    return max(1, (n * GEOMETRY[size]['w'] + 3) // 8)
+
+
+def _vsplit(size):
+    """Rows in the upper half -- an exact half at both sizes."""
+    return GEOMETRY[size]['h'] // 2
+
+
+def _hsplit(size):
+    """Columns in the left half. The axis column belongs to the RIGHT half,
+    matching the way the axis row belongs to the lower half."""
+    return GEOMETRY[size]['c0']
+
+
+def block(cp, size):
+    g = GEOMETRY[size]
+    width, height = g['w'], g['h']
+    px = [[0] * width for _ in range(height)]
+    name = unicodedata.name(chr(cp))
+
+    def fill(rr, cc):
+        for r in rr:
+            for c in cc:
+                px[r][c] = 1
+
+    if name == 'FULL BLOCK':
+        fill(range(height), range(width))
+    elif name.endswith('SHADE'):
+        level = name.split()[0]
+        for r in range(height):
+            for c in range(width):
+                if level == 'MEDIUM':
+                    on = (r + c) % 2 == 0
+                elif level == 'LIGHT':
+                    on = (r % 2 == 0 and c % 4 == 0) or (r % 2 == 1 and c % 4 == 2)
+                else:
+                    on = not ((r % 2 == 0 and c % 4 == 2) or (r % 2 == 1 and c % 4 == 0))
+                px[r][c] = 1 if on else 0
+    elif name.startswith('QUADRANT'):
+        vs, hs = _vsplit(size), _hsplit(size)
+        corner = {'UPPER LEFT': (range(0, vs), range(0, hs)),
+                  'UPPER RIGHT': (range(0, vs), range(hs, width)),
+                  'LOWER LEFT': (range(vs, height), range(0, hs)),
+                  'LOWER RIGHT': (range(vs, height), range(hs, width))}
+        for part in name[len('QUADRANT '):].split(' AND '):
+            fill(*corner[part])
+    else:                                   # <EDGE> <FRACTION> BLOCK
+        edge, frac = name[:-len(' BLOCK')].split(' ', 1)
+        n = EIGHTHS[frac]
+        if edge == 'LOWER':
+            fill(range(height - rows_for(n, size), height), range(width))
+        elif edge == 'UPPER':
+            k = _vsplit(size) if frac == 'HALF' else rows_for(n, size)
+            fill(range(0, k), range(width))
+        elif edge == 'LEFT':
+            k = _hsplit(size) if frac == 'HALF' else cols_for(n, size)
+            fill(range(height), range(0, k))
+        else:                               # RIGHT
+            k = (width - _hsplit(size)) if frac == 'HALF' else cols_for(n, size)
+            fill(range(height), range(width - k, width))
+    return px

@@ -178,4 +178,66 @@ for cp, n in ((0x254C, 2), (0x2504, 3), (0x2508, 4)):
 check('a dashed vertical breaks into three',
       len([x for x in ''.join(r[3] for r in g(0x2506, '7x14')).split('.') if x]), 3)
 
+# ---- the halves tile the cell exactly: no overlap, no hole ---------------
+def b(cp, size):
+    return boxgeom.art(boxgeom.block(cp, size))
+
+
+for size in ('7x14', '8x16'):
+    upper, lower = b(0x2580, size), b(0x2584, size)
+    full = b(0x2588, size)
+    merged = [''.join('#' if (x == '#' or y == '#') else '.' for x, y in zip(u, l))
+              for u, l in zip(upper, lower)]
+    check(f'{size}: upper and lower half tile the cell', merged, full)
+    check(f'{size}: upper and lower half do not overlap',
+          sum(1 for u, l in zip(upper, lower) for x, y in zip(u, l)
+              if x == '#' and y == '#'), 0)
+
+    left, right = b(0x258C, size), b(0x2590, size)
+    merged = [''.join('#' if (x == '#' or y == '#') else '.' for x, y in zip(a_, b_))
+              for a_, b_ in zip(left, right)]
+    check(f'{size}: left and right half tile the cell', merged, full)
+    check(f'{size}: left and right half do not overlap',
+          sum(1 for a_, b_ in zip(left, right) for x, y in zip(a_, b_)
+              if x == '#' and y == '#'), 0)
+
+# ---- the eighth ladders, and the one collapse that is forced ------------
+check('7x14 left-eighth ladder', [boxgeom.cols_for(n, '7x14') for n in range(1, 8)],
+      [1, 2, 3, 3, 4, 5, 6])
+check('7x14 collapses exactly one pair -- six widths for seven steps',
+      len({boxgeom.cols_for(n, '7x14') for n in range(1, 8)}), 6)
+check('8x16 left-eighth ladder is exact',
+      [boxgeom.cols_for(n, '8x16') for n in range(1, 8)], [1, 2, 3, 4, 5, 6, 7])
+check('8x16 collapses nothing',
+      len({boxgeom.cols_for(n, '8x16') for n in range(1, 8)}), 7)
+check('7x14 lower-eighth ladder is distinct',
+      [boxgeom.rows_for(n, '7x14') for n in range(1, 8)], [2, 4, 5, 7, 9, 11, 12])
+check('8x16 lower-eighth ladder is exact',
+      [boxgeom.rows_for(n, '8x16') for n in range(1, 8)], [2, 4, 6, 8, 10, 12, 14])
+
+# ---- the collapse is where the design says it is, and only there ---------
+# NOT `b(0x258C, size) == b(0x258C, size)` at 8x16: a check that compares a
+# thing to itself passes whatever the code does, which is the defect this
+# project keeps finding in its own checks.
+check('7x14: the collapsed pair is three-eighths and one-half',
+      b(0x258D, '7x14'), b(0x258C, '7x14'))
+check('8x16: three-eighths and one-half stay apart',
+      b(0x258D, '8x16') != b(0x258C, '8x16'), True)
+check('7x14: five-eighths is NOT part of the collapse',
+      b(0x258B, '7x14') != b(0x258C, '7x14'), True)
+
+# ---- quadrants tile too -------------------------------------------------
+for size in ('7x14', '8x16'):
+    quads = [b(cp, size) for cp in (0x2598, 0x259D, 0x2596, 0x2597)]
+    merged = [''.join('#' if any(q[r][c] == '#' for q in quads) else '.'
+                      for c in range(len(quads[0][0])))
+              for r in range(len(quads[0]))]
+    check(f'{size}: the four quadrants tile the cell', merged, b(0x2588, size))
+
+# ---- every block element parses and fills something ---------------------
+for size in ('7x14', '8x16'):
+    empty = [cp for cp in boxgeom.BLOCKS
+             if not any('#' in r for r in b(cp, size))]
+    check(f'{size}: no block element is blank', empty, [])
+
 sys.exit(1 if FAIL else 0)
