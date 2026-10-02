@@ -357,6 +357,7 @@ function blockClick(e) {
 /* Draws the block rows for the checked sizes and the browser's face.  The
  * list of untouched blocks, if the reader opened it, is redrawn in place. */
 function renderBlocks() {
+  if (!SIZES.length || !SIZES.every(function (s) { return Z[s]; })) return;
   var wrap = $('#blocks').firstChild;
   wrap.textContent = '';
   S.blocks.forEach(function (b) {
