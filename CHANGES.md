@@ -12,8 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The single guillemets `‹` and `›`** at both sizes, each one chevron of `«` and `»`, centred in the cell.
 
 ### Changed
+- **The specimen site is one page for both cell sizes, chosen with checkboxes in the page header.** Specimen lines, provenance rows, glyph tiles and block strips show the chosen sizes side by side, and clicking a tile half or a strip cell opens the pixel editor for that size. The pages `/7x14/` and `/8x16/` no longer exist and are not redirected, and a link to an editor now names the size, as in `#/glyph/8x16/regular/0041`.
+- **"Block by block" shows one strip per chosen size.** Each cell is coloured by where that size's glyph comes from: drawn here, upstream or generated. The colours follow the face chosen in the glyph browser.
 
 ### Fixed
+- **The pixel editor on the 8x16 specimen page named 7x14's rows in its help text** (column 6, row 10) instead of 8x16's (column 7, row 11). The help text now names the rows of the size the editor shows.
 
 ## 0.3.0 - 2026-09-17
 ### New

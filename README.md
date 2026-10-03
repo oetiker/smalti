@@ -275,8 +275,8 @@ The two rules are the same everywhere; only the spelling changes.
   points read against 96 dpi rather than the real display dpi.
 * **A browser or an editor** — set the size in **`px`**, not `pt`, `em` or a
   percentage, and use the cell height or a whole multiple of it: 14, 28 or 42
-  for 7x14, and 16, 32 or 48 for 8x16.  Each specimen page offers exactly its
-  own three sizes and nothing in between, for this reason.
+  for 7x14, and 16, 32 or 48 for 8x16.  The specimen page sets each cell size at exactly
+  its own three pixel sizes and nothing in between, for this reason.
 
 ### The font is installed and the terminal cannot see it
 
@@ -451,12 +451,17 @@ drawn yet the link arrives at GitHub with the path and the drawing already
 filled in; for one that already has a file it opens that file in GitHub's
 editor.  That is the property the one-file-per-glyph layout was for.
 
+Both cell sizes are on that one page.  The checkboxes in the page header
+choose which are shown (the choice is kept in the URL as `?sizes=7x14,8x16`),
+and each specimen line and glyph tile shows the chosen sizes side by side.
+
 Three things about it are not obvious:
 
 * **It loads the `.woff2` files**, which are the `.ttf` outlines compressed.
   No browser draws an embedded bitmap strike, so the outline path is the only
   one that could ever have reached a web page.
-* **It only ever sets type at 14, 28 and 42 px**, because those are the sizes
+* **It only ever sets type at the cell height and its multiples**, 14, 28 and
+  42 px for 7x14 and 16, 32 and 48 px for 8x16, because those are the sizes
   at which the outline reproduces the strike exactly.  A pixel font at 17px
   looks broken, so no size in between is offered.
 * **Nothing under `build/site/` is committed.**  The page is generated from
