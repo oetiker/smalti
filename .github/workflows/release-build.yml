@@ -1,0 +1,26 @@
+name: Release build
+
+# Called by Create release PR on the release branch before the pull request
+# exists (D28).  Smalti's fonts and packages are built by its own
+# release-build-local.yml.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version being released.
+        type: string
+        required: true
+      ref:
+        description: The release branch head to build.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  smalti:
+    uses: ./.github/workflows/release-build-local.yml
+    with:
+      version: ${{ inputs.version }}
+      ref: ${{ inputs.ref }}

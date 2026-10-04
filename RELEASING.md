@@ -1,123 +1,81 @@
 # Releasing Smalti
 
-A release is **two clicks in the GitHub Actions UI**, with a pull request in
+A release is two steps in the GitHub Actions UI, with a pull request in
 between that you review.
 
 1. **Actions → Create release PR → Run workflow.** Pick `bugfix`, `feature`
-   or `major`. The workflow refuses unless every check on the current `main`
-   commit is green, works out the next version, rolls `CHANGES.md`, writes
-   `VERSION`, and opens a `release/vX.Y.Z` pull request. Nothing is tagged
-   yet; closing that pull request cancels the release.
+   or `major`. The workflow works out the next version, rolls `CHANGES.md`,
+   writes `VERSION` and commits that to a `release/vX.Y.Z` branch. On that
+   branch it builds and checks the fonts and the `.deb`/`.rpm` packages, runs
+   the full CI, attaches every file to a draft release and opens the pull
+   request. Nothing is tagged yet; closing the pull request cancels the
+   release.
 
-2. **Review the changelog and merge the pull request.** The merge tags
-   `vX.Y.Z`, builds and checks the fonts and the `.deb`/`.rpm` packages,
-   attaches all of them to the release, and publishes it.
+2. **Review the changelog and merge the pull request.** The merge tags the
+   commit that was built as `vX.Y.Z`, checks that the draft carries every file
+   listed in `release_assets` in `.github/repo-infra.json`, and publishes it.
 
-Everything that decides the version comes from the repository, not from the
-run: `CHANGES.md` is the source of truth for what is being released, and
-`VERSION` is the copy every artefact carries.
+`CHANGES.md` is the source of truth for what is being released, and `VERSION`
+is the copy every font and package carries.
 
 ## Before you dispatch
 
 Write the entries as you go, under `## [Unreleased]` in `CHANGES.md`. The
-release refuses to roll an empty `[Unreleased]` block, which is the backstop
-against a version with no notes.
+release refuses to roll an empty `[Unreleased]` block.
 
-## What you will see, that looks wrong but is not
+Create release PR refuses to start when a check on the current `main` commit
+has already failed, when a release pull request is still open, or when the
+latest release in `CHANGES.md` has no tag. The message names the cause.
+
+## What you will see
 
 **"Approve workflows to run" on the release pull request.** A pull request
-opened by `GITHUB_TOKEN` does not skip its checks — it parks them, waiting for
-someone with write access to click that button once. The alternative is a
-stored personal token or a GitHub App to create, store and rotate, to save one
-click on a pull request somebody is reviewing anyway. Seeing the banner is the
-system working.
+opened by `GITHUB_TOKEN` parks its own checks until someone approves them.
+Nobody needs to: Create release PR already ran the build and the CI on exactly
+this commit and reported `ci-passed` and `changelog-updated` for it. Publish
+deletes the parked runs after the release.
 
-**The release is a draft for a minute or two.** The fonts and the packages
-are built and checked *after* the tag exists and attached to a draft, so
-nobody can see a Smalti release without them. The last job flips it to
-published, and it waits on both add-on jobs to do so. If either the font job
-or the packages job fails, the release stays a draft — which is the right
-outcome, not a bug.
+**A draft release while the pull request is open.** The fonts, the zip and the
+packages are attached to it when the pull request opens. The merge makes it
+public.
 
-## Why it is two steps and not a push from a workflow
+## When main moves under a release
 
-`main` is protected by a ruleset whose bypass list is empty, and that list only
-accepts users, teams, apps, org admins, repository roles and deploy keys.
-`GITHUB_TOKEN` is none of those, so it cannot be added and cannot push to
-`main`. A pull request needs no bypass. Do not try to route around it with an
-`on: push` trigger either: a push made with `GITHUB_TOKEN` does not fire
-workflow triggers.
+A release is built from one `main` commit. If another pull request merges
+first, the release pull request turns red with `main moved after vX.Y.Z was
+built; close this pull request and dispatch Create release PR again`. Do that.
+Pressing **Update branch** on a release pull request has the same effect: the
+new head was never built, and the checks say so.
 
 ## Recovery
 
-**Re-run, never re-dispatch.** Actions → the failed run → **Re-run failed
-jobs**. The version comes from `CHANGES.md` in the repository, not from run
-inputs, so a re-run does exactly what the first attempt would have.
+**Re-run, never re-dispatch.** If the publish run fails, open it under Actions
+and choose **Re-run failed jobs**. The version comes from `CHANGES.md` in the
+repository, not from run inputs, so a re-run does what the first attempt would
+have done. There is deliberately no `workflow_dispatch` on the publish
+workflow.
 
-There is deliberately no `workflow_dispatch` on the publish workflow: a whole-
-workflow re-run would find the tag already present, stop, and leave the release
-a draft forever. **Re-run failed jobs** keeps the successful job's outputs,
-which is what the later jobs need.
+If publish fails with `main at <sha> does not match the release built from
+<head>`, it tagged nothing and every re-run fails the same way. Abandon the
+release with a pull request that moves its entries back under `[Unreleased]`,
+then dispatch again.
 
-If a run died *between* creating the tag and creating the release, the tag has
-to be removed by hand before a re-run can finish — `git push origin --delete
-vX.Y.Z`, after checking with whoever is releasing.
+## Where this comes from
 
-## Where this came from
+The release flow and the changelog gate are the `repo-infra` standard. Its
+files under `.github/workflows/` carry a `repo-infra: <piece> vN` marker in
+their first comment line and are never edited here; `repo_infra check` reports
+an edited one, and `repo_infra apply` installs newer versions.
 
-The flow is **borrowed** from the `repo-infra` standard
-(`~/checkouts/repo-infra`): `.github/workflows/release-pr.yml`,
-`.github/workflows/release-publish.yml`, the five files in
-`.github/workflows/lib/`, and `.github/repo-infra.json`. Smalti keeps its own
-CI — `validate.yml`, `build.yml` and `pages.yml` are this project's — because
-the standard does not recognise a font built from ASCII-art text files, and
-teaching it a new ecosystem is a change to that project rather than this one.
+Smalti's own work lives in two files the standard calls:
 
-**Do not hand-edit the borrowed files.** Take a newer version of the whole set,
-or the next update silently reverts you. Smalti-specific behaviour lives in the
-`publish-fonts` and `publish-packages` jobs in `release-publish.yml`, which are
-this project's own. The standard's `apply` would normally append an add-on
-job's name to `finalize`'s `needs:` list when it installs the job; Smalti does
-not run `apply`, so that list — currently
-`[publish, publish-fonts, publish-packages]` — is maintained by hand. Add a
-third add-on job and add its name there too, or the release publishes before
-that job has attached anything.
+- `.github/workflows/ci-local.yml`: the glyph store and outline proof
+  (`make check`), the coverage index, the font build and install, and the OS
+  packages (`make check-packages`). `ci.yml` calls it on every push to `main`
+  and every pull request, and Create release PR calls it on the release
+  branch.
+- `.github/workflows/release-build-local.yml`: builds the fonts and the
+  packages for a release with `SOURCE_DATE_EPOCH` set to the release commit's
+  timestamp, checks them, and uploads them for the draft release.
 
-### The one place that rule is broken, on purpose
-
-`release-pr.yml` and `lib/checks.js` carry a local patch, marked in their
-version lines as `+ LOCAL PATCH`. It is reported upstream; until a repo-infra
-release carries the fix, **check before taking a newer set, or taking it
-reintroduces the bug.**
-
-The guard that waits for green checks before releasing excluded only the
-*current* run's jobs. So a release attempt that failed for any reason left a
-failed check run on the commit, and every later attempt read that corpse as
-"this commit has a failing check" and refused. Check runs cannot be deleted,
-so **the commit became permanently un-releasable** — and deleting the release
-branch does not help, because the block is attached to the commit.
-
-That is not theoretical: it cost Smalti its first release. `0.1.0` was
-prepared correctly, failed to open its pull request because *Allow GitHub
-Actions to create and approve pull requests* was off, and then could not be
-retried at all. Two separate faults, and the second one hid behind the first.
-
-The id-gathering now lives in `lib/checks.js` as `guardIgnoreIds`, where
-`lib/checks.test.js` tests it — including that a genuinely failing check still
-blocks a release, which is the half a careless fix would drop. It was inline
-YAML before, where nothing could test it, which is why the bug shipped.
-
-    node --test .github/workflows/lib/checks.test.js
-
-That is deliberately **not** in `make check` or CI: this repository's only
-build dependency is `python3-venv`, and adding node to the gates to test a
-borrowed file would be a poor trade. Upstream runs these tests.
-
-### If a release ever does get stuck on a poisoned commit
-
-Land any further commit on `main` and dispatch again. The guard reads the
-checks of the commit it is releasing, so a commit with a clean history
-releases normally. The prepared branch from the failed attempt can be reused
-as-is: nothing downstream reads the pull request, which is only a review
-surface — `release-publish.yml` fires on `CHANGES.md` landing on `main` and
-reads the version out of the repository.
+`pages.yml`, the specimen site, is Smalti's own and not part of the standard.
