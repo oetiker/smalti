@@ -1,4 +1,4 @@
-// repo-infra: workflow-lib v1
+// repo-infra: workflow-lib v8
 'use strict';
 
 // Commits go through the Git Data API rather than `git commit && git push`.
@@ -35,9 +35,24 @@ async function commitFiles(github, {
     owner, repo, message, tree: newTree.sha, parents: [baseSha],
   });
 
-  await github.rest.git.createRef({
-    owner, repo, ref: `refs/heads/${branch}`, sha: newCommit.sha,
-  });
+  // Create, then move on "already exists". A release branch survives a
+  // closed-but-undeleted PR, and a run that committed before failing to open
+  // one leaves the branch behind too -- in both cases createRef answers 422
+  // and the next run used to die with an opaque API error that only a manual
+  // branch delete cleared. Create first rather than checking first: the check
+  // would be a race, and 422 is the authoritative answer.
+  try {
+    await github.rest.git.createRef({
+      owner, repo, ref: `refs/heads/${branch}`, sha: newCommit.sha,
+    });
+  } catch (e) {
+    if (e.status !== 422) throw e;
+    // Forced because the leftover branch holds an older release commit that
+    // nothing is building on: this run's commit is the one to keep.
+    await github.rest.git.updateRef({
+      owner, repo, ref: `heads/${branch}`, sha: newCommit.sha, force: true,
+    });
+  }
 
   return newCommit.sha;
 }

@@ -1,4 +1,4 @@
-// repo-infra: workflow-lib v1
+// repo-infra: workflow-lib v8
 'use strict';
 
 function escapeRegExp(s) {
@@ -7,7 +7,7 @@ function escapeRegExp(s) {
 
 // The verify pattern is a template containing $VERSION. The version is escaped
 // before substitution so its dots match literally: an unescaped '1.2.3' would
-// also match '1x2x3', and — worse — '1.2.3' would match inside '1.2.30'.
+// also match '1x2x3', and (worse) '1.2.3' would match inside '1.2.30'.
 function verifyPattern(spec, version) {
   return new RegExp(spec.verify.replace(/\$VERSION/g, escapeRegExp(version)) + '(?![0-9])', 'm');
 }
