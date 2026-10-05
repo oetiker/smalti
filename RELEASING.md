@@ -12,8 +12,10 @@ between that you review.
    release.
 
 2. **Review the changelog and merge the pull request.** The merge tags the
-   commit that was built as `vX.Y.Z`, checks that the draft carries every file
-   listed in `release_assets` in `.github/repo-infra.json`, and publishes it.
+   commit that was built as `vX.Y.Z`, uploads the `.deb` and `.rpm` to the
+   oposs package repository on `gitea.oetiker.ch`, checks that the draft
+   carries every file listed in `release_assets` in `.github/repo-infra.json`,
+   and publishes it. If the upload fails, the release stays a draft.
 
 `CHANGES.md` is the source of truth for what is being released, and `VERSION`
 is the copy every font and package carries.
@@ -77,5 +79,10 @@ Smalti's own work lives in two files the standard calls:
 - `.github/workflows/release-build-local.yml`: builds the fonts and the
   packages for a release with `SOURCE_DATE_EPOCH` set to the release commit's
   timestamp, checks them, and uploads them for the draft release.
+
+The upload uses the repository secret `GITEA_PACKAGE_TOKEN` (a Gitea token
+with the `write:package` scope only) and the repository variable
+`GITEA_PACKAGE_USER`. Gitea tokens do not expire; rotate the secret by hand.
+A re-run of a failed upload skips the packages Gitea already holds.
 
 `pages.yml`, the specimen site, is Smalti's own and not part of the standard.

@@ -29,9 +29,23 @@ jobs:
       contents: write
       pull-requests: read
 
+  # The .deb and .rpm to the oposs package registry on gitea.oetiker.ch,
+  # which signs them with its own key. The release stays a draft until the
+  # upload worked, because finalize needs this job.
+  gitea:
+    needs: [publish]
+    if: needs.publish.outputs.release_id != ''
+    uses: ./.github/workflows/ri-publish-gitea.yml
+    permissions:
+      contents: write
+    with:
+      release_id: ${{ needs.publish.outputs.release_id }}
+      head: ${{ needs.publish.outputs.head }}
+    secrets: inherit
+
   # finalize needs every other job of this file; check verifies it (D30).
   finalize:
-    needs: [publish]
+    needs: [publish, gitea]
     if: needs.publish.outputs.release_id != ''
     uses: ./.github/workflows/ri-publish-finalize.yml
     permissions:

@@ -113,9 +113,10 @@ outside pip.
     CHANGES.md    what is in each release, and what is not out yet
 
 A release is two clicks: dispatch **Create release PR** from the Actions tab,
-review the pull request it opens, and merge it.  Merging tags the version,
-builds and checks the fonts and the `.deb`/`.rpm` packages, and attaches all
-of them to the release.
+review the pull request it opens, and merge it.  Before the pull request
+opens, the fonts and the `.deb`/`.rpm` packages are built, checked and
+attached to a draft release.  Merging tags the version, uploads the packages
+to the package repository and publishes the release.
 
 **See [`RELEASING.md`](RELEASING.md)** for the whole procedure, including the
 two things that look wrong and are not, and how to recover a run that failed
@@ -123,15 +124,33 @@ halfway.
 
 ### From a package
 
-Every release attaches a `.deb` and an `.rpm`.
+The packages are in the oposs package repository on `gitea.oetiker.ch`.
 
-    sudo apt install ./fonts-smalti_0.1.0-1_all.deb    # Debian, Ubuntu
-    sudo rpm -i smalti-fonts-0.1.0-1.noarch.rpm        # Fedora, RHEL, openSUSE
+Debian, Ubuntu:
 
-Both install the four faces where fontconfig finds them and carry no
-maintainer scripts: the distributions' own `fontconfig` triggers rebuild the
-cache.  There is no apt or yum repository to add — that would need a signing
-key this project does not have.
+    sudo install -d -m 0755 /etc/apt/keyrings
+    sudo curl -o /etc/apt/keyrings/gitea-oposs.asc https://gitea.oetiker.ch/api/packages/oposs/debian/repository.key
+    echo "deb [signed-by=/etc/apt/keyrings/gitea-oposs.asc] https://gitea.oetiker.ch/api/packages/oposs/debian stable main" | sudo tee /etc/apt/sources.list.d/oposs.list
+    sudo apt update && sudo apt install fonts-smalti
+
+Fedora 41 and later:
+
+    sudo dnf config-manager addrepo --from-repofile=https://gitea.oetiker.ch/api/packages/oposs/rpm.repo
+    sudo dnf install smalti-fonts
+
+RHEL, Rocky, Alma, and Fedora before 41:
+
+    sudo dnf config-manager --add-repo https://gitea.oetiker.ch/api/packages/oposs/rpm.repo
+    sudo dnf install smalti-fonts
+
+Every release also attaches the `.deb` and the `.rpm` for a direct install:
+
+    sudo apt install ./fonts-smalti_0.3.0-1_all.deb    # Debian, Ubuntu
+    sudo rpm -i smalti-fonts-0.3.0-1.noarch.rpm        # Fedora, RHEL, openSUSE
+
+Both install the four faces of each size where fontconfig finds them and
+carry no maintainer scripts: the distributions' own `fontconfig` triggers
+rebuild the cache.
 
 The version reaches every artefact — `build-face.py` writes it into the BDF as
 `FONT_VERSION`, `trace-outline.py` copies it into the `.ttf` name table and
