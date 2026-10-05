@@ -8,11 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### New
-- **Smalti can be installed from a package repository.** Each release uploads its `.deb` and `.rpm` to the oposs repository on `gitea.oetiker.ch`, which signs them, so `apt install fonts-smalti` and `dnf install smalti-fonts` work once the repository is added; `README.md` has the commands. The release stays a draft until the upload has worked.
 
 ### Changed
 
 ### Fixed
+
+## 0.3.1 - 2026-10-05
+### New
+- **Smalti can be installed from a package repository.** Each release uploads its `.deb` and `.rpm` to the oposs repository on `gitea.oetiker.ch`, which signs them, so `apt install fonts-smalti` and `dnf install smalti-fonts` work once the repository is added; `README.md` has the commands. The release stays a draft until the upload has worked.
 
 ## 0.3.0 - 2026-09-17
 ### New
