@@ -8,11 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### New
+- **Box drawing and block elements, U+2500..U+259F, in all eight faces**: single, heavy and double lines with every corner and junction, rounded corners, dashed lines, diagonals, the eighth-blocks, the quadrants and the shades, 160 codepoints in all, so a terminal no longer takes `─ │ ┌ ╭ ═ █ ░` from a fallback font. The lines sit where `-` and `|` already sit, so `┼` lines up with `+` and a run of `─` continues `-`. Three things cannot be exact in the 7-column cell of 7x14: `▍` and `▌` are the same glyph there, and the shades `░ ▒ ▓` and the dashed lines `┈ ┉` show a seam at every cell boundary.
+- **The single guillemets `‹` and `›`** at both sizes, each one chevron of `«` and `»`, centred in the cell.
 - **Smalti can be installed from a package repository.** Each release uploads its `.deb` and `.rpm` to the oposs repository on `gitea.oetiker.ch`, which signs them, so `apt install fonts-smalti` and `dnf install smalti-fonts` work once the repository is added; `README.md` has the commands. The release stays a draft until the upload has worked.
 
 ### Changed
+- **The specimen site is one page for both cell sizes, chosen with checkboxes in the page header.** Specimen lines, provenance rows, glyph tiles and block strips show the chosen sizes side by side, and clicking a tile half or a strip cell opens the pixel editor for that size. The pages `/7x14/` and `/8x16/` no longer exist and are not redirected, and a link to an editor now names the size, as in `#/glyph/8x16/regular/0041`.
+- **"Block by block" shows one strip per chosen size.** Each cell is coloured by where that size's glyph comes from: drawn here, upstream or generated. The colours follow the face chosen in the glyph browser.
 
 ### Fixed
+- **The pixel editor on the 8x16 specimen page named 7x14's rows in its help text** (column 6, row 10) instead of 8x16's (column 7, row 11). The help text now names the rows of the size the editor shows.
 
 ## 0.3.0 - 2026-09-17
 ### New

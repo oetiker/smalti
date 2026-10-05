@@ -1,7 +1,7 @@
 /* Smalti specimen site.
  *
- * Everything on this page comes out of data/glyphs.json, which `make site`
- * writes straight from the glyph store.  Nothing about the font is restated
+ * Everything on this page comes out of data/site.json and data/<size>.json, which
+ * `make site` writes straight from the glyph store.  Nothing about the font is restated
  * here, because a restatement is a second source of truth and would go stale.
  *
  * The one rule worth knowing before changing anything: the text this page can
@@ -12,7 +12,10 @@
  */
 'use strict';
 
-var D = null;              // the whole data file
+var S = null;              // data/site.json: what every size shares
+var Z = {};                // size -> data/<size>.json, once loaded
+var SIZES = [];            // the checked sizes, in S.sizes order
+var PENDING = {};          // size -> Promise, so a size loads once
 var NAME = [];             // per listed codepoint: its Unicode name
 var SHOWN = [];            // per listed codepoint: the character, or ''
 var COVI = null;           // listed index -> index into bits/layers, or -1
@@ -46,8 +49,8 @@ function esc(s) {
 
 /* One glyph as h strings of w characters.  k indexes the covered glyphs, which
  * are the listed codepoints whose state is '#', in the same order. */
-function rowsOf(face, k) {
-  var w = D.cell.w, h = D.cell.h, s = D.bits[face], off = k * h * 2, out = [];
+function rowsOf(size, face, k) {
+  var z = Z[size], w = z.cell.w, h = z.cell.h, s = z.bits[face], off = k * h * 2, out = [];
   for (var y = 0; y < h; y++) {
     var v = parseInt(s.substr(off + y * 2, 2), 16), r = '';
     for (var x = 0; x < w; x++) r += (v >> (w - 1 - x)) & 1 ? '#' : '.';
@@ -56,9 +59,9 @@ function rowsOf(face, k) {
   return out;
 }
 
-function blankRows() {
-  var r = [], i;
-  for (i = 0; i < D.cell.h; i++) r.push('.'.repeat(D.cell.w));
+function blankRows(size) {
+  var c = Z[size].cell, r = [], i;
+  for (i = 0; i < c.h; i++) r.push('.'.repeat(c.w));
   return r;
 }
 
@@ -66,14 +69,14 @@ function blankRows() {
  * from the data file untouched: `make headers` decides its shape and this page
  * must not have an opinion about it. */
 function fileText(i, rows) {
-  return D.headers[i] + '\n' + rows.join('\n') + '\n';
+  return S.headers[i] + '\n' + rows.join('\n') + '\n';
 }
 
 /* A pixel drawing as inline SVG, for the sixteen codepoints a browser will not
  * render as text however good the font is: control codes and the soft hyphen
  * are not characters you can put in a span. */
-function artSvg(rows, px) {
-  var w = D.cell.w, h = D.cell.h, r = '', y, x;
+function artSvg(size, rows, px) {
+  var w = Z[size].cell.w, h = Z[size].cell.h, r = '', y, x;
   for (y = 0; y < h; y++) {
     for (x = 0; x < w; x++) {
       if (rows[y][x] === '#') r += '<rect x="' + x + '" y="' + y + '" width="1" height="1"/>';
@@ -86,33 +89,141 @@ function artSvg(rows, px) {
 
 /* --------------------------------------------------------------- startup -- */
 
-function boot(data) {
-  D = data;
-  /* Assigned here and not at the top of the file: D is null until the data
-   * file has loaded, so a top-level D.guides would throw before anything was
-   * drawn.  Read from the build because the build measured them -- the
-   * baseline is row 10 at 7x14 and row 11 at 8x16. */
-  BASE = D.guides.baseline;
-  CAP = D.guides.cap;
-  XH = D.guides.xheight;
-  AXIS = D.guides.axis;
-  var i;
-  COVI = new Int32Array(D.cps.length);
-  var k = 0;
-  for (i = 0; i < D.cps.length; i++) COVI[i] = D.state[i] === '#' ? k++ : -1;
-  for (i = 0; i < D.headers.length; i++) {
-    var m = HEAD_RE.exec(D.headers[i]);
+function boot(shared) {
+  S = shared;
+  var i, k = 0;
+  COVI = new Int32Array(S.cps.length);
+  for (i = 0; i < S.cps.length; i++) COVI[i] = S.state[i] === '#' ? k++ : -1;
+  for (i = 0; i < S.headers.length; i++) {
+    var m = HEAD_RE.exec(S.headers[i]);
     SHOWN.push(m ? m[2].trim() : '');
     NAME.push(m ? m[3] : '');
   }
-  buildSpecimens();
-  buildProvenance();
+  buildSizeControl();
   buildBlocks();
   buildControls();
-  renderGrid();
   window.addEventListener('hashchange', route);
-  route();
-  animateWordmark();
+  return setSizes(sizeChoice()).then(function () {
+    route();
+    animateWordmark();
+  });
+}
+
+function renderAll() {
+  /* Nothing below may run until every checked size is in Z: the controls are
+   * live before the first load lands, and a click in that window must not
+   * reach Z[size].cell of a size that has not arrived. */
+  if (!SIZES.length || !SIZES.every(function (s) { return Z[s]; })) return;
+  buildHero();
+  buildSpecimens();
+  buildProvenance();
+  renderBlocks();
+  renderGrid();
+}
+
+/* The size whose wordmark and glyph count the hero shows: the one with the
+ * tallest cell among those checked. */
+function largest(list) {
+  return list.reduce(function (a, b) { return Z[b].cell.h > Z[a].cell.h ? b : a; });
+}
+
+function buildHero() {
+  var big = largest(SIZES);
+  Array.prototype.forEach.call(document.querySelectorAll('.wordmark'), function (svg) {
+    svg.hidden = svg.getAttribute('data-size') !== big;
+  });
+  $('#fact-glyphs').textContent = Z[big].totals[0].total;
+  /* Four faces at each size, shipped as one package: eight files. */
+  $('#fact-faces').textContent = S.faces.length * S.sizes.length;
+  $('#fact-sizes').textContent = S.sizes.length;
+  /* With two sizes the bare numbers would not say which is which. */
+  $('#fact-hand').textContent = SIZES.map(function (s) {
+    return Z[s].totals[0].hand + (SIZES.length > 1 ? ' (' + s + ')' : '');
+  }).join(' / ');
+  $('#px-ladder').textContent = SIZES.map(function (s) {
+    var h = Z[s].cell.h;
+    return s + ' at ' + h + ', ' + 2 * h + ' and ' + 3 * h + ' px';
+  }).join('; ');
+}
+
+function loadSize(size) {
+  if (Z[size]) return Promise.resolve(Z[size]);
+  if (!PENDING[size]) {
+    PENDING[size] = fetch('data/' + size + '.json').then(function (r) {
+      if (!r.ok) throw new Error(size + ': HTTP ' + r.status);
+      return r.json();
+    }).then(function (z) {
+      Z[size] = z;
+      var old = $('#load-error');   // a retry that worked clears the notice
+      if (old) old.remove();
+      return z;
+    }, function (err) {
+      /* Forget the failure, or every later click on this size would get the
+       * same rejected promise until the page is reloaded. */
+      delete PENDING[size];
+      throw err;
+    });
+  }
+  return PENDING[size];
+}
+
+/* A size's data that fails to load after boot (offline, 404, bad JSON) must
+ * not fail silently: one notice in the sticky masthead, next to the size
+ * control the visitor just used (the grid is thousands of pixels down), and
+ * replaced by the next. */
+function showLoadError(size, err) {
+  var old = $('#load-error');
+  if (old) old.remove();
+  var p = el('p', 'empty prose',
+    'The ' + size + ' glyph data did not load (' + err.message + '). ' +
+    'Check your connection and try again.');
+  p.id = 'load-error';
+  p.setAttribute('role', 'alert');
+  $('.masthead').appendChild(p);
+}
+
+function setSizes(list) {
+  SIZES = S.sizes.filter(function (s) { return list.indexOf(s) >= 0; });
+  setPref(PREF.sizes, SIZES.join(','));
+  /* The comma is written as itself, the spec's form `?sizes=7x14,8x16`;
+   * URLSearchParams would encode it as %2C.  Any other parameter stays. */
+  var u = new URL(location.href);
+  u.searchParams.delete('sizes');
+  var rest = u.searchParams.toString();
+  u.search = '?' + (rest ? rest + '&' : '') + 'sizes=' + SIZES.join(',');
+  history.replaceState(null, '', u.pathname + u.search + u.hash);
+  Array.prototype.forEach.call(document.querySelectorAll('[name=size]'), function (cb) {
+    cb.checked = SIZES.indexOf(cb.value) >= 0;
+    /* The last checked box cannot be unchecked: a page showing no size has
+     * nothing to show. */
+    cb.disabled = cb.checked && SIZES.length === 1;
+  });
+  return Promise.all(SIZES.map(loadSize)).then(renderAll);
+}
+
+function buildSizeControl() {
+  var host = $('#sizes');
+  S.sizes.forEach(function (s) {
+    var lab = el('label');
+    var cb = el('input');
+    cb.type = 'checkbox';
+    cb.name = 'size';
+    cb.value = s;
+    cb.addEventListener('change', function () {
+      var next = SIZES.filter(function (x) { return x !== s; });
+      if (cb.checked) next.push(s);
+      var prev = SIZES.slice();
+      /* The failed size must not stay checked over a grid that cannot show
+       * it: go back to the sizes that are loaded. */
+      setSizes(next).catch(function (err) {
+        showLoadError(s, err);
+        return setSizes(prev);
+      });
+    });
+    lab.appendChild(cb);
+    lab.appendChild(el('span', null, s));
+    host.appendChild(lab);
+  });
 }
 
 /* The tesserae are set left to right, the way a mosaicist lays them.  Done
@@ -120,10 +231,10 @@ function boot(data) {
 function animateWordmark() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   var tiles = document.querySelectorAll('.wordmark rect');
-  var box = $('.wordmark');
-  if (!box) return;
-  var cols = box.viewBox.baseVal.width || 1;
   for (var i = 0; i < tiles.length; i++) {
+    /* Each wordmark has its own viewBox, so the delay is scaled by its own
+     * width and both finish together. */
+    var cols = tiles[i].ownerSVGElement.viewBox.baseVal.width || 1;
     var x = parseFloat(tiles[i].getAttribute('x'));
     tiles[i].style.setProperty('--i', Math.round(x / cols * 46));
   }
@@ -133,19 +244,19 @@ function animateWordmark() {
 
 function buildSpecimens() {
   var host = $('#specimen-faces');
-  D.faces.forEach(function (f) {
+  host.innerHTML = '';
+  S.faces.forEach(function (f) {
     var card = el('div', 'spec');
-    var name = el('p', 'spec-name px');
-    name.innerHTML = esc(D.faceLabel[f]) + ' <span>' + esc(D.faceFile[f]) + '</span>';
-    card.appendChild(name);
-    D.specimen.forEach(function (s) {
-      /* s.z, not s.px: the class names the MULTIPLE.  Built from the pixel
-       * size it asked for .s16/.s32/.s48 on the 8x16 page and smalti.css
-       * defines .s1/.s2/.s3, so nothing matched and every specimen line fell
-       * back to the body size. */
-      var line = el('p', 'spec-line px s' + s.z + ' ' + faceClass(f));
-      line.innerHTML = '<b>' + s.px + 'px</b>' + esc(s.text);
-      card.appendChild(line);
+    card.appendChild(el('p', 'spec-name px', S.faceLabel[f]));
+    S.specimen.forEach(function (s) {
+      /* s.z, not a pixel size: the class names the MULTIPLE (.s1/.s2/.s3);
+       * data-size picks the family, and --u2/--u4/--u6 pick the pixels. */
+      SIZES.forEach(function (size) {
+        var line = el('p', 'spec-line px s' + s.z + ' ' + faceClass(f));
+        line.setAttribute('data-size', size);
+        line.innerHTML = '<span class="size">' + size + '</span>' + esc(s.text);
+        card.appendChild(line);
+      });
     });
     host.appendChild(card);
   });
@@ -160,26 +271,29 @@ function faceClass(f) {
 
 function buildProvenance() {
   var host = $('#provenance');
+  host.innerHTML = '';
   var wrap = el('div', 'prov');
-  D.totals.forEach(function (t) {
-    var row = el('div', 'prov-row');
-    row.appendChild(el('div', 'prov-name px', t.label));
-    var bar = el('div', 'prov-bar');
-    [['h', t.hand], ['u', t.upstream], ['g', t.gen]].forEach(function (p) {
-      if (!p[1]) return;
-      var s = el('span', p[0]);
-      s.style.flex = p[1];
-      s.title = p[1] + ' ' + LAYER_SHORT[p[0]];
-      bar.appendChild(s);
+  S.faces.forEach(function (f, fi) {
+    SIZES.forEach(function (size) {
+      var t = Z[size].totals[fi];
+      var row = el('div', 'prov-row');
+      row.appendChild(el('div', 'prov-name px', t.label + ' ' + size));
+      var bar = el('div', 'prov-bar');
+      [['h', t.hand], ['u', t.upstream], ['g', t.gen]].forEach(function (p) {
+        if (!p[1]) return;
+        var s = el('span', p[0]);
+        s.style.flex = p[1];
+        s.title = p[1] + ' ' + LAYER_SHORT[p[0]];
+        bar.appendChild(s);
+      });
+      row.appendChild(bar);
+      /* The columns are a CSS rule, not an inline style: an inline width here
+       * would outrank the narrow-screen media query and squeeze the bar to
+       * nothing on a phone. */
+      row.appendChild(el('div', 'prov-n px',
+        t.hand + ' / ' + t.upstream + ' / ' + t.gen + '  = ' + t.total));
+      wrap.appendChild(row);
     });
-    /* The columns are a CSS rule, not an inline style: an inline width here
-     * would outrank the narrow-screen media query and squeeze the bar to
-     * nothing on a phone. */
-    var n = el('div', 'prov-n px',
-               t.hand + ' / ' + t.upstream + ' / ' + t.gen + '  = ' + t.total);
-    row.appendChild(bar);
-    row.appendChild(n);
-    wrap.appendChild(row);
   });
   host.appendChild(wrap);
   var key = el('ul', 'prov-key px');
@@ -197,33 +311,82 @@ function buildProvenance() {
 
 /* ---------------------------------------------------------------- blocks -- */
 
+var BLOCK_ZERO = [];       // blocks with nothing drawn, listed on request
+var BLOCK_MORE = null;     // the opened list of those, or null while closed
+
+/* Built once: the legend and the untouched-blocks note.  The rows themselves
+ * depend on the checked sizes and the face, so renderBlocks draws them. */
 function buildBlocks() {
   var legend = $('#cov-legend');
   legend.innerHTML =
-    '<span><i class="on"></i>a glyph this font has</span>' +
-    '<span><i class="off"></i>nobody has drawn it yet</span>' +
+    '<span><i class="h"></i>drawn here</span>' +
+    '<span><i class="u"></i>upstream</span>' +
+    '<span><i class="g"></i>generated</span>' +
+    '<span><i class="off"></i>not drawn yet</span>' +
     '<span><i class="rule"></i>left undrawn by rule, East Asian Wide</span>';
 
-  var host = $('#blocks'), wrap = el('div', 'blocks'), zero = [];
-  D.blocks.forEach(function (b) {
-    if (b.covered || b.extra) wrap.appendChild(blockRow(b));
-    else zero.push(b);
+  var host = $('#blocks');
+  host.appendChild(el('div', 'blocks'));
+  S.blocks.forEach(function (b) {
+    if (!b.covered && !b.extra) BLOCK_ZERO.push(b);
   });
-  host.appendChild(wrap);
+  host.addEventListener('click', blockClick);
 
   var note = $('#untouched-note');
-  var total = zero.reduce(function (a, b) { return a + b.target; }, 0);
-  note.textContent = zero.length + ' more Unicode blocks in the Basic ' +
+  var total = BLOCK_ZERO.reduce(function (a, b) { return a + b.target; }, 0);
+  note.textContent = BLOCK_ZERO.length + ' more Unicode blocks in the Basic ' +
     'Multilingual Plane have nothing drawn at all — ' + total.toLocaleString() +
     ' codepoints, and every one of them is somebody’s first pull request. ';
   var more = el('button', 'blk-more', 'Show the untouched blocks');
   more.addEventListener('click', function () {
     more.remove();
-    var w2 = el('div', 'blocks');
-    zero.forEach(function (b) { w2.appendChild(blockRow(b)); });
-    note.parentNode.insertBefore(w2, note.nextSibling);
+    BLOCK_MORE = el('div', 'blocks');
+    BLOCK_MORE.addEventListener('click', blockClick);
+    note.parentNode.insertBefore(BLOCK_MORE, note.nextSibling);
+    renderBlocks();
   });
   note.appendChild(more);
+}
+
+/* One click listener per container; a cell names its codepoint and size. */
+function blockClick(e) {
+  var btn = e.target.closest('button[data-i]');
+  if (btn) openEditor(+btn.dataset.i, null, btn.dataset.size);
+}
+
+/* Draws the block rows for the checked sizes and the browser's face.  The
+ * list of untouched blocks, if the reader opened it, is redrawn in place. */
+function renderBlocks() {
+  if (!SIZES.length || !SIZES.every(function (s) { return Z[s]; })) return;
+  var wrap = $('#blocks').firstChild;
+  wrap.textContent = '';
+  S.blocks.forEach(function (b) {
+    if (b.covered || b.extra) wrap.appendChild(blockRow(b));
+  });
+  if (BLOCK_MORE) {
+    BLOCK_MORE.textContent = '';
+    BLOCK_ZERO.forEach(function (b) { BLOCK_MORE.appendChild(blockRow(b)); });
+  }
+}
+
+/* The strip of one size: each cell is coloured by the layer its glyph comes
+ * from in that size, so the strips differ where the sizes do. */
+function stripHtml(b, size) {
+  var out = [], face = FACE, layers = Z[size].layers[face];
+  for (var i = b.from; i < b.to; i++) {
+    var st = S.state[i];
+    var label = 'U+' + hex(S.cps[i]) + ' ' + NAME[i] + ', ' + size;
+    if (st === 'w') {
+      out.push('<i class="rule" title="' + esc(label + ', East Asian Wide, taken from the emoji font') + '"></i>');
+    } else {
+      var cls = st === '#' ? layers[COVI[i]] : 'off';
+      var what = st === '#' ? LAYER_SHORT[cls] : 'not drawn yet';
+      out.push('<button type="button" class="' + cls + '" data-i="' + i +
+               '" data-size="' + size + '" title="' + esc(label + ', ' + what) +
+               '" aria-label="' + esc(label + ', ' + what) + '"></button>');
+    }
+  }
+  return out.join('');
 }
 
 function blockRow(b) {
@@ -244,33 +407,22 @@ function blockRow(b) {
                 b.byRule + ' by rule</em>' : '');
   row.appendChild(n);
 
-  var strip = el('div', 'strip');
+  var strips = el('div', 'strips');
   if (b.to > b.from) {
-    for (var i = b.from; i < b.to; i++) {
-      var st = D.state[i];
-      if (st === 'w') {
-        var t = el('i', 'rule');
-        t.title = 'U+' + hex(D.cps[i]) + ' ' + NAME[i] +
-                  ' — East Asian Wide, taken from the emoji font';
-        strip.appendChild(t);
-      } else {
-        var btn = el('button', st === '#' ? 'on' : 'off');
-        btn.type = 'button';
-        btn.dataset.i = i;
-        btn.title = 'U+' + hex(D.cps[i]) + ' ' + NAME[i] +
-                    (st === '#' ? '' : ' — not drawn yet');
-        btn.setAttribute('aria-label', btn.title);
-        btn.addEventListener('click', function (e) {
-          openEditor(+e.currentTarget.dataset.i);
-        });
-        strip.appendChild(btn);
-      }
-    }
+    SIZES.forEach(function (size) {
+      var line = el('div', 'strip-line');
+      line.appendChild(el('span', 'strip-size px', size));
+      var strip = el('div', 'strip');
+      strip.innerHTML = stripHtml(b, size);
+      line.appendChild(strip);
+      strips.appendChild(line);
+    });
   } else {
-    strip.appendChild(el('span', 'px', '—'));
-    strip.firstChild.style.color = 'var(--grout2)';
+    var dash = el('span', 'px', '—');
+    dash.style.color = 'var(--grout2)';
+    strips.appendChild(dash);
   }
-  row.appendChild(strip);
+  row.appendChild(strips);
   return row;
 }
 
@@ -278,13 +430,13 @@ function blockRow(b) {
 
 function buildControls() {
   var sel = $('#face');
-  D.faces.forEach(function (f) {
-    var o = el('option', null, D.faceLabel[f]);
+  S.faces.forEach(function (f) {
+    var o = el('option', null, S.faceLabel[f]);
     o.value = f;
     sel.appendChild(o);
   });
   sel.value = FACE;
-  sel.addEventListener('change', function () { FACE = sel.value; renderGrid(); });
+  sel.addEventListener('change', function () { FACE = sel.value; renderBlocks(); renderGrid(); });
 
   Array.prototype.forEach.call(document.querySelectorAll('[name=zoom]'), function (r) {
     r.addEventListener('change', function () { ZOOM = +r.value; renderGrid(); });
@@ -303,29 +455,37 @@ function buildControls() {
 }
 
 function matches(i) {
-  var st = D.state[i];
-  if (FILT === 'hand' && !(st === '#' && D.layers[FACE][COVI[i]] === 'h')) return false;
+  var st = S.state[i];
+  if (FILT === 'hand') {
+    if (st !== '#') return false;
+    /* Drawn here at any checked size is drawn here. */
+    var any = SIZES.some(function (s) { return Z[s].layers[FACE][COVI[i]] === 'h'; });
+    if (!any) return false;
+  }
   if (FILT === 'gap' && st !== '.') return false;
   if (!QUERY) return true;
   if (NAME[i].toLowerCase().indexOf(QUERY) >= 0) return true;
-  if (hex(D.cps[i]).toLowerCase().indexOf(QUERY) >= 0) return true;
+  if (hex(S.cps[i]).toLowerCase().indexOf(QUERY) >= 0) return true;
   return SHOWN[i] !== '' && SHOWN[i] === QUERY;
 }
 
 function renderGrid() {
+  /* The controls are live before the checked sizes have loaded; a change in
+   * that window has nothing to draw yet, and renderAll draws when they land. */
+  if (!SIZES.length || !SIZES.every(function (s) { return Z[s]; })) return;
   var host = $('#grid');
-  var px = ZOOM * D.cell.h;
-  host.style.setProperty('--tsize', px + 'px');
-  host.style.setProperty('--tile', (px + 2 * ZOOM + 12) + 'px');
+  host.style.setProperty('--tile', (SIZES.reduce(function (a, s) {
+    return a + ZOOM * Z[s].cell.w;
+  }, 0) + 6 * SIZES.length + 20) + 'px');
   var html = '', shown = 0;
 
-  D.blocks.forEach(function (b) {
+  S.blocks.forEach(function (b) {
     if (b.to <= b.from) return;
     var tiles = '', n = 0;
     for (var i = b.from; i < b.to; i++) {
       if (!matches(i)) continue;
       n++;
-      tiles += tileHtml(i, px);
+      tiles += tileHtml(i);
     }
     if (!n) return;
     shown += n;
@@ -336,53 +496,52 @@ function renderGrid() {
 
   host.innerHTML = html || '<p class="empty prose">Nothing matches that. ' +
     'Try a Unicode name, a hex codepoint like 2192, or paste the character.</p>';
-  $('#count').textContent = shown + ' of ' + D.cps.length +
-    ' codepoints · ' + D.faceLabel[FACE] + ' · ' + px + 'px';
+  $('#count').textContent = shown + ' of ' + S.cps.length +
+    ' codepoints · ' + S.faceLabel[FACE] + ' · ' + ZOOM + 'x';
 }
 
 /* One listener for the whole grid rather than one per tile: the grid is
- * rebuilt on every change of face, size or filter, and 2263 listeners would
- * be rebuilt with it. */
+ * rebuilt on every change of face, size or filter, and thousands of
+ * listeners would be rebuilt with it. */
 $('#grid').addEventListener('click', function (e) {
-  var t = e.target.closest('.tile[data-i]');
-  if (t) openEditor(+t.dataset.i);
+  var t = e.target.closest('.half[data-i]');
+  if (t) openEditor(+t.dataset.i, null, t.dataset.size);
 });
 
-function tileHtml(i, px) {
-  var cp = D.cps[i], st = D.state[i];
+function tileHtml(i) {
+  var cp = S.cps[i], st = S.state[i];
   var label = 'U+' + hex(cp) + ' ' + NAME[i];
   if (st === 'w') {
     return '<span class="tile rule" title="' + esc(label) +
            ' — East Asian Wide, taken from the emoji font">&#183;</span>';
   }
-  if (st === '.') {
-    return '<button class="tile miss" data-i="' + i + '" title="' + esc(label) +
-           ' — not drawn yet, click to draw it" aria-label="' + esc(label) +
-           ', not drawn yet">+</button>';
-  }
-  var layer = D.layers[FACE][COVI[i]];
-  var body;
-  if (D.textok[i] === '1') {
-    body = '<b>' + esc(String.fromCodePoint(cp)) + '</b>';
-  } else {
-    body = artSvg(rowsOf(FACE, COVI[i]), px);
-  }
-  return '<button class="tile ' + layer + ' ' + faceClass(FACE) +
-         '" data-i="' + i + '" title="' + esc(label) + ' — ' +
-         LAYER_SHORT[layer] + '" aria-label="' + esc(label) + '">' + body +
-         '</button>';
+  var halves = SIZES.map(function (size) {
+    var px = ZOOM * Z[size].cell.h;
+    var open = ' data-i="' + i + '" data-size="' + size + '" style="--tsize:' + px + 'px"';
+    if (st === '.') {
+      return '<button class="half miss"' + open + ' title="' + esc(label) + ' ' + size +
+             ' — not drawn yet, click to draw it" aria-label="' + esc(label) + ', ' +
+             size + ', not drawn yet">+</button>';
+    }
+    var layer = Z[size].layers[FACE][COVI[i]];
+    var body = S.textok[i] === '1'
+      ? esc(String.fromCodePoint(cp))
+      : artSvg(size, rowsOf(size, FACE, COVI[i]), px);
+    return '<button class="half ' + layer + ' ' + faceClass(FACE) + '"' + open +
+           ' title="' + esc(label) + ' ' + size + ' — ' + LAYER_SHORT[layer] +
+           '" aria-label="' + esc(label) + ', ' + size + '">' + body + '</button>';
+  }).join('');
+  return '<div class="tile' + (st === '.' ? ' miss' : '') + '">' + halves + '</div>';
 }
 
 /* ---------------------------------------------------------------- editor -- */
-
-var ED = null;    // {i, face, rows, orig}
-var LAST_FOCUS = null;
 
 /* Remembered across glyphs, because the interesting session is "I am drawing
  * a block", not "I am drawing a character".  Private browsing and a blocked
  * storage setting both throw on access rather than returning null, so every
  * read and write is wrapped: the editor has to work with no storage at all. */
-var PREF = { repo: 'smalti.repo', branch: 'smalti.branch', hint: 'smalti.hint' };
+var PREF = { repo: 'smalti.repo', branch: 'smalti.branch', hint: 'smalti.hint',
+             sizes: 'smalti.sizes' };
 
 function pref(key, fallback) {
   try {
@@ -395,6 +554,26 @@ function setPref(key, value) {
   try { localStorage.setItem(key, value); } catch (e) { /* nothing to do */ }
 }
 
+/* The sizes to show.  The URL wins, so a shared link shows the view it was
+ * copied from; then the visitor's last choice; then every size.  Anything
+ * that names no known size falls through to the next source rather than to
+ * an empty page. */
+function sizeChoice() {
+  var known = function (list) {
+    return S.sizes.filter(function (s) { return list.indexOf(s) >= 0; });
+  };
+  var q = new URLSearchParams(location.search).get('sizes');
+  var fromUrl = q ? known(q.split(',')) : [];
+  if (fromUrl.length) return fromUrl;
+  var fromPref = known(pref(PREF.sizes, '').split(','));
+  if (fromPref.length) return fromPref;
+  return S.sizes.slice();
+}
+
+var ED = null;    // {i, face, size, rows, orig}
+var WANT = null;  // the editor most recently asked for: {i, face, size}
+var LAST_FOCUS = null;
+
 /* Where a pull request goes.  The build knows one repository and one branch;
  * a contributor working through a block wants their edits to land together,
  * so both can be overridden here.  THE SITE CANNOT CREATE A BRANCH -- a
@@ -402,35 +581,61 @@ function setPref(key, value) {
  * hint text says so rather than letting a typo look like a broken link. */
 function target() {
   return {
-    repo: pref(PREF.repo, D.repo) || D.repo,
-    branch: pref(PREF.branch, D.branch) || D.branch,
-    custom: pref(PREF.repo, D.repo) !== D.repo ||
-            pref(PREF.branch, D.branch) !== D.branch
+    repo: pref(PREF.repo, S.repo) || S.repo,
+    branch: pref(PREF.branch, S.branch) || S.branch,
+    custom: pref(PREF.repo, S.repo) !== S.repo ||
+            pref(PREF.branch, S.branch) !== S.branch
   };
 }
 
 function route() {
-  var m = /^#\/glyph\/([a-z-]+)\/([0-9A-F]+)$/.exec(location.hash);
-  if (!m) { if (ED) closeEditor(true); return; }
-  var face = D.faces.indexOf(m[1]) >= 0 ? m[1] : 'regular';
-  var cp = parseInt(m[2], 16);
-  var i = D.cps.indexOf(cp);
+  var m = /^#\/glyph\/(\d+x\d+)\/([a-z-]+)\/([0-9A-F]+)$/.exec(location.hash);
+  if (!m) {
+    WANT = null;   // a slow load must not open the editor after the visitor left
+    if (ED) closeEditor(true);
+    return;
+  }
+  var size = S.sizes.indexOf(m[1]) >= 0 ? m[1] : SIZES[0];
+  var face = S.faces.indexOf(m[2]) >= 0 ? m[2] : 'regular';
+  var i = S.cps.indexOf(parseInt(m[3], 16));
   if (i < 0) { closeEditor(true); return; }
-  if (ED && ED.i === i && ED.face === face) return;
-  openEditor(i, face, true);
+  if (ED && ED.i === i && ED.face === face && ED.size === size) return;
+  openEditor(i, face, size, true);
 }
 
-function openEditor(i, face, fromHash) {
+function openEditor(i, face, size, fromHash) {
   face = face || FACE;
+  size = size || SIZES[0];
   if (!fromHash) LAST_FOCUS = document.activeElement;
-  var k = COVI[i];
+  /* A link may name a size that is not checked.  Its data loads on demand;
+   * the size stays unchecked, because opening one glyph is not a vote to
+   * show the whole size.  Loaded data is never dropped (Z is not evicted),
+   * so unchecking a size later does not break an editor link to it.
+   *
+   * The load is asynchronous: a slow size can resolve after the user has
+   * already asked for something else.  Only the latest request may draw. */
+  var mine = WANT = { i: i, face: face, size: size };
+  loadSize(size).then(function () {
+    if (WANT === mine) showEditor(i, face, size);
+  }, function (err) {
+    if (WANT === mine) WANT = null;
+    showLoadError(size, err);
+  });
+}
+
+function showEditor(i, face, size) {
+  var z = Z[size], k = COVI[i];
   ED = {
-    i: i, face: face,
-    rows: k >= 0 ? rowsOf(face, k) : blankRows(),
-    orig: k >= 0 ? rowsOf(face, k) : blankRows(),
-    exists: k >= 0 && D.layers[face][k] === 'h',
+    i: i, face: face, size: size,
+    rows: k >= 0 ? rowsOf(size, face, k) : blankRows(size),
+    orig: k >= 0 ? rowsOf(size, face, k) : blankRows(size),
+    exists: k >= 0 && z.layers[face][k] === 'h',
     ghost: pref(PREF.hint, '1') === '1'
   };
+  /* data-size is deliberately NOT set on #editor: it would give the whole
+   * drawer this size's units and family, and its chrome (subtitle, path,
+   * buttons) belongs in Smalti8x16 at 16 px like the rest of the page.  Only
+   * the paint grid and the title glyph carry it. */
   drawEditor();
   $('#editor').hidden = false;
   $('#scrim').hidden = false;
@@ -440,7 +645,7 @@ function openEditor(i, face, fromHash) {
   $('main').inert = true;
   $('.masthead').inert = true;
   document.body.style.overflow = 'hidden';
-  var want = '#/glyph/' + face + '/' + hex(D.cps[i]);
+  var want = '#/glyph/' + size + '/' + face + '/' + hex(S.cps[i]);
   if (location.hash !== want) history.replaceState(null, '', want);
   var first = $('.pix', $('#editor'));
   if (first) first.focus();
@@ -454,6 +659,7 @@ function openEditor(i, face, fromHash) {
 
 function closeEditor(silent) {
   ED = null;
+  WANT = null;   // a size still loading must not reopen what was just closed
   $('#editor').hidden = true;
   $('#editor').innerHTML = '';
   $('#scrim').hidden = true;
@@ -467,16 +673,17 @@ function closeEditor(silent) {
 }
 
 function drawEditor() {
-  var host = $('#editor'), i = ED.i, cp = D.cps[i], k = COVI[i];
-  var layer = k >= 0 ? D.layers[ED.face][k] : null;
+  var host = $('#editor'), i = ED.i, cp = S.cps[i], k = COVI[i];
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
+  var layer = k >= 0 ? Z[ED.size].layers[ED.face][k] : null;
   host.innerHTML = '';
 
   var top = el('div', 'ed-top');
   var h = el('h2', 'ed-title');
   h.id = 'ed-title';
-  h.innerHTML = '<b>' + (D.textok[i] === '1' && SHOWN[i]
+  h.innerHTML = '<b data-size="' + ED.size + '">' + (S.textok.charAt(i) === '1' && SHOWN[i]
                           ? esc(SHOWN[i]) : '&nbsp;') + '</b>' + esc(NAME[i]);
-  var sub = el('p', 'ed-sub', 'U+' + hex(cp) + '  ·  ' +
+  var sub = el('p', 'ed-sub', 'U+' + hex(cp) + '  ·  ' + ED.size + '  ·  ' +
     (layer ? LAYER_NAME[layer] : 'not drawn yet'));
   var box = el('div');
   box.appendChild(h);
@@ -491,16 +698,16 @@ function drawEditor() {
   faceRow.style.margin = '14px 0 0';
   faceRow.appendChild(document.createTextNode('face  '));
   var fs = el('select');
-  fs.className = 'px';
-  fs.style.cssText = 'background:var(--mortar);color:var(--ink);' +
-    'border:1px solid var(--grout2);padding:3px 7px;font-family:inherit;font-size:14px';
-  D.faces.forEach(function (f) {
-    var o = el('option', null, D.faceLabel[f]);
+  fs.className = 'ed-face';
+  S.faces.forEach(function (f) {
+    var o = el('option', null, S.faceLabel[f]);
     o.value = f;
     fs.appendChild(o);
   });
   fs.value = ED.face;
-  fs.addEventListener('change', function () { openEditor(ED.i, fs.value); });
+  /* fromHash=true: the editor re-opens itself, so LAST_FOCUS must stay the
+   * tile that opened it, not this select, which the redraw removes. */
+  fs.addEventListener('change', function () { openEditor(ED.i, fs.value, ED.size, true); });
   faceRow.appendChild(fs);
   host.appendChild(faceRow);
 
@@ -512,20 +719,14 @@ function drawEditor() {
   var help = el('p', 'ed-help');
   help.innerHTML = 'Click or drag to paint. Arrow keys move, space toggles. ' +
     'Rows and columns follow the grid the rest of the font uses: columns 0 ' +
-    'and 6 are the side bearings, row 10 is the last row on the baseline, ' +
-    'capitals start at row 3, x-height at row 5, and the maths axis is row 7.';
+    'and ' + (C.w - 1) + ' are the side bearings, row ' + G.baseline +
+    ' is the last row on the baseline, capitals start at row ' + G.cap +
+    ', x-height at row ' + G.xheight + ', and the maths axis is row ' +
+    G.axis + '.';
   host.appendChild(help);
 
   refresh();
 }
-
-/* The editor's guide rows, from the build rather than from here.  These were
- * `10, 3, 5, 7` -- 7x14 rows.  The cap line, the x-height line and the maths
- * axis are the same row at 7x14 and 8x16, but THE BASELINE IS NOT: row 10 at
- * 7x14 and row 11 at 8x16, because that is the only type line that moves
- * between the two.  So the 8x16 editor drew its baseline one row high, through
- * the feet of every letter. */
-var BASE, CAP, XH, AXIS;
 
 /* ---------------------------------------------------------- the overlay --
  *
@@ -541,8 +742,9 @@ var BASE, CAP, XH, AXIS;
  * second copy of that arithmetic here would be a copy that can disagree. */
 
 function gridGeom(g) {
+  var C = Z[ED.size].cell;
   var cells = g.querySelectorAll('.pix');
-  var w = D.cell.w;
+  var w = C.w;
   if (cells.length < w + 2) return null;
   var gr = g.getBoundingClientRect();
   var a = cells[0].getBoundingClientRect();
@@ -590,14 +792,15 @@ function ensureHintFont(ch, done) {
 
 function ghostChar() {
   var i = ED.i;
-  if (D.hint.charAt(i) !== '1') return null;
-  if (D.textok.charAt(i) !== '1') return null;
-  return String.fromCodePoint(D.cps[i]);
+  if (S.hint.charAt(i) !== '1') return null;
+  if (S.textok.charAt(i) !== '1') return null;
+  return String.fromCodePoint(S.cps[i]);
 }
 
 function drawOverlay() {
   var host = $('#editor');
   if (!host || !ED) return;
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var g = $('.paint', host);
   var c = $('.ed-overlay', host);
   if (!g || !c) return;
@@ -618,12 +821,12 @@ function drawOverlay() {
    * sits on it, so it is a line between rows and not a line through one. */
   var under = function (row) { return m.y0 + row * m.py + m.ch + gapY / 2; };
   var over = function (row) { return m.y0 + row * m.py - gapY / 2; };
-  var baseY = under(BASE);
+  var baseY = under(G.baseline);
 
   if (ED.ghost) {
     var ch = ghostChar();
     if (ch) {
-      var rows = BASE + 1 - CAP;            // cap height, in whole cells
+      var rows = G.baseline + 1 - G.cap;            // cap height, in whole cells
       var size = rows * m.py / capRatio(ctx);
       ctx.save();
       ctx.globalAlpha = 0.3;
@@ -631,7 +834,7 @@ function drawOverlay() {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       ctx.font = size + 'px SmaltiHint';
-      var mid = m.x0 + ((D.cell.w - 1) * m.px + m.cw) / 2;
+      var mid = m.x0 + ((C.w - 1) * m.px + m.cw) / 2;
       ctx.fillText(ch, mid, baseY);
       ctx.restore();
     }
@@ -642,9 +845,9 @@ function drawOverlay() {
    * something was marked and not which thing. */
   var lines = [
     [baseY, '#d9a72c', [], 2],              // baseline: solid, and thickest
-    [over(CAP), '#5b8bd6', [5, 3], 1],      // cap height: dashed
-    [over(XH), '#5b8bd6', [1, 3], 1],       // x-height: dotted
-    [m.y0 + AXIS * m.py + m.ch / 2, '#3fa88c', [6, 2, 1, 2], 1]  // maths axis
+    [over(G.cap), '#5b8bd6', [5, 3], 1],      // cap height: dashed
+    [over(G.xheight), '#5b8bd6', [1, 3], 1],       // x-height: dotted
+    [m.y0 + G.axis * m.py + m.ch / 2, '#3fa88c', [6, 2, 1, 2], 1]  // maths axis
   ];
   lines.forEach(function (l) {
     ctx.save();
@@ -662,12 +865,14 @@ function drawOverlay() {
 }
 
 function paintGrid() {
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var g = el('div', 'paint');
+  g.setAttribute('data-size', ED.size);   // its own column count and pixel size
   g.setAttribute('role', 'group');
-  g.setAttribute('aria-label', D.cell.w + ' by ' + D.cell.h + ' pixel grid');
+  g.setAttribute('aria-label', C.w + ' by ' + C.h + ' pixel grid');
   var painting = null;
-  for (var y = 0; y < D.cell.h; y++) {
-    for (var x = 0; x < D.cell.w; x++) {
+  for (var y = 0; y < C.h; y++) {
+    for (var x = 0; x < C.w; x++) {
       var b = el('button', 'pix');
       b.type = 'button';
       b.dataset.x = x;
@@ -675,11 +880,11 @@ function paintGrid() {
       b.tabIndex = (x === 0 && y === 0) ? 0 : -1;
       b.setAttribute('role', 'checkbox');
       b.setAttribute('aria-label', 'column ' + x + ', row ' + y);
-      if (x === 0 || x === D.cell.w - 1) b.className += ' side';
-      if (y === BASE) b.className += ' base';
-      if (y === CAP) b.className += ' cap';
-      if (y === XH) b.className += ' xh';
-      if (y === AXIS) b.className += ' axis';
+      if (x === 0 || x === C.w - 1) b.className += ' side';
+      if (y === G.baseline) b.className += ' base';
+      if (y === G.cap) b.className += ' cap';
+      if (y === G.xheight) b.className += ' xh';
+      if (y === G.axis) b.className += ' axis';
       g.appendChild(b);
     }
   }
@@ -717,9 +922,10 @@ function paintGrid() {
 }
 
 function onGridKey(e) {
+  var C = Z[ED.size].cell;
   var t = e.target.closest('.pix');
   if (!t) return;
-  var x = +t.dataset.x, y = +t.dataset.y, w = D.cell.w, h = D.cell.h;
+  var x = +t.dataset.x, y = +t.dataset.y, w = C.w, h = C.h;
   var dx = { ArrowLeft: -1, ArrowRight: 1 }[e.key] || 0;
   var dy = { ArrowUp: -1, ArrowDown: 1 }[e.key] || 0;
   if (dx || dy) {
@@ -743,20 +949,21 @@ function setPixel(x, y, v) {
 }
 
 function sidePanel() {
+  var G = Z[ED.size].guides, C = Z[ED.size].cell;
   var side = el('div', 'ed-side');
 
   var prev = el('div', 'ed-preview');
   [1, 2, 3].forEach(function (z) {
     var wrap = el('div');
     var c = el('canvas');
-    c.width = D.cell.w * z;
-    c.height = D.cell.h * z;
+    c.width = C.w * z;
+    c.height = C.h * z;
     c.className = 'prev' + z;
     c.setAttribute('aria-hidden', 'true');
     wrap.appendChild(c);
     var lab = el('div', 'px');
     lab.style.color = 'var(--ink-dim)';
-    lab.textContent = z + '× ' + (z * D.cell.h) + 'px';
+    lab.textContent = z + '× ' + (z * C.h) + 'px';
     wrap.appendChild(lab);
     prev.appendChild(wrap);
   });
@@ -766,10 +973,10 @@ function sidePanel() {
    * these used to share a row and a colour, so the legend could not tell you
    * which blue line was which -- and neither could the grid. */
   var geom = el('ul', 'ed-geom');
-  [['solid', 'baseline, under row ' + BASE],
-   ['dash', 'cap height, above row ' + CAP],
-   ['dot', 'x-height, above row ' + XH],
-   ['dashdot', 'maths axis, through row ' + AXIS]].forEach(function (p) {
+  [['solid', 'baseline, under row ' + G.baseline],
+   ['dash', 'cap height, above row ' + G.cap],
+   ['dot', 'x-height, above row ' + G.xheight],
+   ['dashdot', 'maths axis, through row ' + G.axis]].forEach(function (p) {
     var li = el('li');
     var i = el('i', p[0]);
     li.appendChild(i);
@@ -783,7 +990,7 @@ function sidePanel() {
   cb.type = 'checkbox';
   cb.id = 'ed-ghost';
   cb.checked = ED.ghost;
-  var can = D.hint.charAt(ED.i) === '1' && D.textok.charAt(ED.i) === '1';
+  var can = S.hint.charAt(ED.i) === '1' && S.textok.charAt(ED.i) === '1';
   cb.disabled = !can;
   cb.addEventListener('change', function () {
     ED.ghost = cb.checked;
@@ -805,7 +1012,7 @@ function sidePanel() {
   var ta = el('textarea', 'ed-file');
   ta.id = 'ed-file';
   ta.readOnly = true;
-  ta.rows = D.cell.h + 2;
+  ta.rows = C.h + 2;
   ta.spellcheck = false;
   ta.setAttribute('aria-label', 'the text file for this glyph');
   side.appendChild(ta);
@@ -877,7 +1084,7 @@ function targetPanel() {
     return p;
   };
   box.appendChild(mk('ed-repo', 'repository', t.repo, 'owner/name'));
-  box.appendChild(mk('ed-branch', 'branch', t.branch, D.branch || 'main'));
+  box.appendChild(mk('ed-branch', 'branch', t.branch, S.branch || 'main'));
 
   var note = el('p', 'ed-help',
     'The branch has to exist already — a GitHub link can open an editor on a '
@@ -890,10 +1097,10 @@ function targetPanel() {
   reset.type = 'button';
   reset.id = 'ed-target-reset';
   reset.addEventListener('click', function () {
-    setPref(PREF.repo, D.repo || '');
-    setPref(PREF.branch, D.branch || '');
-    $('#ed-repo').value = D.repo || '';
-    $('#ed-branch').value = D.branch || '';
+    setPref(PREF.repo, S.repo || '');
+    setPref(PREF.branch, S.branch || '');
+    $('#ed-repo').value = S.repo || '';
+    $('#ed-branch').value = S.branch || '';
     refresh();
   });
   box.appendChild(reset);
@@ -922,6 +1129,7 @@ function copyFile(btn) {
 /* Redraw everything that depends on the pixels: the grid, the previews, the
  * file text and the GitHub link. */
 function refresh() {
+  var C = Z[ED.size].cell;
   var host = $('#editor');
   var pix = host.querySelectorAll('.pix');
   for (var n = 0; n < pix.length; n++) {
@@ -937,8 +1145,8 @@ function refresh() {
     g.fillStyle = '#1e1b15';
     g.fillRect(0, 0, c.width, c.height);
     g.fillStyle = '#efe7d3';
-    for (var y = 0; y < D.cell.h; y++) {
-      for (var x = 0; x < D.cell.w; x++) {
+    for (var y = 0; y < C.h; y++) {
+      for (var x = 0; x < C.w; x++) {
         if (ED.rows[y][x] === '#') g.fillRect(x * z, y * z, z, z);
       }
     }
@@ -946,7 +1154,7 @@ function refresh() {
 
   var text = fileText(ED.i, ED.rows);
   $('#ed-file').value = text;
-  var rel = 'glyphs/' + D.size + '/' + ED.face + '/' + hex(D.cps[ED.i]) + '.txt';
+  var rel = 'glyphs/' + ED.size + '/' + ED.face + '/' + hex(S.cps[ED.i]) + '.txt';
   $('#ed-path').innerHTML = 'the file is <b>' + esc(rel) + '</b>';
   $('#ed-reset').disabled = text === fileText(ED.i, ED.orig);
 
@@ -1009,7 +1217,7 @@ document.addEventListener('click', function (e) {
   if (e.target.id === 'scrim') closeEditor();
 });
 
-fetch('data/glyphs.json')
+fetch('data/site.json')
   .then(function (r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();

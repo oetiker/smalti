@@ -14,8 +14,8 @@
 #   make check-version   the version in VERSION, read back out of every face
 #   make headers    rewrite every drawing into its normal form
 #   make index      regenerate docs/coverage.md
-#   make site       build the specimen site into build/site/ -- one page per
-#                   size, under its own name, with a redirect at the root
+#   make site       build the specimen site into build/site/ -- one page
+#                   showing every size side by side
 #   make check-site prove the site ships this repository's drawings
 #   make packages   build the .deb and the .rpm into build/
 #   make deb        build the .deb only
@@ -161,7 +161,7 @@ GEN     := build/gen/$(SIZE)/.stamp
 GENTOOL := tools/glyphstore.py tools/accents.py tools/weight.py \
            tools/gen-braille.py tools/gen-arrows.py tools/gen-circled-digits.py \
            tools/gen-latin-ext-a.py tools/embolden.py tools/slant-bdf.py \
-           tools/slant-bold.py
+           tools/slant-bold.py tools/gen-box.py tools/boxgeom.py
 
 FACES := Regular Bold Italic BoldItalic
 TTF   := $(FACES:%=build/$(FONT)-%.ttf)
@@ -209,6 +209,7 @@ $(GEN): $(GENTOOL) $(HAND) $(UPSTREAM_R) $(UPSTREAM_B)
 	python3 tools/gen-braille.py $(SIZE)
 	python3 tools/gen-arrows.py $(SIZE)
 	python3 tools/gen-circled-digits.py $(SIZE)
+	python3 tools/gen-box.py $(SIZE)
 	python3 tools/gen-latin-ext-a.py $(UPSTREAM_R) build/gen/$(SIZE)/regular
 	python3 tools/embolden.py $(SIZE)
 	python3 tools/gen-latin-ext-a.py $(UPSTREAM_B) build/gen/$(SIZE)/bold
@@ -260,6 +261,7 @@ check-sources: all
 	$(PY) tools/test-glyphstore.py
 	$(PY) tools/test-accents.py
 	$(PY) tools/test-weight.py
+	$(PY) tools/test-box.py
 	$(PY) tools/test-check-glyphs.py $(SIZE)
 	$(PY) tools/check-glyphs.py $(SIZE)
 
@@ -404,7 +406,8 @@ SITE_ARGS   := --branch $(SITE_BRANCH) $(if $(SITE_REPO),--repo $(SITE_REPO),)
 
 SITESRC := site/index.html site/smalti.css site/smalti.js
 
-# Every size in one run, into $(SITE)/<size>/ with a redirect at the root.
+# Every size in one run, into ONE page at $(SITE)/index.html with a shared
+# data/site.json and a data/<size>.json per size; there is no per-size page.
 # The prerequisite is the FIRST size's faces only, because `site` above has
 # already fanned `woff2` out across every size before reaching this: making
 # every size's .woff2 a prerequisite here would need SIZE-scoped variables
@@ -420,7 +423,7 @@ $(SITE)/index.html: $(WOFF2) $(TTF) $(SITESRC) tools/build-site.py \
 # diff, so every glyph, in every face, is compared back against the store --
 # including the exact bytes the in-page editor would emit.
 check-site: site
-	$(PY) tools/check-site.py --site $(SITE)/$(SIZE) $(SIZE)
+	$(PY) tools/check-site.py --site $(SITE) --size $(SIZE)
 
 # fetch() refuses file:// URLs, so the site has to be served to be looked at.
 serve-site: site

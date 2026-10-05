@@ -5,7 +5,7 @@
  * every surface here is a tile on a warm dark ground, every seam is a hairline
  * of grout, nothing is rounded and nothing casts a shadow -- glass is cut, not
  * moulded.  The layout module is the cell itself: all spacing is a multiple of
- * --u, one glyph WIDTH, which size.css sets per cell size.  --u2 is the glyph
+ * --u, one glyph WIDTH, which sizes.css sets per cell size.  --u2 is the glyph
  * height at every size this ships, because every one of them is 1:2.
  *
  * Three hues carry information and are never used for decoration:
@@ -35,13 +35,11 @@
   --verdigris: #3fa88c;
 
   /* One cell, and its multiples.  Nothing here is a round number by accident. */
-  /* --u .. --u8, --pix, --cell-cols and --cell-rows are NOT here.  They are
-   * the cell, and this file is copied unchanged into every size's page, so a
-   * cell written here is right for one size and wrong for the rest.
-   * tools/build-site.py generates them into size.css, which is linked ahead
-   * of this file. */
+  /* --u .. --u8, --pix, --cell-cols and --cell-rows come from sizes.css: the
+   * chrome's values on :root (8x16), and each size's again under [data-size],
+   * so an element carrying data-size gets its own cell geometry. */
 
-  --pixel: SmaltiSite, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --pixel: Smalti8x16, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --prose: Charter, "Bitstream Charter", "Sitka Text", Cambria, "Iowan Old Style",
            Palatino, Georgia, serif;
 
@@ -78,6 +76,17 @@ body {
   letter-spacing: 0;
 }
 
+/* An element that shows one size's glyphs carries data-size and that size's
+ * family; sizes.css gives it that size's --u2..--u6 under the same selector,
+ * so .s1/.s2/.s3 resolve to its own cell height and multiples. */
+[data-size="7x14"] { font-family: Smalti7x14, var(--pixel); }
+[data-size="8x16"] { font-family: Smalti8x16, var(--pixel); }
+
+.sizes { display: flex; gap: var(--u2); border: 0; margin: 0; padding: 0; }
+.sizes label { display: flex; align-items: center; gap: 4px; cursor: pointer;
+               color: var(--ink-dim); }
+.sizes input:checked + span { color: var(--gold); }
+
 a { color: var(--ink); text-decoration-color: var(--grout2); text-underline-offset: 3px; }
 a:hover { text-decoration-color: var(--gold); }
 code { font-family: var(--pixel); font-size: var(--u2); color: var(--gold); }
@@ -112,21 +121,10 @@ em { font-style: italic; color: var(--ink); }
   border-bottom: 1px solid var(--grout);
 }
 .mark { text-decoration: none; letter-spacing: 0; color: var(--ink); }
-.mark b { color: var(--gold); font-weight: 400; margin-left: var(--u); }
 .masthead nav { display: flex; gap: var(--u3); flex-wrap: wrap; }
 .masthead nav a { text-decoration: none; color: var(--ink-dim); }
 .masthead nav a:hover, .masthead nav a:focus-visible { color: var(--gold); }
 .masthead nav a.out::after { content: " ↗"; }
-
-/* The other cell sizes.  Each is a sibling PAGE, not a control on this one,
- * so it is drawn as a tile rather than as another section link: a reader who
- * clicks it leaves the page, and the section links beside it do not. */
-.masthead nav a.size {
-  padding: 0 var(--u); border: 1px solid var(--grout);
-}
-.masthead nav a.size:hover, .masthead nav a.size:focus-visible {
-  border-color: var(--gold);
-}
 
 /* ----------------------------------------------------------------- hero -- */
 
@@ -142,6 +140,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
  * 0.88 of a unit with the rest as grout, a lighter facet across the top edge,
  * and a lightness that varies tile to tile: real smalti are never uniform. */
 .wordmark { display: block; width: 100%; height: auto; }
+.wordmark[hidden] { display: none; }
 .wordmark .t { fill: var(--gold); }
 .wordmark .t0 { fill: #e3b545; }
 .wordmark .t1 { fill: #cf9a24; }
@@ -200,9 +199,6 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .spec-name span { color: var(--ink-dim); }
 .spec-line { margin: 0 0 var(--u2); white-space: pre; color: var(--ink); }
 .spec-line:last-child { margin-bottom: 0; }
-.spec-line b { color: var(--ink-dim); display: inline-block; width: 6ch;
-               font-weight: 400; font-size: var(--u2); line-height: inherit;
-               vertical-align: top; }
 /* The three exact sizes, indexed by MULTIPLE and not by pixel count.  These
  * were .s14/.s28/.s42 and smalti.js built the class name as 's' + the pixel
  * size, so the 8x16 page asked for .s16/.s32/.s48, matched nothing, and set
@@ -216,7 +212,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .prov { display: grid; gap: 1px; background: var(--grout);
         border: 1px solid var(--grout); margin: var(--u3) 0; }
 .prov-row { background: var(--mortar2); padding: var(--u2) var(--u3);
-            display: grid; grid-template-columns: 13ch 1fr 22ch; gap: var(--u3);
+            display: grid; grid-template-columns: 18ch 1fr 22ch; gap: var(--u3);
             align-items: center; }
 .prov-name { color: var(--ink); }
 .prov-n { color: var(--ink-dim); }
@@ -233,7 +229,9 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
           margin: var(--u3) 0; }
 .legend span { display: flex; align-items: center; gap: var(--u); }
 .legend i { width: 12px; height: 12px; display: block; border: 1px solid var(--grout2); }
-.legend i.on { background: var(--ink); border-color: var(--ink); }
+.legend i.h { background: var(--gold); border-color: var(--gold); }
+.legend i.u { background: var(--cobalt); border-color: var(--cobalt); }
+.legend i.g { background: var(--verdigris); border-color: var(--verdigris); }
 .legend i.off { background: transparent; }
 .legend i.rule { background: var(--mortar3); border-color: var(--grout2);
                  background-image: linear-gradient(135deg, transparent 44%,
@@ -256,10 +254,15 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
   width: 8px; height: 8px; display: block; padding: 0;
   border: 1px solid var(--grout); background: transparent;
 }
-.strip button.on { background: var(--ink); border-color: var(--ink); cursor: pointer; }
-.strip button.off { cursor: pointer; }
+.strips { display: grid; gap: var(--u); }
+.strip-line { display: grid; grid-template-columns: 6ch 1fr; gap: var(--u); align-items: start; }
+.strip-size { color: var(--ink-dim); font-size: var(--u2); }
+.strip button { cursor: pointer; }
+.strip button.h { background: var(--gold); border-color: var(--gold); }
+.strip button.u { background: var(--cobalt); border-color: var(--cobalt); }
+.strip button.g { background: var(--verdigris); border-color: var(--verdigris); }
 .strip button.off:hover { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 30%, transparent); }
-.strip button.on:hover { background: var(--gold); border-color: var(--gold); }
+.strip button:not(.off):hover { outline: 1px solid var(--ink); outline-offset: 0; }
 .strip i.rule { background: var(--mortar3); border-color: var(--grout2);
                 background-image: linear-gradient(135deg, transparent 40%,
                   var(--grout2) 40%, var(--grout2) 60%, transparent 60%); }
@@ -303,16 +306,13 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 /* One tile per glyph.  The glyph is always the same ink on the same ground so
  * the specimen stays honest; provenance is the hairline along the bottom. */
 .tile {
-  position: relative; background: var(--mortar2); border: 0; padding: 0;
+  position: relative; background: var(--mortar2); border: 0;
   color: var(--ink); font-family: var(--pixel); line-height: 1;
-  aspect-ratio: 1; display: grid; place-items: center; cursor: pointer;
-  font-size: var(--tsize);
+  display: flex; align-items: flex-end; justify-content: center;
+  gap: 6px; padding: 6px 4px; cursor: pointer;
   box-shadow: inset 0 0 0 1px var(--grout);
 }
 .tile::after { content: ""; position: absolute; inset: auto 0 0 0; height: 2px; }
-.tile.h::after { background: var(--gold); }
-.tile.u::after { background: var(--cobalt); }
-.tile.g::after { background: var(--verdigris); }
 .tile.miss { color: var(--grout2); background: var(--mortar); }
 .tile.miss::after { background: repeating-linear-gradient(90deg,
     var(--grout2) 0 2px, transparent 2px 4px); }
@@ -320,7 +320,18 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .tile.rule::after { background: var(--grout); }
 .tile:hover:not(.rule) { background: var(--mortar3); }
 .tile:hover:not(.rule) { outline: 1px solid var(--gold); outline-offset: -1px; }
-.tile b { font-weight: 400; }
+
+/* One half per shown size, bottom-aligned so both sit on the tile's
+ * baseline.  The font size is the size's own multiple, set inline by the
+ * script as --tsize on each half. */
+.tile .half { font-size: var(--tsize); line-height: 1; border: 0; padding: 0;
+              background: none; color: inherit; cursor: pointer; position: relative; }
+.tile .half.h { box-shadow: inset 0 -2px 0 var(--gold); }
+.tile .half.u { box-shadow: inset 0 -2px 0 var(--cobalt); }
+.tile .half.g { box-shadow: inset 0 -2px 0 var(--verdigris); }
+.tile .half:hover { outline: 1px solid var(--gold); outline-offset: 1px; }
+.spec-line .size { color: var(--ink-dim); display: inline-block; width: 6ch;
+                  font-size: var(--u2); line-height: inherit; vertical-align: top; }
 
 /* Used on the specimen lines and on the tiles alike.  `oblique` rather than
  * `italic` because that is what the face is -- the regular sheared one column
@@ -331,6 +342,8 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
 .bold { font-weight: 700; }
 
 .empty { color: var(--ink-dim); padding: var(--u4) 0; }
+/* The load-error notice lives in the masthead, on a line of its own. */
+.masthead .empty { flex: 1 0 100%; margin: 0; padding: 0; color: var(--gold); }
 
 /* --------------------------------------------------------------- editor -- */
 
@@ -348,10 +361,15 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
           gap: var(--u2); border-bottom: 1px solid var(--grout);
           padding-bottom: var(--u2); }
 .ed-title { margin: 0; font-family: var(--prose); font-weight: 400; font-size: 23px; }
-.ed-title b { font-family: var(--pixel); font-size: var(--u4); color: var(--gold);
+/* The big glyph carries its own data-size, which supplies the family, and
+ * --u4 is then this size's whole multiple (2x its cell height). */
+.ed-title b { font-size: var(--u4); color: var(--gold);
               font-weight: 400; margin-right: var(--u2); }
 .ed-sub { margin: 4px 0 0; color: var(--ink-dim); font-family: var(--pixel);
           font-size: var(--u2); }
+.ed-face { background: var(--mortar); color: var(--ink);
+           border: 1px solid var(--grout2); padding: var(--u) var(--u2);
+           font-family: var(--pixel); font-size: var(--u2); }
 .ed-close { background: none; border: 1px solid var(--grout2); color: var(--ink);
             font-family: var(--pixel); font-size: var(--u2); padding: var(--u) var(--u2);
             cursor: pointer; }
@@ -469,7 +487,7 @@ main { max-width: 1050px; margin: 0 auto; padding: 0 var(--u3); }
   .blk { grid-template-columns: 1fr; gap: var(--u); }
   .blk-n { text-align: left; }
   .prov-row { grid-template-columns: 1fr; gap: var(--u); }
-  /* --pix is narrowed in size.css, so the column count follows the cell. */
+  /* --pix is narrowed in sizes.css, so the column count follows the cell. */
   .head { font-size: 27px; }
   .lede { font-size: 19px; }
 }
