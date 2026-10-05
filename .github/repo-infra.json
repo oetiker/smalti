@@ -6,7 +6,8 @@
     "Smalti's own work lives in the project files ci-local.yml (called from",
     "ci.yml) and release-build-local.yml (called from release-build.yml).",
     "release_assets lists what every release must carry: the fonts, the zip",
-    "and the OS packages that release-build-local.yml uploads."
+    "and the OS packages that release-build-local.yml uploads.",
+    "gitea_packages names the registry ri-publish-gitea uploads the packages to."
   ],
   "moving_major_tag": false,
   "version_files": [
@@ -23,5 +24,16 @@
     "smalti-*.zip",
     "fonts-smalti_*.deb",
     "smalti-fonts-*.rpm"
-  ]
+  ],
+  "gitea_packages": {
+    "url": "https://gitea.oetiker.ch",
+    "owner": "oposs",
+    "debian": {
+      "distribution": "stable",
+      "component": "main"
+    },
+    "rpm": {
+      "group": ""
+    }
+  }
 }
