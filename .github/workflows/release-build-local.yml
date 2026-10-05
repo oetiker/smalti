@@ -1,0 +1,170 @@
+# Smalti's own release build, called from release-build.yml.
+#
+# Create release PR runs this on the release branch, before the pull request
+# exists.  The files it uploads as release-asset-* artifacts are attached to
+# the draft release, and publish later tags exactly the commit built here.  So
+# nobody ever sees a Smalti release without its fonts and packages: if this
+# fails, no pull request is opened.
+#
+# workflow_call only, and every checkout takes `ref`: without it this would
+# build main and ship it under the release's version.
+name: Smalti release build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: The version being released.
+        type: string
+        required: true
+      ref:
+        description: The release branch head to build.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fonts:
+    name: Build the fonts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # No apt step: since the bitmap .otb was dropped, the build needs
+      # nothing outside pip.
+      - name: python dependencies
+        run: make venv
+
+      # The commit's own timestamp, so the release build is reproducible from
+      # the tag alone: publish tags this very commit.  Without it the fonts
+      # carry the committed fallback epoch, which is reproducible but says
+      # nothing about which commit.
+      - name: build the fonts
+        run: |
+          set -euo pipefail
+          SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+          export SOURCE_DATE_EPOCH
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
+          make
+          make woff2
+
+      # A release must not ship a font the checks have not passed.  This is
+      # the same `make check` a contributor runs, and its version leg is what
+      # proves these files carry the version being released.
+      - name: check
+        run: make check
+
+      - name: assemble the assets
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          # Four faces per size, in two formats.  The size list is asked of
+          # make rather than written here, so a new cell size does not turn a
+          # correct release into a red one.
+          sizes=$(make -s print-sizes)
+          nsizes=$(echo "$sizes" | wc -w)
+          fonts=(build/*.ttf build/*.woff2)
+          if [ ${#fonts[@]} -ne $(( 8 * nsizes )) ]; then
+            echo "::error::expected 4 .ttf and 4 .woff2 for each of" \
+                 "$sizes, found ${#fonts[@]} files"
+            exit 1
+          fi
+
+          # One zip for people who want to unpack a font directory, alongside
+          # the individual files for scripted installs.
+          stage="smalti-$VERSION"
+          mkdir -p "dist/$stage"
+          cp "${fonts[@]}" README.md LICENSE.tamzen "dist/$stage/"
+          (cd dist && zip -r -q "smalti-$VERSION.zip" "$stage" && rm -rf "$stage")
+          cp "${fonts[@]}" dist/
+
+          printf 'release assets:\n'
+          ls -1 dist/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-asset-fonts
+          path: dist/*
+          if-no-files-found: error
+
+  packages:
+    name: Build the OS packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      # rpm and cpio build the .rpm; gettext-base supplies envsubst, which
+      # `make packages` uses to fill in the nfpm template.
+      - name: packaging tooling
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends rpm cpio gettext-base
+
+      - name: python dependencies
+        run: make venv
+
+      # The commit's own timestamp, so the release build is reproducible from
+      # the tag alone.
+      #
+      # Written to $GITHUB_ENV, not just exported in this step, so the later
+      # `check` step sees the SAME value.  A job-level `env:` cannot express
+      # this because the value needs a shell (`git log`) to compute -- so it
+      # is computed once here instead.  If `check` ever rebuilds the packages
+      # (it does not today), it must rebuild them with the timestamp that was
+      # actually shipped, not a fresh `git log` reading taken moments later.
+      - name: pin the build timestamp
+        run: |
+          set -euo pipefail
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)" >> "$GITHUB_ENV"
+
+      - name: build the packages
+        run: |
+          set -euo pipefail
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH"
+          make
+          make packages
+
+      # A release must not ship a package the checks have not passed.
+      - name: check
+        run: make check-packages
+
+      - name: exactly one .deb and one .rpm
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          pkgs=(build/*.deb build/*.rpm)
+          if [ ${#pkgs[@]} -ne 2 ]; then
+            echo "::error::expected one .deb and one .rpm, found ${#pkgs[@]}"
+            exit 1
+          fi
+          printf 'release assets:\n'
+          printf '%s\n' "${pkgs[@]}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-asset-packages
+          path: |
+            build/*.deb
+            build/*.rpm
+          if-no-files-found: error

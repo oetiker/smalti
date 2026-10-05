@@ -1,43 +1,86 @@
-# The font must build from a clean checkout, on a machine that has never
-# seen this project.  Everything here is `make` -- the Makefile is the build,
-# this file only supplies a machine to run it on.
-name: build
+# Smalti's own CI, called from ci.yml.
+#
+# The drawings are the font, so the drawings are what CI checks.  Every rule
+# lives in the Makefile -- `make check` for the glyph store and the outline
+# proof, `make check-packages` for the .deb and .rpm -- never here: a
+# contributor has to be able to run the same check locally before pushing,
+# and a rule written in YAML can only be run by GitHub.  This file's whole
+# job is to provide a machine and call make.
+#
+# workflow_call only.  ci.yml runs it on push and pull request, and Create
+# release PR runs it on the release branch with that commit in `ref`; a
+# checkout without `ref` would test main and report the release as tested.
+name: Smalti CI
 
 on:
-  # Only main and pull requests: a branch push is already covered by
-  # validate.yml, which builds every face in order to check it, and running
-  # both on every push would double every run of a same-repo pull request.
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to test; empty takes the commit that triggered the run.
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
     shell: bash
 
 jobs:
-  build:
+  check:
+    name: Glyph store and outline proof
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
-      # No apt step, and that is deliberate.  fonttosfnt (xfonts-utils) built
-      # the bitmap .otb and had no pip equivalent; the .otb is gone and this
-      # job now installs nothing outside pip.  If an apt-get comes back here,
-      # ask what reintroduced it.
-      #
+      # No apt step, and that is deliberate.  The build used to need
+      # fonttosfnt (xfonts-utils) for the bitmap .otb; that format is gone and
+      # with it the last dependency this job could not get from pip.  If an
+      # apt-get ever comes back here, ask what reintroduced it.
+      - name: python dependencies
+        run: make venv
+
+      # Filenames, headers, glyph dimensions, per-face glyph counts, the
+      # render contract every built .ttf must carry (upem, line box, advances,
+      # style bits), and the proof that every traced glyph is the same shape
+      # as its .bdf strike and rasterises to the same pixels.
+      - name: check
+        run: make check
+
+      # The coverage table is generated, so it must not be edited by hand and
+      # must not go stale.  Regenerate it and insist nothing moved.
+      - name: coverage index is up to date
+        run: |
+          make index
+          if ! git diff --exit-code; then
+            echo "::error::the coverage index is stale -- run 'make index' and commit the result"
+            exit 1
+          fi
+
+  # The font must build from a clean checkout, on a machine that has never
+  # seen this project.
+  build:
+    name: Build and install the fonts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
       # Project-local .venv holding fontTools, for the outline build.
       - name: python dependencies
         run: make venv
@@ -74,8 +117,8 @@ jobs:
           printf 'built: %s\n' "${fonts[@]}"
 
           # Proved by `make check-outlines` in the step above, and by the
-          # render contract in `make check-sources` on the validate workflow.
-          # If either is ever removed, remove this too -- counting a file as
+          # render contract in `make check-sources` in the check job.  If
+          # either is ever removed, remove this too -- counting a file as
           # verified when nothing verified it is the failure this tally exists
           # to stop.
           #
@@ -126,6 +169,7 @@ jobs:
             exit 1
           fi
 
+      # Not named release-asset-*: only the release build may upload those.
       - uses: actions/upload-artifact@v7
         with:
           name: smalti-fonts
@@ -135,17 +179,21 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # The OS packages.  This is the ONE place in the repository that installs an
-  # apt package, and it buys an honest check rather than a decorative one: the
-  # only trustworthy test of an .rpm is `rpm -qp` on the real file, and our own
-  # reader checking our own writer would prove nothing.
+  # The OS packages.  This job installs apt packages, and it buys an honest
+  # check rather than a decorative one: the only trustworthy test of an .rpm
+  # is `rpm -qp` on the real file, and our own reader checking our own writer
+  # would prove nothing.
   #
   # It is a separate job, not a step in `build`, so that the font build's green
   # state keeps meaning "the fonts are fine" with no packaging tooling involved.
   packages:
+    name: Build and check the OS packages
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
 
       - uses: actions/setup-python@v7
         with:
