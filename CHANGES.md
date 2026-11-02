@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **`M T W X Y w x`, the accented `O`s and 31 more letters now lean in the 8x16 oblique faces** instead of standing upright among slanted text. They fill the cell to the right edge, so they lean one column, in their lower rows, where the other letters lean two. The same applies to `Æ ģ Ħ ĺ ľ Œ ť Ǣ Ǽ` at 7x14; `æ Ĳ ǣ ǽ` still stay upright there.
+- **The README has an Install section near the top** with the apt and dnf commands, a link to the latest release for a direct download, and `make install` from source. The dnf commands are now the same on every Fedora and RHEL version, and the README names no version any more: the release badge at its top shows the current one. The glyph count it gave (1039 per face) had fallen behind and now points to `docs/coverage.md`.
 
 ### Fixed
 

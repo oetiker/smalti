@@ -1,12 +1,16 @@
-# Smalti — a pixel font with wide Unicode coverage
+# Smalti: a pixel font with wide Unicode coverage
+
+[![CI](https://github.com/oetiker/smalti/actions/workflows/ci.yml/badge.svg)](https://github.com/oetiker/smalti/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/oetiker/smalti)](https://github.com/oetiker/smalti/releases/latest)
 
 *Smalti* are the small glass tiles a mosaic is made from.  A pixel is one.
 
-Upstream Tamzen has **189 glyphs and nothing above U+00FF** — the same 189 at
+Upstream Tamzen has **189 glyphs and nothing above U+00FF**, the same 189 at
 every cell size: no `§`, no `¶`, no dashes, no arrows, no triangles, no `…`.
-Smalti adds 850 more, draws two faces upstream never had, and does all of it
-at **two cell sizes**, 7x14 and 8x16, so each of its **eight faces carries
-1039 glyphs**:
+Smalti adds more than 1000, draws two faces upstream never had, and does all
+of it at **two cell sizes**, 7x14 and 8x16, so each of its **eight faces
+carries more than 1200 glyphs**.  [`docs/coverage.md`](docs/coverage.md) has
+the exact count.
 
 | face | how it is made |
 |---|---|
@@ -23,11 +27,34 @@ are build artefacts.
 
 It is a **pixel font delivered as outlines**.  Every glyph is a set of
 axis-aligned rectangles on a grid where one pixel is exactly 64 font units,
-so at its drawn size — and at every whole multiple of it — a rasteriser
+so at its drawn size, and at every whole multiple of it, a rasteriser
 reproduces the drawing exactly, with no grey and nothing to hint.  Between
 those sizes it does not.  **See [Making it look right](#making-it-look-right)
 before configuring a terminal**; two settings decide whether you get the
 pixels or a blur.
+
+## Install
+
+The `.deb` and `.rpm` packages install both cell sizes, all four faces each.
+
+Debian and Ubuntu:
+
+    sudo install -d -m 0755 /etc/apt/keyrings
+    sudo curl -fsSL -o /etc/apt/keyrings/gitea-oposs.asc https://gitea.oetiker.ch/api/packages/oposs/debian/repository.key
+    echo "deb [signed-by=/etc/apt/keyrings/gitea-oposs.asc] https://gitea.oetiker.ch/api/packages/oposs/debian stable main" | sudo tee /etc/apt/sources.list.d/oposs.list
+    sudo apt update && sudo apt install fonts-smalti
+
+Fedora, RHEL, Rocky and Alma, with dnf4 and dnf5 alike:
+
+    sudo curl -fsSL -o /etc/yum.repos.d/oposs.repo https://gitea.oetiker.ch/api/packages/oposs/rpm.repo
+    sudo dnf install smalti-fonts
+
+Direct download: the `.ttf` and `.woff2` files, a `.zip` of them, and the
+packages are on the [latest release](https://github.com/oetiker/smalti/releases/latest).
+
+From source, into `~/.local/share/fonts/smalti-ttf/`:
+
+    make install
 
 ## Lineage and licence
 
@@ -44,12 +71,12 @@ Both upstream licences say:
 Modification is explicitly permitted.  See `LICENSE.tamzen`.  The
 `(c) 2015 Scott Fial` notice stays in the font's name table, alongside ours.
 
-**The size is part of the family name** — `Smalti 7x14`, not `Smalti`.  Each
+**The size is part of the family name**: `Smalti 7x14` and `Smalti 8x16`.  Each
 cell size is a separate design with its own metrics, so if they all claimed
 the family name `Smalti` a font matcher would pick between them arbitrarily.
 That is the bug upstream has, and the reason Tamzen's own notes say to keep
 only one size installed.  With the size in the name, every size can be
-installed at once — and `Smalti 7x14` and `Smalti 8x16` are both in the same
+installed at once, and `Smalti 7x14` and `Smalti 8x16` are both in the same
 `.deb` and the same `.rpm`, so installing one installs both.
 
 ## Build
@@ -57,7 +84,7 @@ installed at once — and `Smalti 7x14` and `Smalti 8x16` are both in the same
 Each face is drawn as a bitmap strike (`.bdf`) and traced into an outline
 (`.ttf`).  The `.ttf` is the only delivered format.
 
-Needs `python3-venv`, and nothing else — no system font tooling.
+Needs `python3-venv` and no system font tooling.
 
 `make packages` additionally needs `envsubst` (Debian/Ubuntu: `gettext-base`)
 to expand environment variables in the package configuration before passing
@@ -92,8 +119,8 @@ fonts themselves.
 From a clean clone, `make` is enough: it creates `.venv` itself.
 
 After `make install`, reload wezterm with `Ctrl+Shift+R`.  If it then says it
-cannot load the font, that is a stale font cache and not a failed install —
-see [The font is installed and the terminal cannot see
+cannot load the font, the font cache is stale and the install is fine.  See
+[The font is installed and the terminal cannot see
 it](#the-font-is-installed-and-the-terminal-cannot-see-it).
 
 ### Why there is no `.otb`
@@ -101,7 +128,7 @@ it](#the-font-is-installed-and-the-terminal-cannot-see-it).
 Smalti used to ship a second, bitmap-only format built by `fonttosfnt`.  It
 is gone.  A bitmap-only font has `outline=false`, which
 `/etc/fonts/conf.d/70-no-bitmaps-except-emoji.conf` rejects outright, and no
-browser renders an embedded strike — so it reached nothing except a wezterm
+browser renders an embedded strike, so it reached nothing except a wezterm
 patched to read strikes, while needing an apt package the rest of the build
 did not.  The `.ttf` renders the same pixels everywhere, and `make check`
 proves it glyph by glyph.  Dropping the format removed the last dependency
@@ -109,7 +136,7 @@ outside pip.
 
 ## Releases
 
-    VERSION       0.0.0 — the one place the version is written down
+    VERSION       the one place the version is written down
     CHANGES.md    what is in each release, and what is not out yet
 
 A release is two clicks: dispatch **Create release PR** from the Actions tab,
@@ -122,40 +149,9 @@ to the package repository and publishes the release.
 two things that look wrong and are not, and how to recover a run that failed
 halfway.
 
-### From a package
-
-The packages are in the oposs package repository on `gitea.oetiker.ch`.
-
-Debian, Ubuntu:
-
-    sudo install -d -m 0755 /etc/apt/keyrings
-    sudo curl -o /etc/apt/keyrings/gitea-oposs.asc https://gitea.oetiker.ch/api/packages/oposs/debian/repository.key
-    echo "deb [signed-by=/etc/apt/keyrings/gitea-oposs.asc] https://gitea.oetiker.ch/api/packages/oposs/debian stable main" | sudo tee /etc/apt/sources.list.d/oposs.list
-    sudo apt update && sudo apt install fonts-smalti
-
-Fedora 41 and later:
-
-    sudo dnf config-manager addrepo --from-repofile=https://gitea.oetiker.ch/api/packages/oposs/rpm.repo
-    sudo dnf install smalti-fonts
-
-RHEL, Rocky, Alma, and Fedora before 41:
-
-    sudo dnf config-manager --add-repo https://gitea.oetiker.ch/api/packages/oposs/rpm.repo
-    sudo dnf install smalti-fonts
-
-Every release also attaches the `.deb` and the `.rpm` for a direct install:
-
-    sudo apt install ./fonts-smalti_0.3.0-1_all.deb    # Debian, Ubuntu
-    sudo rpm -i smalti-fonts-0.3.0-1.noarch.rpm        # Fedora, RHEL, openSUSE
-
-Both install the four faces of each size where fontconfig finds them and
-carry no maintainer scripts: the distributions' own `fontconfig` triggers
-rebuild the cache.
-
-The version reaches every artefact — `build-face.py` writes it into the BDF as
-`FONT_VERSION`, `trace-outline.py` copies it into the `.ttf` name table and
-`head.fontRevision` — and `make check-version` reads it back out to prove it.
-A release flow that bumps a number nothing reads is worthless.
+`make check-version` reads the version back out of every built face.  How
+the version reaches each artefact, and what the packages do on install, is in
+[`docs/maintainer-notes.md`](docs/maintainer-notes.md).
 
 ## Making it look right
 
@@ -163,16 +159,16 @@ Smalti is drawn at 7x14 and at 8x16 pixels.  A rasteriser reproduces those
 pixels exactly
 only if you tell it the right size and the right kind of antialiasing.  Get
 either wrong and you get a font that is technically correct and visually
-mush.  There are two rules, and a third thing that is not a rule at all.
+mush.  There are two rules, and a note on hinting.
 
 ### 1. Use an exact size, or a whole multiple of it
 
-The em is a whole number of pixels — `upem = cell height * 64`, so 7x14 gets
+The em is a whole number of pixels: `upem = cell height * 64`, so 7x14 gets
 `upem = 896` and 8x16 gets `upem = 1024`; one pixel is exactly 64 units at
 both.  **The exact size is the cell height.**  At **14 px** on 7x14 every
 pixel edge lands on a device pixel boundary, so coverage is 0 or 255
-everywhere.  The mapping is linear, so **28 px** and **42 px** are exact too
-— and **16, 32 and 48 px** are those same three rungs for 8x16.
+everywhere.  The mapping is linear, so **28 px** and **42 px** are exact too,
+and **16, 32 and 48 px** are those same three rungs for 8x16.
 
 Anything in between is not.  At 20 px a one-pixel stem is 1.43 device pixels,
 and the 0.43 has to go somewhere: it becomes grey.
@@ -183,16 +179,16 @@ the display's dpi:
     pixels = points * dpi / 72
 
 So at the usual 96 dpi, **`font_size = 10.5`** is 14 px.  At 192 dpi the same
-14 px is `font_size = 5.25`, and `10.5` would give you 28 px — also exact.
+14 px is `font_size = 5.25`, and `10.5` would give you 28 px, also exact.
 If your terminal takes a pixel size directly, use 14, 28 or 42 and skip the
 arithmetic.
 
 | device pixels | points at 96 dpi | result |
 |---|---|---|
-| 14 | 10.5 | exact — the drawing |
+| 14 | 10.5 | exact: the drawing |
 | 28 | 21 | exact, doubled |
 | 42 | 31.5 | exact, tripled |
-| anything else | — | antialiased |
+| anything else | any other | antialiased |
 
 ### 2. Grayscale antialiasing, never LCD subpixel
 
@@ -211,10 +207,10 @@ on Smalti 7x14 Regular at 14 px, a one-pixel stem comes out as:
 | LCD subpixel | `83  171  255  171  83` |
 
 A solid black column becomes a five-subpixel coloured smudge.  Across the
-regular face at 14 px, **1000 of the 1003 rendered glyphs differ from the
-drawing under LCD, and none differ under grayscale**.  The three that survive
-are `U+0020`, `U+00A0` and `U+2800` — the three with no ink in them.  It is
-not the LCD filter setting either: `FT_LCD_FILTER_NONE` spreads it
+7x14 regular face at 14 px, **1199 of the 1202 rendered glyphs differ from
+the drawing under LCD, and none differ under grayscale**.  The three that
+survive are `U+0020`, `U+00A0` and `U+2800`, the three with no ink in them.
+The LCD filter setting does not change this: `FT_LCD_FILTER_NONE` spreads it
 identically.
 
 So: grayscale.  In wezterm that is `freetype_load_target = 'Light'` and
@@ -242,7 +238,7 @@ rather than tuned:
 | `OS/2.xAvgCharWidth` | 448 | exactly the 7 px advance |
 
 So in wezterm `cell_width = 1.0` gives `ceil(7.0) = 7` columns, and
-`line_height = 1.14` gives `ceil(14 * 1.14) = 16` rows — the glyph plus two
+`line_height = 1.14` gives `ceil(14 * 1.14) = 16` rows: the glyph plus two
 rows of leading, split evenly above and below the baseline.  `line_height =
 1.0` packs the rows with no leading at all.
 
@@ -278,22 +274,22 @@ config.line_height = 1.14    -- 16 rows
 per-font attribute and only reaches the rasteriser from the entry that
 actually supplies the glyph.  A fallback resolved implicitly carries no
 attributes and rasterises grayscale while the base font is LCD, or the other
-way round — invisible behind a font with full coverage, glaring behind one
-that falls back for anything it lacks.
+way round.  Behind a font with full coverage this is invisible; behind one
+that falls back for anything it lacks, it is obvious.
 
 ### Other terminals
 
 The two rules are the same everywhere; only the spelling changes.
 
-* **kitty** — `font_size 10.5`, and `text_composition_strategy legacy` if
+* **kitty**: `font_size 10.5`, and `text_composition_strategy legacy` if
   the default thickening looks heavy.  kitty has no subpixel mode, so rule 2
   is already satisfied.
-* **Alacritty** — `font.size = 10.5`.  Set `rgba=none` for the family in
+* **Alacritty**: `font.size = 10.5`.  Set `rgba=none` for the family in
   fontconfig; Alacritty takes its antialiasing from there.
-* **foot** — `font=Smalti 7x14:size=10.5`, and `dpi-aware=no` if you want
+* **foot**: `font=Smalti 7x14:size=10.5`, and `dpi-aware=no` if you want
   points read against 96 dpi rather than the real display dpi.
-* **A browser or an editor** — set the size in **`px`**, not `pt`, `em` or a
-  percentage, and use the cell height or a whole multiple of it: 14, 28 or 42
+* **A browser or an editor**: set the size in **`px`** (no `pt`, `em` or
+  percentage), and use the cell height or a whole multiple of it: 14, 28 or 42
   for 7x14, and 16, 32 or 48 for 8x16.  The specimen page sets each cell size at exactly
   its own three pixel sizes and nothing in between, for this reason.
 
@@ -303,16 +299,16 @@ The two rules are the same everywhere; only the spelling changes.
     configuration. Fallback(s) are being used instead
 
 If `fc-list | grep -i smalti` lists all four faces and a *freshly started*
-program finds the font, then it is installed and the message is about a
-**cache, not the install**.
+program finds the font, then it is installed and the message is about the
+**font cache**.
 
 fontconfig builds its list of fonts once per process.  A terminal that was
 already running when you installed the font has never seen those files, and
-never will: reloading the configuration re-reads the config file, not the
-system font database.  Restarting the program fixes it — and so does
+never will: reloading the configuration re-reads the config file and leaves
+the system font database alone.  Restarting the program fixes it, and so does
 `font_dirs`, which wezterm scans itself, on every reload, without asking
-fontconfig.  That is why the snippet above sets it even though fontconfig
-serves these files perfectly well.
+fontconfig.  That is why the snippet above sets it although fontconfig serves
+these files as well.
 
 **Keep that directory holding `.ttf` only.**  wezterm scans `font_dirs`
 directly, including formats fontconfig would refuse, so a leftover file from
@@ -320,9 +316,9 @@ an older build sitting beside them offers a second candidate for every face.
 
 ## Outlines
 
-`tools/trace-outline.py` turns one BDF strike into one `.ttf`.  Not a curve
-fit — `potrace` and friends smooth pixel edges, which is exactly wrong here.
-The outline is the **exact union of the lit pixels**, at integer coordinates.
+`tools/trace-outline.py` turns one BDF strike into one `.ttf`.  The outline
+is the **exact union of the lit pixels**, at integer coordinates.  A curve
+fit such as `potrace` would smooth the pixel edges.
 
 **The em is a whole number of pixels.**  `upem = cell_height * 64`, so one
 pixel is exactly 64 units and 7x14 gets `upem = 896`, advance 448, ascent
@@ -331,8 +327,8 @@ pixel edge at unit *k*·64 lands on device pixel *k* with no rounding; the
 mapping is linear, so 28 px and 42 px are exact too.  `make check` rasterises
 every face of every size at 1x, 2x and 3x its own cell height and finds
 **no** pixel different from the bitmap and **no** antialiased pixel.
-Sizes between multiples do blur — that is the one thing an outline gives up,
-and wezterm only ever asks for an exact ppem anyway.
+Sizes between multiples do blur.  That is the one thing an outline gives up,
+and wezterm only ever asks for an exact ppem.
 
 **One file per strike**, because outlines cannot vary with cell size: a
 variable font's `opsz` axis would need interpolation-compatible masters, and
@@ -341,35 +337,37 @@ different places.
 
 The one hard case is **two pixels touching only at a corner**.  That vertex
 has two incoming and two outgoing edges, so a point-keyed lookup loses one
-and the contour walk dies; there are 6,223 such vertices across the four
-faces.  Each arrival is paired with the sharpest *right* turn.  Either
-pairing is correct — the winding number of a point is a sum over the edges
-and does not depend on how they are grouped into loops — so the choice only
+and the contour walk dies; there are 7,199 such vertices across the four
+7x14 faces and 8,154 across the four 8x16 faces.  Each arrival is paired with
+the sharpest *right* turn.  Either pairing is correct, because the winding
+number of a point is a sum over the edges and does not depend on how they are
+grouped into loops, so the choice only
 decides whether `o` comes out as one pinched ring or as four rectangles
 whose union is the same shape.  Contour count is not the goal; the area
 check is.
 
-`make check` is the proof, over all 4,016 glyphs of all four faces:
+`make check` is the proof, over all 4,808 glyphs of the four faces of each
+size:
 
-| check | result |
-|---|---|
-| signed filled area vs. lit pixel count | 0 discrepancies |
-| segments that are not axis-aligned | 0 |
-| coordinates off the 64-unit grid | 0 |
-| off-curve points | 0 |
-| points per glyph | 22.5 mean, 132 worst |
+| check | 7x14 | 8x16 |
+|---|---|---|
+| signed filled area vs. lit pixel count | 0 discrepancies | 0 discrepancies |
+| segments that are not axis-aligned | 0 | 0 |
+| coordinates off the 64-unit grid | 0 | 0 |
+| off-curve points | 0 | 0 |
+| points per glyph | 21.3 mean, 196 worst | 22.6 mean, 256 worst |
 
 Nothing in this path runs `fonttosfnt`, so nothing inherits its broken name
 table: nameID 6 is written, nameID 5 carries the real version, and nameID 10
 is a whole sentence.  `head.macStyle` and `OS/2 fsSelection` are set from one
-table in the tracer, so they cannot disagree — and `make check-sources`
-verifies that they still agree in the file that comes out.
+table in the tracer, and `make check-sources` verifies that they agree in
+the file that comes out.
 
 ### The build is byte-reproducible
 
 Two clean builds of the same tree produce byte-identical `.ttf` and
-`.woff2`.  This is not tidiness: **the acceptance test for any change to the
-glyph store is that these files do not change**, which is how a
+`.woff2`.  **The acceptance test for any change to the glyph store is that
+these files do not change**, which is how a
 thousand-file restructuring is proved to have moved no pixel.  A wall-clock
 stamp anywhere in the output would silently destroy that test, and it is
 `fontTools`' default for `head.created` / `head.modified`, so the tracer
@@ -383,14 +381,14 @@ the tracer is clock- or environment-derived, and glyph order, edge order and
 the contour walk are all order-stable by construction rather than by
 accident.
 
-## `make watch` — the editing loop
+## The editing loop: `make watch`
 
-Run it in a spare pane, then just edit a glyph file and save:
+Run it in a spare pane, then edit a glyph file and save:
 
     make watch
 
 Every save rebuilds, installs, and `touch`es `~/.config/wezterm/wezterm.lua`,
-which triggers wezterm's own automatic config reload — the same thing
+which triggers wezterm's own automatic config reload, the same thing
 `Ctrl+Shift+R` does.  New pixels appear in about a second, in every wezterm
 window.
 
@@ -420,24 +418,24 @@ Three layers, and for each codepoint the build takes the first that exists:
 | 3 | `build/gen/<size>/<face>/<CP>.txt` | a generator |
 
 **A drawing always beats a computation.  A computation always beats nothing.**
-Upstream sits above the generators, not below, because it is also hand-drawn:
+Upstream sits above the generators because it is also hand-drawn:
 `tools/weight.py` reproduces only 93 of upstream's 189 bold glyphs, and a
-hand-drawn bold beats a computed one.  The faces upstream never drew — italic
-and bold-italic — simply have no layer 2.
+hand-drawn bold beats a computed one.  The faces upstream never drew, italic
+and bold-italic, have no layer 2.
 
 Everything a generator writes goes into `build/gen/` and nothing else, so
 every generator stays re-runnable for ever and no contributor's work can be
-overwritten by one.  Overriding a generator is not a flag or a marker, it is
-just drawing the glyph: create the file and it wins.
+overwritten by one.  To override a generator, draw the glyph: create the
+file and it wins.
 
 One file per glyph, named for the codepoint in uppercase hex, so a pull
 request touches exactly one file, the diff *is* the drawing, and a duplicate
-codepoint is impossible rather than merely checked for.  Hex rather than the
-character itself because the character does not survive contributors: 142 of
+codepoint is impossible.  The name is hex because the character itself does
+not survive contributors: 142 of
 this font's codepoints collide case-insensitively on APFS and NTFS, 168
 normalise to NFD on macOS, and 17 cannot be a bare filename at all.
 
-`upstream/` holds pristine upstream BDF sources and is never edited — it keeps
+`upstream/` holds pristine upstream BDF sources and is never edited.  It keeps
 Tamzen's own filenames, because those files *are* Tamzen.  `baseline/` holds
 the exact `.otb` files that were live before this repo existed, so
 `make restore` is always a working escape hatch.  Those are upstream Tamzen's
@@ -446,15 +444,15 @@ own files and have nothing to do with Smalti's build, which produces no
 
 `docs/coverage.md`, regenerated by `make index`, says what each size and face
 actually carries.  A size with zero drawings still builds; it comes out as
-plain upstream Tamzen.  Ragged coverage is a first-class state.
+plain upstream Tamzen.
 
 `repair-tamzen.py` is no longer part of the build.  It repaired the four
 metric fields `fonttosfnt` emitted wrongly on every bitmap build (wrong EBLC
 `indexTablesSize`, wrong `hmtx` advance, wrong `OS/2` `xAvgCharWidth`,
 phantom `hhea` leading); with the `.otb` gone there is nothing to repair.  It
 is kept for the one job that still needs it: repairing upstream Tamzen's own
-files after `make restore`.  The same four fields are now *checked* rather
-than repaired — see [The cell](#the-cell).
+files after `make restore`.  The same four fields are now *checked*; see
+[The cell](#the-cell).
 
 ## The specimen site
 
@@ -463,9 +461,9 @@ than repaired — see [The cell](#the-cell).
     make check-site   # prove it ships this repository's own drawings
 
 `https://oetiker.github.io/smalti/` shows every glyph in every face as real
-rendered text, says honestly what is and is not covered, and lets a visitor
-**click any glyph, change its pixels and open the pull request from the
-browser** — no clone, no Python, no toolchain.  For a codepoint nobody has
+rendered text, says what is and is not covered, and lets a visitor **click any
+glyph, change its pixels and open the pull request from the browser**, with no
+clone, no Python and no toolchain.  For a codepoint nobody has
 drawn yet the link arrives at GitHub with the path and the drawing already
 filled in; for one that already has a file it opens that file in GitHub's
 editor.  That is the property the one-file-per-glyph layout was for.
@@ -474,7 +472,7 @@ Both cell sizes are on that one page.  The checkboxes in the page header
 choose which are shown (the choice is kept in the URL as `?sizes=7x14,8x16`),
 and each specimen line and glyph tile shows the chosen sizes side by side.
 
-Three things about it are not obvious:
+About the site:
 
 * **It loads the `.woff2` files**, which are the `.ttf` outlines compressed.
   No browser draws an embedded bitmap strike, so the outline path is the only
@@ -485,8 +483,8 @@ Three things about it are not obvious:
   looks broken, so no size in between is offered.
 * **Nothing under `build/site/` is committed.**  The page is generated from
   the drawings by `tools/build-site.py`, and `tools/check-site.py` compares
-  every glyph it ships — and the exact bytes its editor would put on a
-  contributor's clipboard — back against the store.  `site/` holds the HTML,
+  every glyph it ships, and the exact bytes its editor would put on a
+  contributor's clipboard, back against the store.  `site/` holds the HTML,
   CSS and JS it is generated from; there is no npm and no build step.
 
 `.github/workflows/pages.yml` runs `make check-site` and publishes the result.
@@ -498,7 +496,7 @@ whole block rather than one character.
 
 **A ghost of the character behind the grid.**  Drawing a codepoint nobody has
 drawn yet means knowing what it is supposed to look like, and the reference
-has to be the same for everybody — a hint that came from whichever fonts the
+has to be the same for everybody: a hint that came from whichever fonts the
 visitor happened to have installed would have two contributors tracing two
 different shapes.  So the reference fonts are vendored, in `site/hint/`:
 
@@ -510,7 +508,7 @@ different shapes.  So the reference fonts are vendored, in `site/hint/`:
 | `NotoSansMath-Regular.woff2` | mathematical operators |
 | `SymbolsNerdFont-Regular.woff2` | the private-use icons, Powerline included |
 
-**None of them is subsetted**, deliberately.  Cutting them down to what
+**None of them is subsetted.**  Cutting them down to what
 Smalti covers today would delete the hint for exactly the glyphs that are not
 drawn yet, which is the only case the ghost is for.  About 1.7 MB sits in the
 repository; a visitor downloads **one** of those files, because
@@ -521,15 +519,14 @@ range produced 2.2 MB of parts against 1.0 MB whole, because woff2 compresses
 the whole glyph set better than its pieces.)
 
 Where a codepoint is in none of them, the editor **says so** instead of
-drawing the empty box a missing glyph produces — which a contributor would
-reasonably read as a design decision.  `make check-site` proves both halves of
+drawing the empty box a missing glyph produces, which a contributor would
+read as a design decision.  `make check-site` proves both halves of
 that claim: every codepoint offered a ghost really is in a shipped font, and
 every codepoint refused really is in none of them.
 
 `tools/make-hint-fonts.py` is what vendors them.  It is **not** part of
-`make`: it needs the network, and putting a third party's release schedule
-inside a byte-reproducible build would be a moving part in the one place this
-project cannot afford one.  Every source is pinned to a commit or a release
+`make`: it needs the network, and a third party's release schedule would
+make the build no longer byte-reproducible.  Every source is pinned to a commit or a release
 tag, `site/hint/SOURCES.json` records the SHA-256 of what went in and what
 came out, and `--check` re-derives the lot and compares without writing:
 
@@ -542,8 +539,8 @@ both licence files are vendored beside the fonts and served with them.
 this repository and its default branch.  Under *where edits go* you can point
 them somewhere else, and the choice is remembered as you move from glyph to
 glyph, so twenty edits land on one branch instead of scattering.  **The site
-cannot create that branch** — a GitHub URL opens an editor on a ref, it does
-not make one.  Make the first edit the ordinary way, then paste the branch
+cannot create that branch**: a GitHub URL opens an editor on an existing
+ref.  Make the first edit the ordinary way, then paste the branch
 GitHub made for it into the box.  While a branch other than the default is in
 force the editor offers both doors, create-the-file and edit-the-file, because
 what the build knows about which glyphs exist is only true of the default
@@ -570,13 +567,12 @@ Create `glyphs/7x14/regular/2192.txt`:
     .......
 
 Exactly 14 rows of exactly 7 characters.  `#` is ink, `.` is background.
-The builder refuses anything else, so a miscounted row is a build error,
-not a silently wrong glyph.  The header line is filled in by `make headers`,
-so leave it off if you like — that command rewrites the whole file into its
+The builder refuses anything else, so a miscounted row is a build error.  The header line is filled in by `make headers`,
+so you can leave it off: that command rewrites the whole file into its
 normal form, which is what `make check` insists on, byte for byte.
 
 The same file under `glyphs/7x14/bold/`, `…/italic/` or `…/bold-italic/`
-overrules the derived face for that one codepoint — which is how the
+overrules the derived face for that one codepoint.  This is how the
 letters the shear can lean only one column, the four it leaves upright, and
 every judgement `embolden.py` makes, can be corrected by hand.
 
@@ -588,7 +584,7 @@ to read before drawing at a new size.  Geometry, read off the existing glyphs
 |-------------|------------------------------------------------------|
 | cell        | 7 wide, 14 tall                                      |
 | body        | columns 1..5 for most glyphs; 0 and 6 are the side bearings |
-| wider       | 0 and 6 are allowed — 20 upstream glyphs use them; see below |
+| wider       | 0 and 6 are allowed; 20 upstream glyphs use them, see below |
 | baseline    | row 10 is the last row *on* the baseline             |
 | cap height  | rows 3..10 (see `A`)                                 |
 | x-height    | rows 5..10 (see `x`)                                 |
@@ -603,8 +599,8 @@ and so may you:
 
 * **Must join across cells.**  `_` uses all 7 columns so that underscores form
   one unbroken line.  Same for the VT100 line-drawing set that upstream keeps
-  in the control-code slots (U+0002, U+000B..U+0018) -- though wezterm draws
-  those itself via `custom_block_glyphs`, so they need no work here.
+  in the control-code slots (U+0002, U+000B..U+0018).  wezterm draws those
+  itself via `custom_block_glyphs`, so they need no work here.
 * **Needs the width.**  `%` `&` `©` `Ð` `Æ` `æ` are dense; five columns is not
   enough detail.
 * **Deliberate asymmetry.**  `«` sits in columns 3..6 and `»` in columns 1..4,
@@ -624,7 +620,7 @@ face, and `make show` prints the lot in the terminal's own font.
 
 With `ª` and `º` this block is complete: 96 of 96.  Both are drawn as a
 superscript letter in rows 2..6 over an underline in row 8, so the pair reads
-as a pair -- and `°` U+00B0 stays the shorter four-row ring it always was,
+as a pair, and `°` U+00B0 stays the shorter four-row ring it always was,
 because a degree sign is a symbol and an ordinal is a letter.
 
 | | | |
@@ -702,7 +698,7 @@ because a degree sign is a symbol and an ordinal is a letter.
 | `≤` | U+2264 | Less-Than Or Equal To |
 | `≥` | U+2265 | Greater-Than Or Equal To |
 
-**Shapes and marks** (14)
+**Shapes and marks** (15)
 
 | | | |
 |---|---|---|
@@ -717,15 +713,16 @@ because a degree sign is a symbol and an ordinal is a letter.
 | `◆` | U+25C6 | Black Diamond |
 | `○` | U+25CB | White Circle |
 | `●` | U+25CF | Black Circle |
+| `◯` | U+25EF | Large Circle |
 | `★` | U+2605 | Black Star |
 | `✓` | U+2713 | Check Mark |
 | `✗` | U+2717 | Ballot X |
 
 ## Nothing is refused any more
 
-Every glyph that was once too hard is drawn.  Each needed the same move: stop
-trying to draw it correctly and draw it *legibly*, because a cramped glyph in
-the right weight beats a correct one borrowed from another font.
+Every glyph that was once too hard is drawn.  Each one is drawn *legibly*
+rather than correctly: a cramped glyph in the right weight sits better in the
+line than a correct one borrowed from another font.
 
 | | what it took |
 |---|---|
@@ -750,7 +747,7 @@ into `build/gen/7x14/regular/` and `build/gen/7x14/bold/`.  It is the one
 generator that produces the bold face as well, and for bold that beats
 emboldening.
 
-It works by subtraction, not invention.  Tamzen already draws grave, acute,
+It works by subtraction.  Tamzen already draws grave, acute,
 circumflex, tilde, diaeresis, ring and cedilla on `a`, `A`, `c` and `C`;
 subtracting the plain letter from the accented one recovers each mark exactly
 as Tamzen drew it.  Only macron, breve, dot above, double acute, caron and
@@ -759,7 +756,7 @@ ogonek had to be added by hand.
 Four traps worth recording:
 
 * **Do not subtract from capitals.**  At 7x14 Tamzen *squashes* the capital
-  under its own accents -- `Á` is a shorter `A` -- so `Á AND NOT A` leaves
+  under its own accents (`Á` is a shorter `A`), so `Á AND NOT A` leaves
   fragments of the squashed letter behind.  The generator always takes the
   lowercase mark and raises it over a full-height capital instead.
 * **Subtraction only cancels when the two donors agree.**  At 8x16 they do
@@ -771,69 +768,68 @@ Four traps worth recording:
   what the subtraction leaves **above** the base letter's ink, which is where
   a mark above sits by definition.  `tools/test-accents.py` is the checker
   that can see this; `make check` counts glyphs and never looks at shape.
-* **A mark Tamzen does not draw is written out per cell, not once.**  The six
+* **A mark Tamzen does not draw is written out once per cell.**  The six
   in `accents.HAND_MARKS` used to be a single set of 7-character literals, and
   at 8x16 every one of them sat a column left of where it belonged, on 84
   glyphs per face.  The letters differ between cells, and `pack()` lands the
   same literal in a different cell column at a different width, so one set
   cannot serve both.
-* **A mark above `i` or `j` replaces the dot** (`ī`, not an i with both).  That
+* **A mark above `i` or `j` replaces the dot** (`ī` has no dot).  That
   is the typographic rule and also the only way it fits.
 
-Where a letter is too tall for a mark above it -- `ĺ` `ľ` `ť` `ģ` -- the
-generator falls back to a raised comma beside the letter, which is what real
-typography does anyway.  It prints every such case when it runs.
+Where a letter is too tall for a mark above it (`ĺ` `ľ` `ť` `ģ`), the
+generator falls back to a raised comma beside the letter, which is what Czech
+and Latvian typography does.  It prints every such case when it runs.
 
-**Extended-B is taken on rules, not on a list.**  Most of the block does not
+**Extended-B is taken by rules.**  Most of the block does not
 decompose at all, and the part that does contains letters this generator would
 get wrong, so `gen-latin-ext-a.py` refuses two kinds and takes the remaining
 33 (`EXT_B_RULES` in that file spells both out):
 
-* **No second mark on an already accented base.**  Sixteen letters stack one --
-  `ǚ` is `ü` plus a caron, not `u` plus two marks -- and `compose()` has one
+* **No second mark on an already accented base.**  Sixteen letters stack one
+  (`ǚ` is `ü` plus a caron), and `compose()` has one
   mark's worth of rules.  Four of the sixteen happen to miss `ü`'s diaeresis
   and would come out looking plausible, which is worse than the twelve that
   visibly collide.
-* **In Extended-B a collision means skip, not a raised comma.**  The comma
+* **In Extended-B a collision means skip.**  The raised comma
   form above is the correct Czech and Latvian shape for `ď ģ ĺ ľ ť`.  The
   Extended-B letters that collide are `ǩ` and `ȟ`, whose languages draw the
-  caron on top, so for them the fallback would be a wrong drawing -- and
-  nothing beats a wrong drawing.
+  caron on top, so for them the comma would be a wrong drawing, and no
+  glyph is better than a wrong one.
 
 Greek, U+0370..U+03FF, is hand-drawn, except the capitals whose letterform
 is identical to Latin (`Α` `Β` `Ε` `Ζ` `Η` `Ι` `Κ` `Μ` `Ν` `Ο` `Ρ` `Τ` `Υ` `Χ`)
-which are copies of Tamzen's own bitmaps, so the two cannot drift apart.
+which are copies of Tamzen's own bitmaps.
 `μ` and `µ` share one shape.
 
 ## Bold
 
-All four faces carry all 1039 glyphs.  The bold face is upstream's own bold
-wherever upstream drew one — 190 glyphs, hand-tuned, and nothing computed
-beats that.  The other 812 are derived from the **resolved** regular face on
+All four faces carry every glyph.  The bold face is upstream's own bold
+wherever upstream drew one: 190 glyphs, hand-tuned.  The rest are derived
+from the **resolved** regular face on
 every build, so hand-drawing a regular glyph improves its bold without anyone
 touching the bold face.  Three different ways, depending on what gives the
 better result:
 
 | group | how the bold version is made |
 |---|---|
-| Latin Extended | composed again, against the **bold** base font -- Tamzen's bold letters and bold accents already exist, so nothing is invented |
+| Latin Extended | composed again, against the **bold** base font: Tamzen's bold letters and bold accents already exist, so nothing is invented |
 | Greek capitals sharing a Latin form | copied straight from Tamzen's bold `A`, `B`, `E` ... so bold Alpha stays exactly bold A |
-| shapes, braille, dingbats, and six maximum-density glyphs | **left identical**.  Widening a filled circle does not make it bold, it makes it lopsided; braille and box drawing must keep their pitch to line up with neighbours; and `®` `™` `‰` `¼` `½` `¾` already fill 6 or 7 columns with 1-pixel detail, so any widening merges the interior |
+| shapes, braille, dingbats, and six maximum-density glyphs | **left identical**.  Widening a filled circle makes it lopsided; braille and box drawing must keep their pitch to line up with neighbours; and `®` `™` `‰` `¼` `½` `¾` already fill 6 or 7 columns with 1-pixel detail, so any widening merges the interior |
 | everything else | each stroke widened by one pixel, the way Tamzen does it |
 
-**The widening rule is not the obvious one.**  Plain `row | (row << 1)`
-reproduces 108 of the 189 upstream bold glyphs -- but it merges every
+**The widening rule.**  Plain `row | (row << 1)` reproduces 108 of the 189
+upstream bold glyphs, but it merges every
 1-pixel gap, which turned `¶`, `®` and `π` into solid blobs.  Widening whole
 *runs*, and falling back to widening rightward when the left is blocked,
 reproduces 93 of 189 and never fills a counter.  Fewer exact matches, better
 glyphs; `tools/embolden.py` records the trade-off.
 
 `KEEP` and `TWIN` in `tools/embolden.py` are policies about how to *derive*,
-not shapes, so they stay in Python.  Changing a shape still needs no code
-change, because the way to change a shape is to draw it — and a drawing in
-`glyphs/7x14/bold/` outranks every rule in there.
+so they stay in Python.  Changing a shape needs no code change: draw it, and
+a drawing in `glyphs/7x14/bold/` outranks every rule in there.
 
-There is nothing to regenerate by hand any more: `make` resolves the whole
+Nothing needs regenerating by hand: `make` resolves the whole
 stack, and `make watch` rebuilds on every save.
 
 ## Upstream's diaeresis
@@ -848,18 +844,18 @@ hand-drawn.  If the other form is wanted after all, the answer is to draw it:
 
 The **whole** U+2190..U+21FF block is generated by
 `tools/gen-arrows.py`.  112 arrows drawn one at a time would drift apart, so a
-handful of parts -- shaft, head, tail, overlay -- are drawn once facing right
+handful of parts (shaft, head, tail, overlay) are drawn once facing right
 or up and mirrored for the other three directions.
 
 Mirroring is done **inside the glyph's own ink window**, so an arrow keeps its
 vertical position instead of sliding down the cell.
 
-Two mistakes worth not repeating: a gap cannot be made by overlaying more ink
-(the first `↻` came out as a solid arc, so the ring is now drawn already
-broken), and a mirrored half must be re-centred on its own shaft, not on the
-cell (`⇅`'s left head sat one column off).
+Two mistakes to avoid: a gap cannot be made by overlaying more ink (the
+first `↻` came out as a solid arc, so the ring is now drawn already broken),
+and a mirrored half must be re-centred on its own shaft and not on the cell
+(`⇅`'s left head sat one column off).
 
-Honest limit: at 7x14 some distinctions Unicode draws are finer than the cell.
+A limit: at 7x14 some distinctions Unicode draws are finer than the cell.
 A wave arrow and a squiggle arrow differ by one pixel of amplitude, and a
 triple arrow is three lines because four would touch.  Every arrow is drawn
 distinct where distinct is possible, and directionally correct always.
@@ -871,13 +867,11 @@ are drawn: `⑂` U+2442 OCR FORK (real Unicode, which is why prompts favour it)
 and `` Powerline BRANCH (private use area).  The rest of the small OCR
 block came along with the first, and the core Powerline set with the second.
 
-U+E0A0..U+E0BF is the **only** private-use range drawn here, and
-deliberately so.  Nerd Font puts about 3,600 more icons in the PUA; those are
+U+E0A0..U+E0BF is the **only** private-use range drawn here.  Nerd Font puts about 3,600 more icons in the PUA; those are
 designed for a double-width cell and the CommitMono Nerd Font fallback already
 renders them properly, so drawing them at 7x14 would make them worse.  The
-separators fill the cell edge to edge on purpose — they must butt against
-their neighbours with no seam — which also means they must never be
-emboldened, and `tools/embolden.py` keeps U+E0B0..E0BF as-is.
+separators fill the cell edge to edge, because they must butt against
+their neighbours with no seam, so they must never be emboldened, and `tools/embolden.py` keeps U+E0B0..E0BF as-is.
 
 ## Terminal UI symbols
 
@@ -888,8 +882,8 @@ circles `◐ ◑ ◒ ◓ ◔ ◕`, the `⏺` tool marker and the `⎿` result co
 The **whole** U+2800 block, all 256 patterns, is generated by
 `tools/gen-braille.py`.  Partial coverage is worse than none for
 a braille spinner: the frames the font lacks jump to the fallback and the
-spinner visibly jitters.  The block is perfectly regular -- the codepoint's low
-byte is the dot bitmask -- so there is no judgement involved anywhere in it.
+spinner visibly jitters.  The block is regular (the codepoint's low byte is
+the dot bitmask), so no part of it needs judgement.
 
 ## Box drawing and block elements
 
@@ -931,7 +925,7 @@ it is, because box drawing must keep its pitch to line up with its
 neighbours, and the italic shear leaves these symbols upright.  All four faces
 carry the same 160 glyphs.
 
-Three compromises at 7x14 are deliberate and should not be "fixed":
+Three compromises at 7x14 are deliberate:
 
 * **`▍` and `▌` are the same glyph.**  The left eighth-blocks `▏▎▍▌▋▊▉` are
   seven steps below full, and a 7-column cell has six widths below full.
@@ -950,7 +944,7 @@ glyph that looks wrong.
 
 ## The dingbats block
 
-**177 of the 192** codepoints in U+2700..U+27BF are covered — 147 hand-drawn,
+**177 of the 192** codepoints in U+2700..U+27BF are covered: 147 hand-drawn,
 30 circled digits generated.  Fifteen are left out.
 
 They are left out **by rule**: they have `Emoji_Presentation=Yes`, which
@@ -959,26 +953,25 @@ takes it from the emoji font, so a 7x14 bitmap for it would be both unused and
 the wrong width.  Those fifteen are `✅ ✊ ✋ ✨ ❌ ❎ ❓ ❔ ❕ ❗ ➕ ➖ ➗ ➰ ➿`.
 
 One glyph that is drawn needed a trick to get there: `➉` U+2789 CIRCLED
-SANS-SERIF NUMBER TEN.  Two digits take five columns -- a 3-wide zero, a 1-wide one and a gap
--- and a full ring takes the outer two, so there is no separation at all: the
+SANS-SERIF NUMBER TEN.  Two digits take five columns (a 3-wide zero, a
+1-wide one and a gap), and a full ring takes the outer two, so there is no separation at all: the
 one merges into the left wall and the zero into the right.  So `➉` gets an
 **open ring**, the top and bottom arcs only, positioned so that no arc pixel
 sits in a digit column.  It keeps the family's height and still reads as an
 enclosure.  Its two *negative* siblings `❿` and `➓` need none of this: a solid
-disc has no thin wall to merge with, so the digits are simply knocked out of
-it.
+disc has no thin wall to merge with, so the digits are knocked out of it.
 
-Three compromises are deliberate and should not be "fixed":
+Three compromises are deliberate:
 
 * **Zapf's weight pairs collapse.**  Many of these characters differ only by
   stroke weight or by a shading effect that needs more than seven columns.
   Where two names land on one achievable shape, they are held apart by *which*
-  edge carries the extra weight -- upper against lower, left against right.
+  edge carries the extra weight: upper against lower, left against right.
   This is the same compromise the terminal-UI asterisks already make.
 * **Serif and sans-serif are invisible at 7x14.**  U+2776..U+277F and
   U+278A..U+2793 are both negative circled runs and come out identical.
-* **The geometry is split by kind.**  The ornaments -- stars, crosses,
-  florettes, snowflakes, arrows -- use the 7x7 symbol box on rows 4..10, the
+* **The geometry is split by kind.**  The ornaments (stars, crosses,
+  florettes, snowflakes, arrows) use the 7x7 symbol box on rows 4..10, the
   same box as `★` and `◆`.  The pictographs and the tall crosses use rows
   3..11, starting at cap height, because they need the height to read at all.
   The bracket ornaments sit on rows 2..12, the span the base font gives
@@ -986,8 +979,8 @@ Three compromises are deliberate and should not be "fixed":
 
 The circled digits are generated by `tools/gen-circled-digits.py`; everything
 else in the block is hand-drawn.  The whole block falls inside `embolden.py`'s
-keep-as-is range, so bold and regular are identical here -- widening a
-dingbat makes it lopsided, not bold.
+keep-as-is range, so bold and regular are identical here: widening a
+dingbat makes it lopsided.
 
 The three geometry bands are also recorded in each size's own
 `glyphs/<size>/README.md`, where someone drawing a new dingbat will actually
@@ -999,15 +992,13 @@ look.
 * **Miscellaneous Symbols** U+2600..U+26FF has only `★` and `☆`.
 * **Miscellaneous Technical** U+2300..U+23FF has only what the terminal-UI
   glyphs needed.
-* **Six of upstream's eight sizes are still undrawn.**  Smalti draws 7x14 and
-  8x16; upstream ships 5x9, 6x12, 7x13, 8x15 and 10x20 as well.  The layout
-  was multi-size from day one, and the second size is what proved it: adding
-  `glyphs/6x12/regular/` costs nothing now and would have been a brutal
-  retrofit once other people had forks and open pull requests.  Unlike
-  Tamzen, Smalti's sizes *can* be installed side by side, because the size is
-  part of the family name.
+* **Five of upstream's seven sizes are still undrawn.**  Smalti draws 7x14
+  and 8x16; upstream ships 5x9, 6x12, 7x13, 8x15 and 10x20 as well.  The
+  layout is multi-size, so adding `glyphs/6x12/regular/` needs no
+  restructuring.  Unlike Tamzen, Smalti's sizes can be installed side by
+  side, because the size is part of the family name.
 * **Nothing proves a `.woff2` decompresses to the same outlines as the `.ttf`
   it came from.**  Every other artefact is checked against the drawings; this
   one is taken on trust from `fontTools`.  The build workflow emits a standing
-  warning naming the gap rather than hiding it.  Closing it means
+  warning that names the gap.  Closing it means
   decompressing the `.woff2` and running `check-outlines.py` on the result.
