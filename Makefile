@@ -196,6 +196,12 @@ STEPS_7x14 := 5,8
 STEPS_8x16 := 6,9  # owner's choice, 2026-08-25 -- see docs/superpowers/specs/2026-08-25-8x16-design.md §11
 STEPS      ?= $(STEPS_$(SIZE))
 
+# HALF_STEP is the one step a glyph gets when it has no room for the full
+# lean: from this row down it moves one column left, above it stays put.
+HALF_STEP_7x14 := 8
+HALF_STEP_8x16 := 8  # owner's choice, 2026-11-01 -- one row above STEPS' last
+HALF_STEP      ?= $(HALF_STEP_$(SIZE))
+
 # One ordered recipe, because the generators feed each other: the bold face is
 # emboldened from the RESOLVED regular face, the italic is sheared from it, and
 # the bold-italic from the resolved italic and bold.  The order also settles
@@ -213,7 +219,7 @@ $(GEN): $(GENTOOL) $(HAND) $(UPSTREAM_R) $(UPSTREAM_B)
 	python3 tools/gen-latin-ext-a.py $(UPSTREAM_R) build/gen/$(SIZE)/regular
 	python3 tools/embolden.py $(SIZE)
 	python3 tools/gen-latin-ext-a.py $(UPSTREAM_B) build/gen/$(SIZE)/bold
-	python3 tools/slant-bdf.py --steps $(STEPS) $(SIZE)
+	python3 tools/slant-bdf.py --steps $(STEPS) --half-step $(HALF_STEP) $(SIZE)
 	python3 tools/slant-bold.py $(SIZE)
 	@touch $@
 
