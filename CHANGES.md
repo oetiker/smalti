@@ -8,8 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### New
+- **The large circle `◯` U+25EF** at both sizes and in all faces, so it no longer comes from a fallback font. It is the full width of the cell like `○` and taller, centred on the same row.
 
 ### Changed
+- **`M T W X Y w x`, the accented `O`s and 31 more letters now lean in the 8x16 oblique faces** instead of standing upright among slanted text. They fill the cell to the right edge, so they lean one column, in their lower rows, where the other letters lean two. The same applies to `Æ ģ Ħ ĺ ľ Œ ť Ǣ Ǽ` at 7x14; `æ Ĳ ǣ ǽ` still stay upright there.
 
 ### Fixed
 

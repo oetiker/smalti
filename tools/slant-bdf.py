@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Derive the italic face from the resolved regular face by shearing it.
 
-Usage: slant-bdf.py [--steps R,R,...] [SIZE]        (default 7x14)
+Usage: slant-bdf.py [--steps R,R,...] [--half-step R] [SIZE]  (default 7x14)
 
 IT CONSUMES THE RESOLVED FACE, NOT A BUILT BDF
     Every layer of the regular face is in place by the time this runs, so
     hand-drawing a regular glyph improves its italic automatically.  The output
     is only a candidate: a drawing in glyphs/<size>/italic/ outranks it, which
-    is how the nine letters this leaves upright can be corrected by hand.
+    is how the letters this leans only half way, or leaves upright, can be
+    corrected by hand.
 
 WHY A SHEAR AND NOT REDRAWN LETTERFORMS
     At 7x14 there is no room for cursive letterforms.  A shear keeps every
@@ -53,6 +54,17 @@ WHAT IS SLANTED
     so there is nothing to lean them into.  Shearing only their other rows
     would put a kink in the middle of a stroke, so they stay upright and the
     tool names them.
+
+THE ONE-PIXEL FALLBACK FOR LETTERS THAT FILL THE RIGHT BEARING
+    At 8x16 the wide letters -- 'M', 'T', 'W', 'X', 'Y', 'w', 'x', the
+    accented 'O's, much of Greek -- reach column 7, so their top rows cannot
+    move right.  Left upright they stand out in a run of oblique text, so
+    they get half the lean instead: one step, at --half-step, from which
+    row down the glyph moves one column left.  It defaults to the last of
+    --steps, so the lower rows line up with a fully sheared neighbour.  At
+    8x16 the owner put it one row higher, on row 8, because the step on
+    row 9 sat too low in a letter that leans only once.  A letter that
+    cannot take even that stays upright and is named.
 """
 import os
 import sys
@@ -63,6 +75,7 @@ import glyphstore as gs
 
 CELL_W = 7
 STEPS = (5, 8)       # rows where the displacement drops by one column
+HALF_STEP = None     # the fallback's single step; None means STEPS[-1]
 
 
 def pad_mask():
@@ -104,7 +117,13 @@ def move(v, k):
     return (v >> k) & mask if k >= 0 else (v << -k) & mask
 
 
-def has_room(rows):
+def half_offset(row):
+    """The fallback: a one-column lean, leftward from HALF_STEP down."""
+    step = STEPS[-1] if HALF_STEP is None else HALF_STEP
+    return -1 if row >= step else 0
+
+
+def has_room(rows, offset=offset):
     """False if any row would push ink out of the cell in either direction."""
     mask = pad_mask()
     for r, v in enumerate(rows):
@@ -126,15 +145,18 @@ def has_room(rows):
     return True
 
 
-def shear(rows):
+def shear(rows, offset=offset):
     return [move(v, offset(r)) for r, v in enumerate(rows)]
 
 
 def main():
-    global STEPS, CELL_W
+    global STEPS, HALF_STEP, CELL_W
     argv = sys.argv[1:]
     if len(argv) >= 2 and argv[0] == '--steps':
         STEPS = tuple(int(x) for x in argv[1].split(','))
+        argv = argv[2:]
+    if len(argv) >= 2 and argv[0] == '--half-step':
+        HALF_STEP = int(argv[1])
         argv = argv[2:]
     size = argv[0] if argv else '7x14'
     CELL_W, _h = gs.cell(size)
@@ -144,13 +166,16 @@ def main():
         sys.exit(f'slant-bdf.py: the {size} regular face resolved to nothing')
     outdir = gs.gen_dir(size, 'italic')
 
-    crowded, n = [], 0
+    crowded, half, n = [], [], 0
     for cp, rows in sorted(regular.items()):
         out = rows
         if is_slanted(cp):
             if has_room(rows):
                 out = shear(rows)
                 n += 1
+            elif has_room(rows, half_offset):
+                out = shear(rows, half_offset)
+                half.append(cp)
             else:
                 crowded.append(cp)
         gs.write_glyph(os.path.join(outdir, gs.filename(cp)), cp,
@@ -158,6 +183,9 @@ def main():
 
     steps = ','.join(str(s) for s in STEPS)
     print(f'{outdir}: {n} of {len(regular)} glyphs sheared, steps at {steps}')
+    if half:
+        print('  leaned one column only, no room on the right: '
+              + ' '.join(f'U+{c:04X} {chr(c)}' for c in sorted(half)))
     if crowded:
         print('  left upright, no room to lean: '
               + ' '.join(f'U+{c:04X} {chr(c)}' for c in sorted(crowded)))

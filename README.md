@@ -576,9 +576,9 @@ so leave it off if you like — that command rewrites the whole file into its
 normal form, which is what `make check` insists on, byte for byte.
 
 The same file under `glyphs/7x14/bold/`, `…/italic/` or `…/bold-italic/`
-overrules the derived face for that one codepoint — which is how the nine
-letters the shear leaves upright, and every judgement `embolden.py` makes,
-can now be corrected by hand.
+overrules the derived face for that one codepoint — which is how the
+letters the shear can lean only one column, the four it leaves upright, and
+every judgement `embolden.py` makes, can be corrected by hand.
 
 `glyphs/7x14/README.md` is the per-size grid reference and is the first thing
 to read before drawing at a new size.  Geometry, read off the existing glyphs
